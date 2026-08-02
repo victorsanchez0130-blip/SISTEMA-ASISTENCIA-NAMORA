@@ -5,7 +5,8 @@ function checkAuth(requiredRol = null) {
     window.location.href = 'index.html';
     return;
   }
-  if (requiredRol && user.rol !== requiredRol && user.rol !== 'Director') {
+  
+  if (requiredRol && user.rol !== requiredRol && user.rol !== 'Director' && user.rol !== 'Directivo') {
     alert('Acceso restringido: No tiene permisos suficientes.');
     window.location.href = 'escaner.html';
   }
