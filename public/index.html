@@ -17,13 +17,15 @@
       </div>
         <p class="text-xs text-slate-500 font-medium">Sistema Oficial de Control Asistencial</p>
     </div>
-    <form id="login-form" class="space-y-4">
-      <div>
-        <label class="block text-xs font-bold text-slate-600 mb-1">CÓDIGO DE USUARIO</label>
-        <input type="text" id="login-codigo" placeholder="Ej: DIR-SRN-001 o DOC-SRN-101" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm" required>
-      </div>
-      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm">Ingresar al Sistema</button>
-    </form>
+    <form id="login-form" class="space-y-4" onsubmit="event.preventDefault(); login();">
+  <div>
+    <label class="block text-xs font-bold text-slate-600 mb-1">CÓDIGO DE USUARIO</label>
+    <input type="text" id="login-codigo" placeholder="Ej: DIR-SRN-001 o DOC-SRN-101" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm uppercase" required>
+  </div>
+  <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm transition-colors">
+    Ingresar al Sistema
+  </button>
+</form>
   </div>
 
   <script>
