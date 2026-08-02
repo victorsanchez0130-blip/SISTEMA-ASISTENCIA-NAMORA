@@ -198,17 +198,17 @@ app.get('/api/reportes/consolidado', (req, res) => {
         const puntajeTotal = (asistenciasCount * 2.0) + (tardanzas * 1.0) + (fJustificadas * 0.5);
 
         return {
-          id: u.id,
-          codigo: u.codigo,
-          nombre: u.nombre,
-          rol: u.rol,
-          aula: u.materia_aula,
-          asistencias: asistenciasCount,
-          tardanzas,
-          fJustificadas,
-          fInjustificadas,
-          puntajeTotal
-        };
+        id: u.id,
+        codigo: u.codigo,
+        nombre: u.nombre,
+        rol: u.rol,
+        aula: u.materia_aula, // <--- Aquí la clave se llama 'aula'
+        asistencias: asistenciasCount,
+        tardanzas,
+        fJustificadas,
+        fInjustificadas,
+        puntajeTotal
+      };
       });
       res.json(consolidado);
     });
