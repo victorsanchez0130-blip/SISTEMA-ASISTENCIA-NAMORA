@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rankings de Méritos - I.E. Santa Rosa</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <div class="dashboard-container">
+    <aside class="sidebar">
+      <div class="brand">🏫 I.E. Santa Rosa</div>
+      <nav class="menu">
+        <a href="dashboard.html">🏠 Inicio</a>
+        <a href="reportes.html">📁 Control y Reportes</a>
+        <a href="rankings.html" class="active">🏆 Rankings y Puntos</a>
+        <a href="inscripciones.html">📝 Inscribir / CRUD</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+        <h2>🏆 Rankings de Méritos</h2>
+        <div style="display: flex; gap: 10px;">
+          <button onclick="imprimirRankingDocentesPDF()" class="btn-submit" style="background:#0284c7;">👨‍🏫 Ranking Docentes PDF</button>
+          <button onclick="imprimirRankingAlumnosPDF()" class="btn-submit" style="background:#10b981;">🎓 Ranking Alumnos PDF</button>
+        </div>
+      </div>
+
+      <!-- Cuadro Ranking Docentes -->
+      <div class="table-container" style="margin-bottom: 30px;">
+        <h3 style="color: #0284c7; margin-bottom: 15px;">👨‍🏫 Ranking de Docentes</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Posición</th>
+              <th>Nombre Completo</th>
+              <th>Materia / Área</th>
+              <th>Puntaje Acumulado</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyRankingDocentes"></tbody>
+        </table>
+      </div>
+
+      <!-- Cuadro Ranking Alumnos -->
+      <div class="table-container">
+        <h3 style="color: #0284c7; margin-bottom: 15px;">🎓 Ranking de Alumnos</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Posición</th>
+              <th>Nombre Completo</th>
+              <th>Aula / Grado</th>
+              <th>Puntaje Acumulado</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyRankingAlumnos"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/rankings.js"></script>
+</body>
+</html>

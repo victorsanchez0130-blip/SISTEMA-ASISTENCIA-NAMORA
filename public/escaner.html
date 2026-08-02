@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Módulo de Asistencia Diaria</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-slate-100">
+  <header class="bg-white border-b border-slate-200 py-3 px-6 flex justify-between items-center">
+    <div>
+      <div class="flex items-center gap-2 mb-6 pb-2 border-b border-slate-800">
+        <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-16 h-16 object-contain">
+       <h2 class="text-white font-bold text-base">I.E. SANTA ROSA</h2>
+      </div>
+      <p class="text-xs text-blue-600 font-semibold">Módulo de Marcación Diaria (Solo Lectura / Escáner)</p>
+    </div>
+    <button onclick="logout()" class="bg-red-600 text-white text-xs font-bold py-1.5 px-3 rounded">Cerrar Sesión</button>
+  </header>
+
+  <main class="max-w-5xl mx-auto mt-6 p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <h2 class="text-sm font-bold text-slate-700 mb-2">📷 ESCÁNER DE FOTOCHECKS</h2>
+      <div id="reader" class="w-full bg-slate-900 rounded-xl overflow-hidden min-h-[250px]"></div>
+      <div id="scan-feedback" class="mt-4 hidden p-3 rounded-lg text-center font-bold text-xs"></div>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+      <h2 class="text-sm font-bold text-slate-700 mb-4">✅ MARCACIONES REGISTRADAS HOY</h2>
+      <div class="table-responsive">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500">
+              <th class="p-2">Código</th>
+              <th class="p-2">Nombre</th>
+              <th class="p-2 text-center">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="today-records-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="js/auth.js"></script>
+  <script src="js/scanner.js"></script>
+</body>
+</html>

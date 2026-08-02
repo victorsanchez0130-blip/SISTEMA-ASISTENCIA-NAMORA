@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Panel Directivo General</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-slate-100 flex">
+  <aside class="w-64 bg-slate-900 text-slate-300 min-h-screen p-4">
+    <!-- Contenedor del Título con Logo -->
+    <div class="flex items-center gap-2 mb-6 pb-2 border-b border-slate-800">
+     <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-16 h-16 object-contain">
+     <h2 class="text-white font-bold text-base">I.E. SANTA ROSA</h2>
+    </div>
+    <nav class="space-y-2 text-sm">
+      <a href="dashboard.html" class="block py-2 px-4 rounded bg-blue-600 text-white font-bold">📊 Inicio</a>
+      <a href="reportes.html" class="block py-2 px-4 rounded hover:bg-slate-800">📁 Control y Reportes</a>
+      <a href="rankings.html" class="block py-2 px-4 rounded hover:bg-slate-800">🏆 Rankings y Puntos</a>
+      <a href="inscripciones.html" class="block py-2 px-4 rounded hover:bg-slate-800">📝 Inscribir / CRUD</a>
+      <button onclick="logout()" class="w-full text-left py-2 px-4 rounded hover:bg-red-800 text-red-400 mt-8">🚪 Cerrar Sesión</button>
+    </nav>
+  </aside>
+
+  <main class="flex-1 p-8">
+    <h1 class="text-2xl font-bold text-slate-800 mb-6">Resumen Ejecutivo General</h1>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <span class="text-xs font-bold text-slate-400">SISTEMA</span>
+        <h3 class="text-lg font-bold text-slate-800 mt-1">Estado On-Line</h3>
+        <p class="text-xs text-green-600 mt-2">Sincronizado globalmente</p>
+      </div>
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <span class="text-xs font-bold text-slate-400">ACCESO DIRECTIVO</span>
+        <h3 class="text-lg font-bold text-slate-800 mt-1">Gestión Total</h3>
+        <p class="text-xs text-blue-600 mt-2">CRUD & Control de Asistencia Habilitado</p>
+      </div>
+    </div>
+  </main>
+  <script src="js/auth.js"></script>
+  <script>checkAuth('Director');</script>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control y Reportes - I.E. Santa Rosa</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <div class="dashboard-container">
+    <aside class="sidebar">
+      <div class="brand">🏫 I.E. Santa Rosa</div>
+      <nav class="menu">
+        <a href="dashboard.html">🏠 Inicio</a>
+        <a href="reportes.html" class="active">📁 Control y Reportes</a>
+        <a href="rankings.html">🏆 Rankings y Puntos</a>
+        <a href="inscripciones.html">📝 Inscribir / CRUD</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <div class="card-box">
+        <div class="card-title">📂 CONTROL Y REPORTES</div>
+        
+        <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <select id="filtroTipo" class="form-control" style="width: 170px;" onchange="cambiarTipoFiltroFecha()">
+              <option value="Diario">Reporte Diario</option>
+              <option value="Semanal">Reporte Semanal</option>
+              <option value="Mensual">Reporte Mensual</option>
+            </select>
+          </div>
+
+          <div id="contenedorFecha">
+            <input type="date" id="filtroFecha" class="form-control" style="width: 170px;" onchange="cargarReportes()">
+          </div>
+
+          <div style="margin-left: auto; display:flex; gap:10px;">
+            <button onclick="generarDocentesPDF()" class="btn-submit" style="background:#0f172a;">📄 Docentes PDF</button>
+            <button onclick="generarGradoPDF()" class="btn-submit" style="background:#0284c7;">📊 Grado PDF</button>
+          </div>
+        </div>
+
+        <!-- Filtro por Aula y Buscador -->
+        <div style="display:flex; gap:15px; margin-bottom:20px; background:#f8fafc; padding:12px; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label style="font-size:13px; font-weight:bold; color:#475569;">Filtro por Aula:</label>
+            <select id="filtroNivel" class="form-control" style="width:130px;" onchange="filtrarTablaLocal()">
+              <option value="Todos">Todos</option>
+              <option value="Secundaria">Secundaria</option>
+              <option value="Primaria">Primaria</option>
+            </select>
+            <select id="filtroGrado" class="form-control" style="width:90px;" onchange="filtrarTablaLocal()">
+              <option value="Todos">Todos</option>
+              <option value="1ro">1ro</option>
+              <option value="2do">2do</option>
+              <option value="3ro">3ro</option>
+              <option value="4to">4to</option>
+              <option value="5to">5to</option>
+            </select>
+            <select id="filtroSeccion" class="form-control" style="width:70px;" onchange="filtrarTablaLocal()">
+              <option value="Todos">Todos</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+            </select>
+          </div>
+
+          <div style="flex-grow:1; display:flex; align-items:center;">
+            <input type="text" id="filtroNombre" class="form-control" placeholder="🔍 Buscar por nombre..." onkeyup="filtrarTablaLocal()">
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>CÓDIGO</th>
+                <th>NOMBRE</th>
+                <th>AULA / ASIGNACIÓN</th>
+                <th style="color: #16a34a;">ASIST.</th>
+                <th style="color: #ca8a04;">TARD.</th>
+                <th style="color: #2563eb;">F. JUST.</th>
+                <th style="color: #dc2626;">F. INJ.</th>
+                <th>PUNTAJE</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyReportes"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/reportes.js"></script>
+</body>
+</html>
