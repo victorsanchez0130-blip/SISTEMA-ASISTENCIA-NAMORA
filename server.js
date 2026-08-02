@@ -51,11 +51,20 @@ db.serialize(() => {
 // Login
 app.post('/api/auth/login', (req, res) => {
   const { codigo } = req.body;
-  db.get('SELECT * FROM usuarios WHERE codigo = ?', [codigo], (err, user) => {
-    if (err || !user) {
-      return res.status(401).json({ success: false, message: 'Código no encontrado en el sistema.' });
+  db.get('SELECT * FROM usuarios WHERE codigo = ?', [codigo], (err, usuario) => {
+    if (err || !usuario) {
+      return res.status(401).json({ success: false, mensaje: 'Código no encontrado en el sistema.' });
     }
-    res.json({ success: true, user });
+    // Redirección según el Rol guardado
+    res.json({
+      success: true,
+      usuario: {
+        codigo: usuario.codigo,
+        nombre: usuario.nombre,
+        rol: usuario.rol, // "Docente", "Alumno", "Auxiliar", etc.
+        materia_aula: usuario.materia_aula
+      }
+    });
   });
 });
 
@@ -68,17 +77,50 @@ app.get('/api/usuarios', (req, res) => {
 });
 
 // Crear Usuario
+// Ruta para registrar un nuevo usuario
 app.post('/api/usuarios', (req, res) => {
   const { nombre, rol, materia_aula } = req.body;
-  if (!nombre || !rol) return res.status(400).json({ success: false, message: 'Nombre y Rol obligatorios.' });
 
-  const prefix = rol === 'Docente' ? 'DOC' : (rol === 'Alumno' ? 'ALU' : (rol === 'Auxiliar' ? 'AUX' : 'DIR'));
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
-  const codigo = `${prefix}-SRN-2026-${randomNum}`;
+  // 1. Determinar el prefijo según el Rol
+  let prefijo = 'ALU';
+  if (rol === 'Docente') prefijo = 'DOC';
+  if (rol === 'Auxiliar') prefijo = 'AUX';
+  if (rol === 'Directivo' || rol === 'Director') prefijo = 'DIR';
 
-  db.run('INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)', [codigo, nombre, rol, materia_aula || ''], function(err) {
-    if (err) return res.status(500).json({ success: false, message: 'Error al registrar.' });
-    res.json({ success: true, message: 'Usuario registrado.', codigo });
+  // 2. Obtener el último correlativo registrado para ese rol
+  const queryUltimo = `SELECT codigo FROM usuarios WHERE rol = ? ORDER BY id DESC LIMIT 1`;
+
+  db.get(queryUltimo, [rol], (err, row) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    let nuevoNumero = 1;
+
+    if (row && row.codigo) {
+      // Extraer los últimos dígitos del código previo (ej: DOC-SRN-101 -> 101)
+      const partes = row.codigo.split('-');
+      const ultimoNumero = parseInt(partes[partes.length - 1], 10);
+      if (!isNaN(ultimoNumero)) {
+        nuevoNumero = ultimoNumero + 1;
+      }
+    }
+
+    // Formatear el código (Ej: DOC-SRN-101, ALU-SRN-101, etc.)
+    const codigoGenerado = `${prefijo}-SRN-${nuevoNumero}`;
+
+    // 3. Guardar el usuario con su rol exacto y nuevo código
+    const queryInsert = `INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)`;
+    db.run(queryInsert, [codigoGenerado, nombre, rol, materia_aula], function (err) {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.json({
+        success: true,
+        codigo: codigoGenerado,
+        id: this.lastID
+      });
+    });
   });
 });
 
@@ -107,8 +149,8 @@ app.delete('/api/usuarios/:id', (req, res) => {
 // Marcar Asistencia QR
 app.post('/api/asistencia/marcar', (req, res) => {
   const { codigoQR } = req.body;
-  db.get('SELECT * FROM usuarios WHERE codigo = ?', [codigoQR], (err, user) => {
-    if (err || !user) return res.status(404).json({ success: false, message: 'Código QR no registrado.' });
+  db.get('SELECT * FROM usuarios WHERE codigo = ?', [codigoQR], (err, usuario) => {
+    if (err || !usuario) return res.status(404).json({ success: false, message: 'Código QR no registrado.' });
 
     const hoy = new Date().toISOString().slice(0, 10);
     const horaActual = new Date().toLocaleTimeString('es-PE', { hour12: false });
@@ -116,7 +158,7 @@ app.post('/api/asistencia/marcar', (req, res) => {
 
     db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [codigoQR, hoy, horaActual, estado], (err) => {
       if (err) return res.status(500).json({ success: false, message: 'Error al marcar.' });
-      res.json({ success: true, message: `Marcación [${estado}] registrada para ${user.nombre}`, user });
+      res.json({ success: true, message: `Marcación [${estado}] registrada para ${usuario.nombre}`, user: usuario });
     });
   });
 });
