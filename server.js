@@ -1,19 +1,18 @@
-const express = require('express');
-const path = require('path');
-const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Inicialización de la Base de Datos SQLite
-const db = new sqlite3.Database('asistencia.db', (err) => {
-  if (err) console.error('Error al conectar con SQLite:', err.message);
-  else console.log('Base de datos SQLite conectada correctamente.');
+// Prueba de conexión a la nube
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error('Error al conectar con la base de datos en la nube:', err.stack);
+  } else {
+    console.log('Base de datos en la nube conectada correctamente.');
+    release();
+  }
 });
 
 // Creación de tablas e inserción de datos iniciales
