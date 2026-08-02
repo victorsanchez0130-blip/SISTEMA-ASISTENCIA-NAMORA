@@ -10,10 +10,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Inicialización de la Base de Datos SQLite
-const db = new sqlite3.Database('asistencia.db', (err) => {
+// Configuración de la Base de Datos con soporte para Disco Persistente en la Nube (Railway)
+const dbPath = process.env.RAILWAY_VOLUME_MOUNT_PATH 
+  ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'asistencia.db') 
+  : 'asistencia.db';
+
+const db = new sqlite3.Database(dbPath, (err) => {
   if (err) console.error('Error al conectar con SQLite:', err.message);
-  else console.log('Base de datos SQLite conectada correctamente.');
+  else console.log('Base de datos conectada correctamente en:', dbPath);
 });
 
 // Creación de tablas e inserción de datos iniciales
@@ -63,7 +67,6 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(401).json({ success: false, mensaje: 'Código no encontrado en el sistema.' });
     }
     
-    // Devolución estandarizada
     res.json({
       success: true,
       mensaje: 'Acceso concedido',
@@ -86,7 +89,7 @@ app.get('/api/usuarios', (req, res) => {
   });
 });
 
-// Crear Usuario
+// Crear Usuario (Con código aleatorio limpio)
 app.post('/api/usuarios', (req, res) => {
   const { nombre, rol, materia_aula } = req.body;
 
@@ -95,10 +98,7 @@ app.post('/api/usuarios', (req, res) => {
   if (rol === 'Auxiliar') prefijo = 'AUX';
   if (rol === 'Director') prefijo = 'DIR';
 
-  // Generar un número aleatorio de 4 dígitos (Ej: 4892)
   const aleatorio = Math.floor(1000 + Math.random() * 9000);
-
-  // Resultado final: DOC-SRN-4892, ALU-SRN-8371, etc.
   const codigoGenerado = `${prefijo}-SRN-${aleatorio}`;
 
   const queryInsert = `INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)`;
@@ -167,9 +167,8 @@ app.post('/api/asistencia/manual', (req, res) => {
   });
 });
 
-// Reporte Consolidado
+// Reporte Consolidado (Filtrado solo para Alumnos y con asignación asegurada)
 app.get('/api/reportes/consolidado', (req, res) => {
-  // 1. Filtrar solo a los Alumnos directamente desde la base de datos
   db.all("SELECT * FROM usuarios WHERE rol = 'Alumno'", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
 
@@ -192,14 +191,13 @@ app.get('/api/reportes/consolidado', (req, res) => {
           codigo: u.codigo,
           nombre: u.nombre,
           rol: u.rol,
-          // 2. Validar múltiples nombres posibles de la columna para que nunca salga '-'
           aula: u.materia_aula || u.aula || u.grado_seccion || 'Sin Asignación',
           asistencias: asistenciasCount,
           tardanzas,
           fJustificadas,
           fInjustificadas,
           puntajeTotal
-      };
+        };
       });
       res.json(consolidado);
     });
