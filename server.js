@@ -169,8 +169,10 @@ app.post('/api/asistencia/manual', (req, res) => {
 
 // Reporte Consolidado
 app.get('/api/reportes/consolidado', (req, res) => {
-  db.all('SELECT * FROM usuarios', [], (err, usuarios) => {
+  // 1. Filtrar solo a los Alumnos directamente desde la base de datos
+  db.all("SELECT * FROM usuarios WHERE rol = 'Alumno'", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
+
     db.all('SELECT * FROM asistencias', [], (err, asistencias) => {
       const consolidado = usuarios.map(u => {
         const marcaciones = asistencias.filter(a => a.usuario_codigo === u.codigo);
@@ -186,16 +188,17 @@ app.get('/api/reportes/consolidado', (req, res) => {
         const puntajeTotal = (asistenciasCount * 2.0) + (tardanzas * 1.0) + (fJustificadas * 0.5);
 
         return {
-        id: u.id,
-        codigo: u.codigo,
-        nombre: u.nombre,
-        rol: u.rol,
-        aula: u.materia_aula, // <--- Aquí la clave se llama 'aula'
-        asistencias: asistenciasCount,
-        tardanzas,
-        fJustificadas,
-        fInjustificadas,
-        puntajeTotal
+          id: u.id,
+          codigo: u.codigo,
+          nombre: u.nombre,
+          rol: u.rol,
+          // 2. Validar múltiples nombres posibles de la columna para que nunca salga '-'
+          aula: u.materia_aula || u.aula || u.grado_seccion || 'Sin Asignación',
+          asistencias: asistenciasCount,
+          tardanzas,
+          fJustificadas,
+          fInjustificadas,
+          puntajeTotal
       };
       });
       res.json(consolidado);

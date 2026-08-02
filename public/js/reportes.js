@@ -62,13 +62,19 @@ function calcularDiasHabiles(tipo, valorFecha) {
 
 async function cargarReportes() {
   try {
-    const tipo = document.getElementById('filtroTipo').value;
-    const fecha = document.getElementById('filtroFecha').value;
-
-    const res = await fetch(`/api/asistencia/resumen?tipo=${tipo}&fecha=${fecha}`);
-    datosReporteGlobal = await res.json();
+    // ¡Debe apuntar exactamente a la ruta que creaste en el servidor!
+    const res = await fetch('/api/reportes/consolidado');
     
+    if (!res.ok) {
+      throw new Error('Error al obtener el consolidado');
+    }
+
+    datosReporteGlobal = await res.json();
+    console.log("Datos consolidados cargados:", datosReporteGlobal);
+    
+    // Refrescar la tabla con los datos
     filtrarTablaLocal();
+
   } catch (error) {
     console.error('Error al cargar reportes:', error);
   }
