@@ -49,19 +49,19 @@ db.serialize(() => {
 });
 
 // Login
-app.post('/api/auth/login', (req, res) => {
+app.post(['/api/login', '/api/auth/login'], (req, res) => {
   const { codigo } = req.body;
   db.get('SELECT * FROM usuarios WHERE codigo = ?', [codigo], (err, usuario) => {
     if (err || !usuario) {
       return res.status(401).json({ success: false, mensaje: 'Código no encontrado en el sistema.' });
     }
-    // Redirección según el Rol guardado
+    
     res.json({
       success: true,
       usuario: {
         codigo: usuario.codigo,
         nombre: usuario.nombre,
-        rol: usuario.rol, // "Docente", "Alumno", "Auxiliar", etc.
+        rol: usuario.rol,
         materia_aula: usuario.materia_aula
       }
     });
