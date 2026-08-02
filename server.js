@@ -4,11 +4,11 @@ const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; // Correcto para Railway (asigna un puerto dinámico)
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors()); // Habilita peticiones cruzadas
+app.use(express.json()); // Permite recibir body en JSON en tus endpoints
+app.use(express.static(path.join(__dirname, 'public'))); // Sirve index.html y la web pública
 
 // Inicialización de la Base de Datos SQLite
 const db = new sqlite3.Database('asistencia.db', (err) => {
@@ -49,7 +49,7 @@ db.serialize(() => {
 });
 
 // Login
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/login', (req, res) => {
   const { codigo } = req.body;
   db.get('SELECT * FROM usuarios WHERE codigo = ?', [codigo], (err, usuario) => {
     if (err || !usuario) {
