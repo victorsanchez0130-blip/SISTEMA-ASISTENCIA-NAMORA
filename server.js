@@ -93,36 +93,24 @@ app.post('/api/usuarios', (req, res) => {
   let prefijo = 'ALU';
   if (rol === 'Docente') prefijo = 'DOC';
   if (rol === 'Auxiliar') prefijo = 'AUX';
-  if (rol === 'Directivo' || rol === 'Director') prefijo = 'DIR';
+  if (rol === 'Director') prefijo = 'DIR';
 
-  const queryUltimo = `SELECT codigo FROM usuarios WHERE rol = ? ORDER BY id DESC LIMIT 1`;
+  // Generar un número aleatorio de 4 dígitos (Ej: 4892)
+  const aleatorio = Math.floor(1000 + Math.random() * 9000);
 
-  db.get(queryUltimo, [rol], (err, row) => {
+  // Resultado final: DOC-SRN-4892, ALU-SRN-8371, etc.
+  const codigoGenerado = `${prefijo}-SRN-${aleatorio}`;
+
+  const queryInsert = `INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)`;
+  
+  db.run(queryInsert, [codigoGenerado, nombre, rol, materia_aula], function (err) {
     if (err) {
       return res.status(500).json({ success: false, mensaje: err.message });
     }
-
-    let nuevoNumero = 1;
-    if (row && row.codigo) {
-      const partes = row.codigo.split('-');
-      const ultimoNumero = parseInt(partes[partes.length - 1], 10);
-      if (!isNaN(ultimoNumero)) {
-        nuevoNumero = ultimoNumero + 1;
-      }
-    }
-
-    const codigoGenerado = `${prefijo}-SRN-${nuevoNumero}`;
-    const queryInsert = `INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)`;
-    
-    db.run(queryInsert, [codigoGenerado, nombre, rol, materia_aula], function (err) {
-      if (err) {
-        return res.status(500).json({ success: false, mensaje: err.message });
-      }
-      res.json({
-        success: true,
-        codigo: codigoGenerado,
-        id: this.lastID
-      });
+    res.json({
+      success: true,
+      codigo: codigoGenerado,
+      id: this.lastID
     });
   });
 });
