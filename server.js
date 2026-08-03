@@ -92,7 +92,6 @@ app.post('/api/auth/login', (req, res) => {
     // Normalizamos el rol para evitar problemas de mayúsculas/minúsculas
     const rolNormalizado = (usuario.rol || '').trim();
 
-    // 👈 AQUÍ ESTÁ EL CAMBIO: Redirige a dashboard.html si es Director
     res.json({
       success: true,
       mensaje: 'Acceso concedido',
@@ -206,7 +205,10 @@ app.get('/api/asistencia/hoy', (req, res) => {
       u.nombre,
       u.materia_aula AS rol,
       a.hora,
-      a.estado
+      CASE 
+        WHEN UPPER(a.estado) IN ('FALTA JUSTIFICADA', 'FALTA INJUSTIFICADA') THEN 'FALTA'
+        ELSE UPPER(a.estado)
+      END AS estado
     FROM asistencias a
     JOIN usuarios u ON a.usuario_codigo = u.codigo
     WHERE a.fecha = ?
@@ -219,7 +221,7 @@ app.get('/api/asistencia/hoy', (req, res) => {
   });
 });
 
-// API Rankings (Excluye al Director)
+// API Rankings (Excluye al Director y unifica Faltas a 0 puntos)
 app.get('/api/rankings', (req, res) => {
   const query = `
     SELECT 
@@ -229,10 +231,9 @@ app.get('/api/rankings', (req, res) => {
       u.materia_aula AS asignacion,
       COALESCE(SUM(
         CASE 
-          WHEN UPPER(a.estado) = 'PUNTUAL' THEN 2.0
-          WHEN UPPER(a.estado) = 'TARDE' OR UPPER(a.estado) = 'TARDANZA' THEN 1.0
-          WHEN UPPER(a.estado) = 'JUSTIFICADA' THEN 0.5 
-          WHEN UPPER(a.estado) = 'INJUSTIFICADA' THEN 0.0
+          WHEN UPPER(a.estado) IN ('PUNTUAL', 'ASISTIÓ') THEN 2.0
+          WHEN UPPER(a.estado) = 'TARDANZA' THEN 1.0
+          WHEN UPPER(a.estado) LIKE '%FALTA%' THEN 0.0
           ELSE 0
         END
       ), 0) AS puntaje_acumulado
@@ -260,17 +261,21 @@ app.get('/api/rankings', (req, res) => {
 // Modificar Asistencia Manual
 app.post('/api/asistencia/manual', (req, res) => {
   const { usuario_codigo, fecha, estado } = req.body;
+
+  // Unificamos el estado si viene como justificada/injustificada
+  const estadoNormalizado = (estado || '').toUpperCase().includes('FALTA') ? 'FALTA' : estado;
+
   db.get('SELECT id FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [usuario_codigo, fecha], (err, row) => {
     if (row) {
-      db.run('UPDATE asistencias SET estado = ? WHERE id = ?', [estado, row.id]);
+      db.run('UPDATE asistencias SET estado = ? WHERE id = ?', [estadoNormalizado, row.id]);
     } else {
-      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [usuario_codigo, fecha, '07:30:00', estado]);
+      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [usuario_codigo, fecha, '07:30:00', estadoNormalizado]);
     }
     res.json({ success: true });
   });
 });
 
-// Reporte Consolidado
+// Reporte Consolidado (Sin distinción de justificada/injustificada)
 app.get('/api/reportes/consolidado', (req, res) => {
   db.all("SELECT * FROM usuarios WHERE rol = 'Alumno'", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
@@ -278,16 +283,17 @@ app.get('/api/reportes/consolidado', (req, res) => {
     db.all('SELECT * FROM asistencias', [], (err, asistencias) => {
       const consolidado = usuarios.map(u => {
         const marcaciones = asistencias.filter(a => a.usuario_codigo === u.codigo);
-        let asistenciasCount = 0, tardanzas = 0, fJustificadas = 0, fInjustificadas = 0;
+        let asistenciasCount = 0, tardanzas = 0, faltas = 0;
 
         marcaciones.forEach(m => {
-          if (m.estado === 'PUNTUAL') asistenciasCount++;
-          else if (m.estado === 'TARDANZA') tardanzas++;
-          else if (m.estado === 'JUSTIFICADA') fJustificadas++;
-          else if (m.estado === 'INJUSTIFICADA') fInjustificadas++;
+          const est = (m.estado || '').toUpperCase();
+          if (est === 'PUNTUAL' || est === 'ASISTIÓ') asistenciasCount++;
+          else if (est === 'TARDANZA') tardanzas++;
+          else if (est.includes('FALTA') || est === 'JUSTIFICADA' || est === 'INJUSTIFICADA') faltas++;
         });
 
-        const puntajeTotal = (asistenciasCount * 2.0) + (tardanzas * 1.0) + (fJustificadas * 0.5);
+        // Cálculo de puntaje unificado: Puntual = 2pts, Tardanza = 1pt, Falta = 0pts
+        const puntajeTotal = (asistenciasCount * 2.0) + (tardanzas * 1.0);
 
         return {
           id: u.id,
@@ -297,8 +303,7 @@ app.get('/api/reportes/consolidado', (req, res) => {
           aula: u.materia_aula || 'Sin Asignación',
           asistencias: asistenciasCount,
           tardanzas,
-          fJustificadas,
-          fInjustificadas,
+          faltas,
           puntajeTotal
         };
       });
