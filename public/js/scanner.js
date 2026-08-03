@@ -201,44 +201,54 @@ function cerrarModalYContinuar() {
   }, 300);
 }
 
-async function loadMarcaciones() {
+app.get('/api/asistencia/hoy', async (req, res) => {
   try {
-    const res = await fetch('/api/asistencia/hoy');
-    const tbody = document.getElementById('today-records-body');
-    if (!tbody) return;
+    // 1. Obtener la fecha actual formateada en la zona horaria de Perú (YYYY-MM-DD)
+    const fechaHoyPeru = new Date().toLocaleDateString('es-PE', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).split('/').reverse().join('-'); // Convierte DD/MM/YYYY a YYYY-MM-DD
 
-    if (!res.ok) {
-      tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 font-medium">Sin marcaciones registradas hoy</td></tr>';
-      return;
-    }
+    // 2. Consulta SQL flexible:
+    // Unimos con 'usuarios' para obtener el nombre actualizado y filtramos por la fecha de hoy
+    const query = `
+      SELECT 
+        a.codigo,
+        COALESCE(u.nombre, a.nombre, 'Usuario Registrado') AS nombre,
+        COALESCE(u.materia_aula, u.aula, 'Sin asignación') AS rol_asignacion,
+        a.hora,
+        a.estado,
+        a.fecha
+      FROM asistencia a
+      LEFT JOIN usuarios u ON UPPER(a.codigo) = UPPER(u.codigo)
+      WHERE DATE(a.fecha) = $1 
+         OR a.fecha LIKE $2
+         OR a.fecha = $1
+      ORDER BY a.id DESC;
+    `;
 
-    const data = await res.json();
+    // Ejecutar consulta (adaptar según tu cliente SQL: db.query, pool.query, sqlite, etc.)
+    const { rows } = await db.query(query, [fechaHoyPeru, `${fechaHoyPeru}%`]);
 
-    if (!Array.isArray(data) || data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 font-medium">Sin marcaciones registradas hoy</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = '';
-    data.forEach(item => {
-      const esTarde = item.estado === 'TARDE' || item.estado === 'TARDANZA';
-      const badgeClass = esTarde 
-        ? 'bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded' 
-        : 'bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded';
-      
-      const estadoTexto = item.estado || (esTarde ? 'TARDE' : 'PUNTUAL');
-      const horaTexto = item.hora || item.fecha || '-';
-
-      tbody.innerHTML += `
-        <tr class="border-b border-slate-100 text-xs hover:bg-slate-50">
-          <td class="p-2 font-mono font-bold text-slate-700">${item.codigo}</td>
-          <td class="p-2 font-medium text-slate-800">${item.nombre}</td>
-          <td class="p-2 text-center text-slate-500 font-mono">${horaTexto}</td>
-          <td class="p-2 text-center"><span class="${badgeClass}">${estadoTexto}</span></td>
-        </tr>
-      `;
+    // 3. Normalizar la respuesta para asegurar que el frontend siempre reciba campos válidos
+    const marcacionesNormalizadas = (rows || []).map(item => {
+      const esTarde = item.estado && (item.estado.toUpperCase() === 'TARDE' || item.estado.toUpperCase() === 'TARDANZA');
+      return {
+        codigo: item.codigo || '-',
+        nombre: item.nombre || 'Usuario Registrado',
+        rol: item.rol_asignacion || '-',
+        hora: item.hora || (item.fecha ? new Date(item.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '-'),
+        estado: item.estado ? item.estado.toUpperCase() : (esTarde ? 'TARDE' : 'PUNTUAL')
+      };
     });
-  } catch (e) {
-    console.error("Error al cargar marcaciones de hoy:", e);
+
+    return res.status(200).json(marcacionesNormalizadas);
+
+  } catch (error) {
+    console.error("Error al obtener marcaciones de hoy:", error);
+    // Devolver un array vacío con 200 o status 500 para evitar que el frontend colapse
+    return res.status(500).json({ error: true, message: "Error al consultar las marcaciones de hoy" });
   }
-}
+});
