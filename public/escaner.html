@@ -2,69 +2,93 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <!-- OBLIGATORIO: Permite la adaptación responsiva en cualquier dispositivo móvil -->
+  <!-- Viewport estricto para evitar vista de escritorio y desbordamiento en celulares -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Módulo de Asistencia Diaria</title>
+  
+  <!-- CDN de TailwindCSS y HTML5-QRCode -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <link rel="stylesheet" href="css/styles.css">
+
+  <style>
+    /* Estilos globales para garantizar ajuste completo del visor de cámara en móviles */
+    #reader video {
+      object-fit: cover !important;
+      border-radius: 0.75rem !important;
+      width: 100% !important;
+      height: 100% !important;
+    }
+  </style>
 </head>
-<body class="bg-slate-100 relative min-h-screen">
+<body class="bg-slate-100 relative min-h-screen font-sans antialiased text-slate-800">
 
   <!-- Header Responsivo -->
-  <header class="bg-white border-b border-slate-200 py-3 px-4 md:px-6 flex flex-col sm:flex-row justify-between items-center gap-3 shadow-sm">
+  <header class="bg-white border-b border-slate-200 py-3 px-4 md:px-6 flex flex-col sm:flex-row justify-between items-center gap-3 shadow-sm sticky top-0 z-40">
     <!-- Logo y Nombre -->
-    <div class="flex items-center gap-3">
-      <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-8 h-8 md:w-10 md:h-10 object-contain">
-      <h2 class="text-slate-900 font-extrabold text-lg md:text-xl tracking-wide">I.E. SANTA ROSA</h2>
+    <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+      <div class="flex items-center gap-2 md:gap-3">
+        <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-8 h-8 md:w-10 md:h-10 object-contain">
+        <h2 class="text-slate-900 font-extrabold text-base md:text-xl tracking-wide">I.E. SANTA ROSA</h2>
+      </div>
+      <!-- Botón visible en móvil a la derecha del header -->
+      <button onclick="logout()" class="sm:hidden bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg transition-colors">
+        Salir
+      </button>
     </div>
     
-    <!-- Módulo de Marcación -->
+    <!-- Título del Módulo -->
     <p class="text-xs sm:text-sm md:text-base text-blue-600 font-bold uppercase tracking-wide text-center">
       Módulo de Marcación Diaria (Escáner)
     </p>
 
-    <!-- Botón Cerrar Sesión -->
-    <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-1.5 px-3 md:py-2 md:px-4 rounded-lg transition-colors shadow-sm">
+    <!-- Botón Cerrar Sesión en Escritorio -->
+    <button onclick="logout()" class="hidden sm:block bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition-colors shadow-sm">
       Cerrar Sesión
     </button>
   </header>
 
-  <!-- Contenido Principal -->
-  <main class="max-w-5xl mx-auto mt-4 md:mt-6 p-3 md:p-4 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+  <!-- Contenido Principal (Grid Adaptativo) -->
+  <main class="max-w-5xl mx-auto mt-2 md:mt-6 p-3 md:p-4 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
     
-    <!-- Sección del Escáner -->
-    <div class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+    <!-- Bloque Escáner -->
+    <div class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
       <h2 class="text-xs md:text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
         <span>📷</span> ESCÁNER DE FOTOCHECKS
       </h2>
-      <div id="reader" class="w-full bg-slate-900 rounded-xl overflow-hidden min-h-[250px] shadow-inner"></div>
-      <div id="scan-feedback" class="mt-4 hidden p-3 rounded-lg text-center font-bold text-xs"></div>
+      
+      <!-- Visor de la Cámara -->
+      <div id="reader" class="w-full bg-slate-900 rounded-xl overflow-hidden min-h-[260px] max-h-[350px] shadow-inner flex items-center justify-center"></div>
+      
+      <!-- Mensaje Feedback de Escaneo -->
+      <div id="scan-feedback" class="mt-3 hidden p-3 rounded-lg text-center font-bold text-xs"></div>
     </div>
 
-    <!-- Sección de Registros de Hoy -->
-    <div class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-      <h2 class="text-xs md:text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+    <!-- Bloque Tabla de Registros -->
+    <div class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
+      <h2 class="text-xs md:text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
         <span>✅</span> MARCACIONES REGISTRADAS HOY
       </h2>
-      <div class="overflow-x-auto">
+      
+      <!-- Tabla con Scroll Horizontal y Vertical si supera tamaño -->
+      <div class="overflow-x-auto max-h-[350px] overflow-y-auto border border-slate-100 rounded-lg">
         <table class="w-full text-left text-xs">
-          <thead>
-            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500">
-              <th class="p-2">Código</th>
-              <th class="p-2">Nombre</th>
-              <th class="p-2 text-center">Hora</th>
-              <th class="p-2 text-center">Estado</th>
+          <thead class="sticky top-0 bg-slate-50 border-b border-slate-200 text-slate-500 z-10">
+            <tr>
+              <th class="p-2.5">Código</th>
+              <th class="p-2.5">Nombre</th>
+              <th class="p-2.5 text-center">Hora</th>
+              <th class="p-2.5 text-center">Estado</th>
             </tr>
           </thead>
-          <tbody id="today-records-body"></tbody>
+          <tbody id="today-records-body" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
     </div>
 
   </main>
 
-  <!-- Ventana Emergente (Modal Pop-Up) -->
+  <!-- Ventana Emergente (Modal Pop-Up de Confirmación) -->
   <div id="modal-asistencia" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-slate-100 p-5 md:p-6 text-center transform transition-all">
       <div id="modal-icon" class="text-4xl md:text-5xl mb-2">✅</div>
