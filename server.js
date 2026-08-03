@@ -221,6 +221,32 @@ app.get('/api/asistencia/hoy', (req, res) => {
   });
 });
 
+// =========================================================================
+// NVO ENDPOINT: OBTENER ASISTENCIA HISTÓRICA EXACTA POR CÓDIGO DE ALUMNO
+// =========================================================================
+app.get('/api/asistencias/alumno/:codigo', (req, res) => {
+  const { codigo } = req.params;
+  const sql = `
+    SELECT 
+      a.id,
+      a.usuario_codigo AS codigo,
+      a.fecha,
+      a.hora,
+      a.estado
+    FROM asistencias a
+    WHERE UPPER(a.usuario_codigo) = UPPER(?)
+    ORDER BY a.fecha DESC, a.hora DESC
+  `;
+
+  db.all(sql, [codigo.trim()], (err, rows) => {
+    if (err) {
+      console.error('Error al obtener asistencias del alumno:', err.message);
+      return res.status(500).json([]);
+    }
+    res.json(rows || []);
+  });
+});
+
 // API Rankings (Excluye al Director y unifica Faltas a 0 puntos)
 app.get('/api/rankings', (req, res) => {
   const query = `
@@ -275,9 +301,9 @@ app.post('/api/asistencia/manual', (req, res) => {
   });
 });
 
-// Reporte Consolidado (Sin distinción de justificada/injustificada)
+// Reporte Consolidado (Para Alumnos y Docentes)
 app.get('/api/reportes/consolidado', (req, res) => {
-  db.all("SELECT * FROM usuarios WHERE rol = 'Alumno'", [], (err, usuarios) => {
+  db.all("SELECT * FROM usuarios WHERE rol IN ('Alumno', 'Docente', 'Auxiliar')", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
 
     db.all('SELECT * FROM asistencias', [], (err, asistencias) => {
@@ -301,6 +327,7 @@ app.get('/api/reportes/consolidado', (req, res) => {
           nombre: u.nombre,
           rol: u.rol,
           aula: u.materia_aula || 'Sin Asignación',
+          materia_aula: u.materia_aula || 'Sin Asignación',
           asistencias: asistenciasCount,
           tardanzas,
           faltas,
