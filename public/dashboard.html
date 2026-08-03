@@ -2,42 +2,384 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Panel Directivo General</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Directivo General | I.E. Santa Rosa</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
 </head>
-<body class="bg-slate-100 flex">
-  <aside class="w-64 bg-slate-900 text-slate-300 min-h-screen p-4">
-    <!-- Contenedor del Título con Logo -->
-    <div class="flex items-center gap-2 mb-6 pb-2 border-b border-slate-800">
-     <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-16 h-16 object-contain">
-     <h2 class="text-white font-bold text-base">I.E. SANTA ROSA</h2>
+<body class="bg-slate-100 text-slate-800 flex h-screen overflow-hidden">
+
+  <!-- SIDEBAR NAVEGACIÓN -->
+  <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen">
+    <div>
+      <!-- Header Sidebar con Logo Local -->
+      <div class="flex items-center gap-3 p-4 border-b border-slate-800">
+        <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-12 h-12 object-contain">
+        <div>
+          <h2 class="text-white font-bold text-sm leading-tight tracking-wider">I.E. SANTA ROSA</h2>
+          <span class="text-[11px] text-slate-400 font-medium">Control Asistencial</span>
+        </div>
+      </div>
+
+      <!-- Links de Navegación con Íconos Coloridos -->
+      <nav class="p-3 space-y-2 text-sm font-semibold">
+        <!-- Inicio (Activo) -->
+        <a href="dashboard.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-blue-600 text-white shadow-md">
+          <i class="fa-solid fa-chart-pie w-5 text-center text-base text-cyan-300"></i>
+          <span>Inicio</span>
+        </a>
+
+        <!-- Control y Reportes -->
+        <a href="reportes.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <i class="fa-solid fa-folder-open w-5 text-center text-base text-emerald-400"></i>
+          <span>Control y Reportes</span>
+        </a>
+
+        <!-- Rankings y Puntos -->
+        <a href="rankings.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <i class="fa-solid fa-trophy w-5 text-center text-base text-amber-400"></i>
+          <span>Rankings y Puntos</span>
+        </a>
+
+        <!-- Inscribir / CRUD -->
+        <a href="inscripciones.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <i class="fa-solid fa-user-pen w-5 text-center text-base text-purple-400"></i>
+          <span>Inscribir / CRUD</span>
+        </a>
+
+        <!-- Botón Cerrar Sesión -->
+        <button onclick="logout()" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors font-bold text-sm text-left mt-6">
+          <i class="fa-solid fa-right-from-bracket w-5 text-center text-base text-rose-500"></i>
+          <span>Cerrar Sesión</span>
+        </button>
+      </nav>
     </div>
-    <nav class="space-y-2 text-sm">
-      <a href="dashboard.html" class="block py-2 px-4 rounded bg-blue-600 text-white font-bold">📊 Inicio</a>
-      <a href="reportes.html" class="block py-2 px-4 rounded hover:bg-slate-800">📁 Control y Reportes</a>
-      <a href="rankings.html" class="block py-2 px-4 rounded hover:bg-slate-800">🏆 Rankings y Puntos</a>
-      <a href="inscripciones.html" class="block py-2 px-4 rounded hover:bg-slate-800">📝 Inscribir / CRUD</a>
-      <button onclick="logout()" class="w-full text-left py-2 px-4 rounded hover:bg-red-800 text-red-400 mt-8">🚪 Cerrar Sesión</button>
-    </nav>
   </aside>
 
-  <main class="flex-1 p-8">
-    <h1 class="text-2xl font-bold text-slate-800 mb-6">Resumen Ejecutivo General</h1>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <span class="text-xs font-bold text-slate-400">SISTEMA</span>
-        <h3 class="text-lg font-bold text-slate-800 mt-1">Estado On-Line</h3>
-        <p class="text-xs text-green-600 mt-2">Sincronizado globalmente</p>
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="flex-1 overflow-y-auto p-8">
+    
+    <!-- Header Superior con Fecha Actual Dinámica -->
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+      <div>
+        <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">PANEL DIRECTIVO</h1>
+        <p class="text-xs font-medium text-slate-500">Gestión total y métricas de asistencia en tiempo real</p>
       </div>
-      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <span class="text-xs font-bold text-slate-400">ACCESO DIRECTIVO</span>
-        <h3 class="text-lg font-bold text-slate-800 mt-1">Gestión Total</h3>
-        <p class="text-xs text-blue-600 mt-2">CRUD & Control de Asistencia Habilitado</p>
+
+      <div class="flex items-center gap-4">
+        <span class="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-bold px-3.5 py-1.5 rounded-full border border-emerald-200 shadow-sm">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span> Sistema En Línea
+        </span>
+        <div class="text-right text-xs text-slate-500 border-l border-slate-300 pl-4">
+          <div class="text-slate-800 font-bold capitalize" id="fecha-actual">Cargando fecha...</div>
+          <span class="font-medium">I.E. Santa Rosa</span>
+        </div>
       </div>
+    </header>
+
+    <!-- 1. TARJETAS DE MÉTRICAS -->
+    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+      
+      <!-- Card Estudiantes -->
+      <div class="bg-gradient-to-r from-red-500 to-rose-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
+        <div>
+          <span class="text-xs font-extrabold uppercase tracking-wider text-rose-100">Estudiantes</span>
+          <div class="text-3xl font-black mt-1" id="total-estudiantes">--</div>
+          <span class="text-[11px] font-semibold text-rose-100/90">Matriculados activos</span>
+        </div>
+        <div class="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white text-2xl shadow-inner">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+      </div>
+
+      <!-- Card Docentes -->
+      <div class="bg-gradient-to-r from-lime-500 to-emerald-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
+        <div>
+          <span class="text-xs font-extrabold uppercase tracking-wider text-emerald-100">Docentes</span>
+          <div class="text-3xl font-black mt-1" id="total-docentes">--</div>
+          <span class="text-[11px] font-semibold text-emerald-100/90">Plana docente activa</span>
+        </div>
+        <div class="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white text-2xl shadow-inner">
+          <i class="fa-solid fa-chalkboard-user"></i>
+        </div>
+      </div>
+
+      <!-- Card Marcaciones -->
+      <div class="bg-gradient-to-r from-teal-400 to-cyan-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
+        <div>
+          <span class="text-xs font-extrabold uppercase tracking-wider text-teal-100">Puntuales Hoy</span>
+          <div class="text-3xl font-black mt-1" id="total-asistencias">--</div>
+          <span class="text-[11px] font-semibold text-teal-100/90">Registrados a tiempo</span>
+        </div>
+        <div class="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white text-2xl shadow-inner">
+          <i class="fa-solid fa-clipboard-check"></i>
+        </div>
+      </div>
+
+      <!-- Card Tardanzas -->
+      <div class="bg-gradient-to-r from-sky-400 to-blue-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
+        <div>
+          <span class="text-xs font-extrabold uppercase tracking-wider text-sky-100">Tardanzas Hoy</span>
+          <div class="text-3xl font-black mt-1" id="total-tardanzas">--</div>
+          <span class="text-[11px] font-semibold text-sky-100/90">Requieren seguimiento</span>
+        </div>
+        <div class="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white text-2xl shadow-inner">
+          <i class="fa-solid fa-clock"></i>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 2. CRONOGRAMA Y ACCESOS DIRECTIVOS -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      
+      <!-- Cronograma de Asistencia Diaria -->
+      <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">Cronograma de Asistencia Diaria</h2>
+            <p class="text-xs text-slate-500 font-medium">Últimos registros reportados por el escáner</p>
+          </div>
+          <a href="reportes.html" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors">
+            Ver reporte completo <i class="fa-solid fa-arrow-right text-[10px]"></i>
+          </a>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50/50">
+                <th class="py-3 px-3">Código</th>
+                <th class="py-3 px-3">Usuario</th>
+                <th class="py-3 px-3">Rol / Asignación</th>
+                <th class="py-3 px-3 text-center">Hora</th>
+                <th class="py-3 px-3 text-center">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-dashboard-recent" class="text-xs divide-y divide-slate-100 font-medium">
+              <tr>
+                <td colspan="5" class="py-8 text-center text-slate-400 font-semibold">Cargando marcaciones recientes...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Panel Lateral de Acceso Directivo -->
+      <div class="space-y-6">
+        
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <h2 class="text-base font-bold text-slate-800 mb-1">Acceso Directivo</h2>
+          <p class="text-xs text-slate-500 font-medium mb-4">CRUD & Control de Asistencia Habilitado.</p>
+          
+          <div class="space-y-2.5">
+            <a href="escaner.html" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
+              <span class="flex items-center gap-2.5"><i class="fa-solid fa-qrcode text-slate-400 group-hover:text-blue-600"></i> Módulo Escáner</span>
+              <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-600"></i>
+            </a>
+            <a href="inscripciones.html" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
+              <span class="flex items-center gap-2.5"><i class="fa-solid fa-user-plus text-slate-400 group-hover:text-blue-600"></i> Inscribir / CRUD</span>
+              <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-600"></i>
+            </a>
+            <a href="rankings.html" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
+              <span class="flex items-center gap-2.5"><i class="fa-solid fa-star text-slate-400 group-hover:text-blue-600"></i> Rankings y Puntos</span>
+              <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-600"></i>
+            </a>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <h2 class="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-server text-blue-600"></i> Estado del Sistema
+          </h2>
+          <div class="border-l-4 border-emerald-500 pl-3 py-1 mb-3">
+            <p class="text-xs font-bold text-slate-800">Sincronizado globalmente</p>
+            <p class="text-[11px] font-medium text-slate-500">Base de datos de asistencia operativa.</p>
+          </div>
+          <div class="border-l-4 border-blue-500 pl-3 py-1">
+            <p class="text-xs font-bold text-slate-800">Control de Puntajes</p>
+            <p class="text-[11px] font-medium text-slate-500">Sistema evaluativo por puntualidad activo.</p>
+          </div>
+        </div>
+
+      </div>
+
     </div>
+
   </main>
+
   <script src="js/auth.js"></script>
-  <script>checkAuth('Director');</script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Verificar sesión activa de Director
+      if (typeof checkAuth === 'function') {
+        checkAuth('Director');
+      }
+
+      // Imprimir fecha actual dinámica en español
+      const elemFecha = document.getElementById('fecha-actual');
+      if (elemFecha) {
+        elemFecha.innerText = new Date().toLocaleDateString('es-PE', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+      }
+
+      // Ejecutar la lectura general de datos
+      cargarMetricasDashboard();
+    });
+
+    async function cargarMetricasDashboard() {
+  // -------------------------------------------------------------------------
+  // 1. OBTENER TOTAL DE ESTUDIANTES Y DOCENTES REGISTRADOS (MÉTRICAS MATRICULADOS)
+  // -------------------------------------------------------------------------
+  try {
+    let resUsuarios = await fetch('/api/estudiantes');
+    if (!resUsuarios.ok) resUsuarios = await fetch('/api/usuarios');
+    
+    if (resUsuarios.ok) {
+      const listaUsuarios = await resUsuarios.json();
+      
+      const totalAlumnos = listaUsuarios.filter(u => 
+        (u.rol && u.rol.toLowerCase() === 'alumno') || 
+        (u.tipo && u.tipo.toLowerCase() === 'alumno') ||
+        (!u.rol && !u.tipo)
+      ).length;
+
+      const totalDocentes = listaUsuarios.filter(u => 
+        (u.rol && (u.rol.toLowerCase() === 'docente' || u.rol.toLowerCase() === 'auxiliar')) || 
+        (u.tipo && (u.tipo.toLowerCase() === 'docente' || u.tipo.toLowerCase() === 'auxiliar'))
+      ).length;
+
+      const elemEstudiantes = document.getElementById('total-estudiantes');
+      const elemDocentes = document.getElementById('total-docentes');
+      
+      if (elemEstudiantes) elemEstudiantes.innerText = totalAlumnos;
+      if (elemDocentes) elemDocentes.innerText = totalDocentes;
+    }
+  } catch (errUsuarios) {
+    console.warn("Error al consultar directorio de usuarios:", errUsuarios);
+  }
+
+  // -------------------------------------------------------------------------
+  // 2. OBTENER ÚNICAMENTE MARCACIONES REALES DEL ESCÁNER
+  // -------------------------------------------------------------------------
+  try {
+    let datosOriginales = [];
+
+    // Priorizar endpoints de marcaciones/asistencias directas del escáner
+    let resMarcaciones = await fetch('/api/asistencias');
+    if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/marcaciones');
+    if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/reportes/consolidado');
+
+    if (resMarcaciones.ok) {
+      datosOriginales = await resMarcaciones.json();
+    }
+
+    const tbody = document.getElementById('tabla-dashboard-recent');
+    if (tbody) tbody.innerHTML = '';
+
+    // -------------------------------------------------------------------------
+    // FILTRO ESTRICTO: Solo alumnos con marcación REAL efectuada hoy
+    // -------------------------------------------------------------------------
+    const marcacionesEfectivas = datosOriginales.filter(item => {
+      // 1. Debe tener un campo de hora con valor real (no vacio, null o "--:--")
+      const horaValida = item.hora || item.hora_ingreso || item.hora_registro || item.hora_escaneo || item.fecha_hora || item.created_at || item.createdAt || item.timestamp;
+      
+      // 2. O debe tener marcación explícita reportada por el escáner
+      const tieneMarcacionReal = (horaValida && String(horaValida).trim() !== '' && horaValida !== '--:--') || 
+                                (item.tardanzas > 0) || 
+                                (item.asistencias > 0 && item.hora);
+
+      return tieneMarcacionReal;
+    });
+
+    // Si nadie ha escaneado su QR el día de hoy
+    if (!marcacionesEfectivas || marcacionesEfectivas.length === 0) {
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400 font-semibold">Sin registros de marcación hoy</td></tr>';
+      }
+      actualizarTarjetasContadores(0, 0);
+      return;
+    }
+
+    let puntualesTotal = 0;
+    let tardanzasTotal = 0;
+
+    // -------------------------------------------------------------------------
+    // 3. RENDERIZAR SOLO A LOS ALUMNOS QUE ESCANEARON SU QR
+    // -------------------------------------------------------------------------
+    marcacionesEfectivas.forEach((item, index) => {
+      const estadoUpper = String(item.estado || '').toUpperCase();
+      const esTarde = estadoUpper === 'TARDE' || (item.tardanzas && item.tardanzas > 0);
+      const esPuntual = estadoUpper === 'PUNTUAL' || estadoUpper === 'PRESENTE' || (!esTarde && item.asistencias > 0);
+
+      if (esTarde) {
+        tardanzasTotal++;
+      } else if (esPuntual) {
+        puntualesTotal++;
+      }
+
+      // Mostrar únicamente en la tabla del Cronograma
+      if (tbody && index < 5) {
+        const estadoBadge = esTarde 
+          ? '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">TARDE</span>'
+          : '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">PUNTUAL</span>';
+
+        let rawHora = item.hora || item.hora_ingreso || item.hora_registro || item.hora_escaneo || item.fecha_hora || item.created_at || item.createdAt || item.timestamp;
+        let horaFormateada = '--:--';
+
+        if (rawHora && typeof rawHora === 'string') {
+          if (rawHora.includes('T') || (rawHora.includes('-') && rawHora.includes(':'))) {
+            const d = new Date(rawHora);
+            if (!isNaN(d.getTime())) {
+              horaFormateada = d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+            }
+          } else if (/^\d{1,2}:\d{2}/.test(rawHora)) {
+            if (rawHora.toLowerCase().includes('m')) {
+              horaFormateada = rawHora;
+            } else {
+              const partes = rawHora.split(':');
+              horaFormateada = `${partes[0].padStart(2, '0')}:${partes[1]}`;
+            }
+          } else {
+            horaFormateada = rawHora;
+          }
+        }
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+            <td class="py-3 px-3 font-mono font-bold text-slate-700">${item.codigo || item.id || 'N/A'}</td>
+            <td class="py-3 px-3 font-semibold text-slate-800">${item.nombre || item.nombre_completo || 'Usuario'}</td>
+            <td class="py-3 px-3 text-slate-500 font-medium">${item.aula || item.materia_aula || item.grado || 'General'}</td>
+            <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">${horaFormateada}</td>
+            <td class="py-3 px-3 text-center">${estadoBadge}</td>
+          </tr>
+        `;
+      }
+    });
+
+    actualizarTarjetasContadores(puntualesTotal, tardanzasTotal);
+
+  } catch (errReportes) {
+    console.error("Error al cargar marcaciones:", errReportes);
+  }
+}
+
+function actualizarTarjetasContadores(puntuales, tardanzas) {
+  const elemPuntuales = document.getElementById('total-puntuales') || document.getElementById('total-asistencias');
+  const elemTardanzas = document.getElementById('total-tardanzas');
+
+  if (elemPuntuales) elemPuntuales.innerText = puntuales;
+  if (elemTardanzas) elemTardanzas.innerText = tardanzas;
+}
+  </script>
 </body>
 </html>

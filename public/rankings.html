@@ -3,66 +3,147 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rankings de Méritos - I.E. Santa Rosa</title>
+  <title>Rankings de Méritos | I.E. Santa Rosa</title>
+  <!-- Framework CSS Tailwind para diseño responsive y estilizado -->
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/styles.css">
+  <!-- Íconos de FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Librerías jsPDF para la exportación en PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
 </head>
-<body>
-  <div class="dashboard-container">
-    <aside class="sidebar">
-      <div class="brand">🏫 I.E. Santa Rosa</div>
-      <nav class="menu">
-        <a href="dashboard.html">🏠 Inicio</a>
-        <a href="reportes.html">📁 Control y Reportes</a>
-        <a href="rankings.html" class="active">🏆 Rankings y Puntos</a>
-        <a href="inscripciones.html">📝 Inscribir / CRUD</a>
-      </nav>
-    </aside>
+<body class="bg-slate-100 text-slate-800 flex h-screen overflow-hidden">
 
-    <main class="main-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
-        <h2>🏆 Rankings de Méritos</h2>
-        <div style="display: flex; gap: 10px;">
-          <button onclick="imprimirRankingDocentesPDF()" class="btn-submit" style="background:#0284c7;">👨‍🏫 Ranking Docentes PDF</button>
-          <button onclick="imprimirRankingAlumnosPDF()" class="btn-submit" style="background:#10b981;">🎓 Ranking Alumnos PDF</button>
+  <!-- SIDEBAR NAVEGACIÓN -->
+  <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen">
+    <div>
+      <!-- Cabecera del Sidebar con Logo Institucional -->
+      <div class="flex items-center gap-3 p-4 border-b border-slate-800">
+        <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-12 h-12 object-contain">
+        <div>
+          <h2 class="text-white font-bold text-sm leading-tight tracking-wider">I.E. SANTA ROSA</h2>
+          <span class="text-[11px] text-slate-400 font-medium">Control Asistencial</span>
         </div>
       </div>
 
-      <!-- Cuadro Ranking Docentes -->
-      <div class="table-container" style="margin-bottom: 30px;">
-        <h3 style="color: #0284c7; margin-bottom: 15px;">👨‍🏫 Ranking de Docentes</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Posición</th>
-              <th>Nombre Completo</th>
-              <th>Materia / Área</th>
-              <th>Puntaje Acumulado</th>
-            </tr>
-          </thead>
-          <tbody id="tbodyRankingDocentes"></tbody>
-        </table>
+      <!-- Menú de enlaces de navegación -->
+      <nav class="p-3 space-y-2 text-sm font-semibold">
+        <!-- Inicio -->
+        <a href="dashboard.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <i class="fa-solid fa-chart-pie w-5 text-center text-base text-cyan-300"></i>
+          <span>Inicio</span>
+        </a>
+
+        <!-- Control y Reportes -->
+        <a href="reportes.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <i class="fa-solid fa-folder-open w-5 text-center text-base text-emerald-400"></i>
+          <span>Control y Reportes</span>
+        </a>
+
+        <!-- Rankings y Puntos (Página activa) -->
+        <a href="rankings.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-blue-600 text-white shadow-md">
+          <i class="fa-solid fa-trophy w-5 text-center text-base text-amber-400"></i>
+          <span>Rankings y Puntos</span>
+        </a>
+
+        <!-- Inscribir / CRUD -->
+        <a href="inscripciones.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <i class="fa-solid fa-user-pen w-5 text-center text-base text-purple-400"></i>
+          <span>Inscribir / CRUD</span>
+        </a>
+
+        <!-- Botón Cerrar Sesión -->
+        <button onclick="logout()" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors font-bold text-sm text-left mt-6">
+          <i class="fa-solid fa-right-from-bracket w-5 text-center text-base text-rose-500"></i>
+          <span>Cerrar Sesión</span>
+        </button>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="flex-1 overflow-y-auto p-8">
+    
+    <!-- Header de la sección con Botones de Descarga PDF -->
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+      <div>
+        <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+          🏆 Rankings de Méritos
+        </h1>
+        <p class="text-xs font-medium text-slate-500">Puntajes acumulados por puntualidad y asistencia</p>
       </div>
 
-      <!-- Cuadro Ranking Alumnos -->
-      <div class="table-container">
-        <h3 style="color: #0284c7; margin-bottom: 15px;">🎓 Ranking de Alumnos</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Posición</th>
-              <th>Nombre Completo</th>
-              <th>Aula / Grado</th>
-              <th>Puntaje Acumulado</th>
-            </tr>
-          </thead>
-          <tbody id="tbodyRankingAlumnos"></tbody>
-        </table>
+      <!-- Botones para exportar reportes -->
+      <div class="flex flex-wrap gap-3">
+        <button onclick="imprimirRankingDocentesPDF()" class="flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition-all">
+          <i class="fa-solid fa-file-pdf text-sm"></i> Ranking Docentes PDF
+        </button>
+        <button onclick="imprimirRankingAlumnosPDF()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition-all">
+          <i class="fa-solid fa-file-pdf text-sm"></i> Ranking Alumnos PDF
+        </button>
       </div>
-    </main>
-  </div>
+    </header>
 
+    <div class="space-y-8">
+      <!-- 👨‍🏫 TABLA: RANKING DE DOCENTES -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-chalkboard-user text-sky-600"></i> Ranking de Docentes
+        </h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50/50">
+                <th class="py-3 px-4">Posición</th>
+                <th class="py-3 px-4">Nombre Completo</th>
+                <th class="py-3 px-4">Materia / Área</th>
+                <th class="py-3 px-4">Puntaje Acumulado</th>
+              </tr>
+            </thead>
+            <!-- El JS inyecta las filas dinámicas aquí -->
+            <tbody id="tbodyRankingDocentes" class="text-xs divide-y divide-slate-100 font-medium">
+              <tr>
+                <td colspan="4" class="py-6 text-center text-slate-400 font-semibold">Cargando ranking de docentes...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 🎓 TABLA: RANKING DE ALUMNOS -->
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-user-graduate text-emerald-600"></i> Ranking de Alumnos
+        </h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50/50">
+                <th class="py-3 px-4">Posición</th>
+                <th class="py-3 px-4">Nombre Completo</th>
+                <th class="py-3 px-4">Aula / Grado</th>
+                <th class="py-3 px-4">Puntaje Acumulado</th>
+              </tr>
+            </thead>
+            <!-- El JS inyecta las filas dinámicas aquí -->
+            <tbody id="tbodyRankingAlumnos" class="text-xs divide-y divide-slate-100 font-medium">
+              <tr>
+                <td colspan="4" class="py-6 text-center text-slate-400 font-semibold">Cargando ranking de alumnos...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+  </main>
+
+  <!-- Lógica backend para procesar datos e imprimir PDFs -->
   <script src="js/rankings.js"></script>
 </body>
 </html>
