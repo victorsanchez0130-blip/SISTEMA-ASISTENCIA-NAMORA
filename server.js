@@ -36,7 +36,7 @@ function getHoraPeru() {
   return new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour12: false });
 }
 
-// Creación de tablas e inserción de datos iniciales
+// Creación de tablas e inserción de datos iniciales (A prueba de fallos UNIQUE)
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -58,11 +58,10 @@ db.serialize(() => {
     )
   `);
 
-  // Insertar usuarios por defecto si no existen
-  db.get("SELECT * FROM usuarios WHERE rol = 'Director'", (err, row) => {
-    if (!row) {
-      db.run("INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES ('DIR-SRN-001', 'Director Manuel Asencio Málaga', 'Director', 'Dirección General')");    }
-  });
+  // Usar INSERT OR IGNORE previene colisiones con la restricción UNIQUE
+  const stmt = db.prepare("INSERT OR IGNORE INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)");
+  stmt.run('DIR-SRN-001', 'Director General', 'Director Manuel Asencio Málaga', 'Dirección General');
+  stmt.finalize();
 });
 
 // API Login
