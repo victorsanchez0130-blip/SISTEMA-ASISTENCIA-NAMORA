@@ -200,44 +200,54 @@ async function generarFichaAlumnoPDF() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
   const fechaFiltro = document.getElementById('filtroFecha')?.value || '';
+  const maxDias = calcularDiasHabiles(tipo, fechaFiltro);
 
   agregarMembreteInstitucional(doc, "FICHA INDIVIDUAL DE ASISTENCIA Y PUNTUALIDAD");
 
-  // Encabezado con Datos Reales del Alumno
+  // Encabezado con Datos Reales del Alumno (Alineación corregida)
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(15, 23, 42);
 
   doc.text("CÓDIGO ALUMNO:", 14, 34);
   doc.setFont("helvetica", "normal");
-  doc.text(alumno.codigo, 60, 34);
+  doc.text(alumno.codigo, 68, 34);
 
   doc.setFont("helvetica", "bold");
-  doc.text("APELLIDOS Y NOMBRES:", 14, 40);
+  doc.text("APELLIDOS Y NOMBRES:", 14, 41);
   doc.setFont("helvetica", "normal");
-  doc.text(alumno.nombre, 60, 40);
+  doc.text(alumno.nombre, 68, 41);
 
   doc.setFont("helvetica", "bold");
-  doc.text("AULA / SECCIÓN:", 14, 46);
+  doc.text("AULA / SECCIÓN:", 14, 48);
   doc.setFont("helvetica", "normal");
-  doc.text(alumno.aula || alumno.materia_aula || '-', 60, 46);
+  doc.text(alumno.aula || alumno.materia_aula || '-', 68, 48);
 
   doc.setFont("helvetica", "bold");
-  doc.text("PERÍODO EVALUADO:", 14, 52);
+  doc.text("PERÍODO EVALUADO:", 14, 55);
   doc.setFont("helvetica", "normal");
-  doc.text(fechaFiltro || "General", 60, 52);
+  doc.text(fechaFiltro || "General", 68, 55);
 
-  // Cuadro Resumen de Metricas
+  // Cálculos de porcentajes
+  const cAsist = alumno.asistencias || 0;
+  const cTard = alumno.tardanzas || 0;
+  const cFalt = alumno.faltas || 0;
+  const pctA = maxDias > 0 ? Math.round((cAsist / maxDias) * 100) : 0;
+  const pctT = maxDias > 0 ? Math.round((cTard / maxDias) * 100) : 0;
+  const pctF = maxDias > 0 ? Math.round((cFalt / maxDias) * 100) : 0;
+
+  // Cuadro Resumen de Métricas con Porcentajes
   const resumenData = [[
-    `${alumno.asistencias || 0}`,
-    `${alumno.tardanzas || 0}`,
-    `${alumno.faltas || 0}`,
+    `${cAsist} (${pctA}%)`,
+    `${cTard} (${pctT}%)`,
+    `${cFalt} (${pctF}%)`,
     `${alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : (alumno.puntos || 0)} pts`
   ]];
 
   doc.autoTable({
-    startY: 58,
+    startY: 62,
     head: [['PUNTUALES', 'TARDANZAS', 'FALTAS', 'PUNTAJE']],
     body: resumenData,
     theme: 'grid',
@@ -252,7 +262,6 @@ async function generarFichaAlumnoPDF() {
     if (res.ok) {
       const dataAsistencias = await res.json();
       
-      // Filtrar por fecha seleccionada si aplica
       if (fechaFiltro) {
         historialFiltrado = dataAsistencias.filter(reg => reg.fecha === fechaFiltro || reg.fecha_hora?.startsWith(fechaFiltro));
       } else {
@@ -274,7 +283,7 @@ async function generarFichaAlumnoPDF() {
       const fechaReg = reg.fecha || reg.fecha_hora?.split(' ')[0] || fechaFiltro;
       const horaReg = reg.hora || (reg.fecha_hora?.split(' ')[1]) || '-';
       const estadoReg = (reg.estado || 'REGISTRADO').toUpperCase();
-      const obsReg = reg.observacion || (estadoReg === 'TARDE' ? 'Ingreso fuera de horario regular' : 'Ingreso registrado en escáner');
+      const obsReg = reg.observacion || (estadoReg === 'TARDE' || estadoReg === 'TARDANZA' ? 'Ingreso fuera de horario regular' : 'Ingreso registrado en escáner');
 
       const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
       let nombreDia = 'Registrado';
@@ -286,7 +295,6 @@ async function generarFichaAlumnoPDF() {
       return [fechaReg, nombreDia, horaReg, estadoReg, obsReg];
     });
   } else {
-    // Si NO tiene registros reales, NO se llena información falsa
     bodyHistorial = [
       ['-', '-', '-', '-', 'Sin registros de asistencia en el período seleccionado']
     ];
@@ -331,23 +339,37 @@ function generarDocentesPDF() {
   doc.text(`Fecha/Período: ${fecha}`, 14, 32);
 
   const docentes = datosReporteGlobal.filter(d => d.rol === 'Docente' || d.rol === 'Auxiliar');
-  const bodyData = docentes.map(d => [
-    d.codigo,
-    d.nombre,
-    d.materia_aula || d.aula || '-',
-    `${d.asistencias || 0}/${maxDias}`,
-    `${d.tardanzas || 0}/${maxDias}`,
-    `${d.faltas || 0}/${maxDias}`,
-    `${d.puntajeTotal !== undefined ? d.puntajeTotal : (d.puntos || 0)} pts`
-  ]);
+  const bodyData = docentes.map(d => {
+    const cAsist = d.asistencias || 0;
+    const cTard = d.tardanzas || 0;
+    const cFalt = d.faltas || 0;
+    const pctA = maxDias > 0 ? Math.round((cAsist / maxDias) * 100) : 0;
+    const pctT = maxDias > 0 ? Math.round((cTard / maxDias) * 100) : 0;
+    const pctF = maxDias > 0 ? Math.round((cFalt / maxDias) * 100) : 0;
+
+    return [
+      d.codigo,
+      d.nombre,
+      d.materia_aula || d.aula || '-',
+      `${cAsist}/${maxDias} (${pctA}%)`,
+      `${cTard}/${maxDias} (${pctT}%)`,
+      `${cFalt}/${maxDias} (${pctF}%)`,
+      `${d.puntajeTotal !== undefined ? d.puntajeTotal : (d.puntos || 0)} pts`
+    ];
+  });
 
   doc.autoTable({
     startY: 36,
     head: [['Código', 'Nombre', 'Materia / Asignación', 'Asist.', 'Tard.', 'Faltas', 'Puntaje']],
     body: bodyData,
     theme: 'grid',
-    headStyles: { fillColor: [14, 42, 71], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 8 }
+    headStyles: { fillColor: [14, 42, 71], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+    styles: { fontSize: 8, halign: 'center' },
+    columnStyles: {
+      0: { halign: 'left' },
+      1: { halign: 'left' },
+      2: { halign: 'left' }
+    }
   });
 
   doc.save(`Reporte_Docentes_${tipo}.pdf`);
@@ -377,23 +399,37 @@ function generarGradoPDF() {
   doc.setFont("helvetica", "normal");
   doc.text(`Nivel: ${valNivel} | Grado: ${valGrado} | Sección: ${valSeccion} | Período: ${fecha}`, 14, 32);
 
-  const bodyData = alumnos.map(a => [
-    a.codigo,
-    a.nombre,
-    a.aula || a.materia_aula || '-',
-    `${a.asistencias || 0}/${maxDias}`,
-    `${a.tardanzas || 0}/${maxDias}`,
-    `${a.faltas || 0}/${maxDias}`,
-    `${a.puntajeTotal !== undefined ? a.puntajeTotal : (a.puntos || 0)} pts`
-  ]);
+  const bodyData = alumnos.map(a => {
+    const cAsist = a.asistencias || 0;
+    const cTard = a.tardanzas || 0;
+    const cFalt = a.faltas || 0;
+    const pctA = maxDias > 0 ? Math.round((cAsist / maxDias) * 100) : 0;
+    const pctT = maxDias > 0 ? Math.round((cTard / maxDias) * 100) : 0;
+    const pctF = maxDias > 0 ? Math.round((cFalt / maxDias) * 100) : 0;
+
+    return [
+      a.codigo,
+      a.nombre,
+      a.aula || a.materia_aula || '-',
+      `${cAsist}/${maxDias} (${pctA}%)`,
+      `${cTard}/${maxDias} (${pctT}%)`,
+      `${cFalt}/${maxDias} (${pctF}%)`,
+      `${a.puntajeTotal !== undefined ? a.puntajeTotal : (a.puntos || 0)} pts`
+    ];
+  });
 
   doc.autoTable({
     startY: 36,
     head: [['Código', 'Nombre', 'Grado / Sección', 'Asist.', 'Tard.', 'Faltas', 'Puntaje']],
     body: bodyData,
     theme: 'grid',
-    headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 8 }
+    headStyles: { fillColor: [2, 132, 199], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+    styles: { fontSize: 8, halign: 'center' },
+    columnStyles: {
+      0: { halign: 'left' },
+      1: { halign: 'left' },
+      2: { halign: 'left' }
+    }
   });
 
   const nombreArchivo = `Reporte_Alumnos_${valNivel}_${valGrado}_${valSeccion}.pdf`.replace(/\s+/g, '_');
