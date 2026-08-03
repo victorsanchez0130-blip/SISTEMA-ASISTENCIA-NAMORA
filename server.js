@@ -36,7 +36,7 @@ function getHoraPeru() {
   return new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour12: false });
 }
 
-// Creación de tablas e inserción de datos iniciales (A prueba de fallos UNIQUE)
+// Creación de tablas y actualización forzada del rol del Director
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -58,10 +58,20 @@ db.serialize(() => {
     )
   `);
 
-  // Usar INSERT OR IGNORE previene colisiones con la restricción UNIQUE
+  // 1. Insertar el registro si no existe
   const stmt = db.prepare("INSERT OR IGNORE INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)");
   stmt.run('DIR-SRN-001', 'Director Manuel Asencio Málaga', 'Director', 'Dirección General');
   stmt.finalize();
+
+  // 2. FORZAR la corrección del rol y nombre por si fue editado o guardado como 'Docente'
+  db.run(`
+    UPDATE usuarios 
+    SET rol = 'Director', nombre = 'Director Manuel Asencio Málaga', materia_aula = 'Dirección General'
+    WHERE codigo = 'DIR-SRN-001'
+  `, (err) => {
+    if (err) console.error("Error al corregir el rol del Director:", err.message);
+    else console.log("Rol de Director verificado y actualizado correctamente.");
+  });
 });
 
 // API Login
@@ -211,6 +221,7 @@ app.get('/api/asistencia/hoy', (req, res) => {
 });
 
 // API Rankings y Sumatoria de Puntos
+// API Rankings y Sumatoria de Puntos (Excluye al Director)
 app.get('/api/rankings', (req, res) => {
   const query = `
     SELECT 
@@ -229,6 +240,7 @@ app.get('/api/rankings', (req, res) => {
       ), 0) AS puntaje_acumulado
     FROM usuarios u
     LEFT JOIN asistencias a ON u.codigo = a.usuario_codigo
+    WHERE u.rol IN ('Docente', 'Alumno') -- 👈 Solo toma en cuenta a Docentes y Alumnos
     GROUP BY u.id
     ORDER BY puntaje_acumulado DESC
   `;
@@ -236,8 +248,9 @@ app.get('/api/rankings', (req, res) => {
   db.all(query, [], (err, rows) => {
     if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
 
+    // Filtrar estrictamente por cada rol (el Director no entrará en ninguno)
     const docentes = rows.filter(r => r.rol === 'Docente');
-    const alumnos = rows.filter(r => r.rol === 'Alumno' || r.rol === 'Director');
+    const alumnos = rows.filter(r => r.rol === 'Alumno');
 
     res.json({
       success: true,
