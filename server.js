@@ -89,9 +89,10 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(401).json({ success: false, mensaje: 'Código no encontrado en el sistema.' });
     }
     
-    // Normalizamos el rol para evitar problemas de mayúsculas/minúsculas en el frontend
-    const rolNormalizado = usuario.rol.trim();
+    // Normalizamos el rol para evitar problemas de mayúsculas/minúsculas
+    const rolNormalizado = (usuario.rol || '').trim();
 
+    // 👈 AQUÍ ESTÁ EL CAMBIO: Redirige a dashboard.html si es Director
     res.json({
       success: true,
       mensaje: 'Acceso concedido',
@@ -111,7 +112,7 @@ app.post('/api/auth/login', (req, res) => {
 app.get('/api/usuarios', (req, res) => {
   db.all('SELECT * FROM usuarios ORDER BY id DESC', [], (err, rows) => {
     if (err) return res.status(500).json([]);
-    res.json(rows);
+    res.json(rows || []);
   });
 });
 
@@ -163,7 +164,7 @@ app.delete('/api/usuarios/:id', (req, res) => {
   });
 });
 
-// Marcar Asistencia QR (Evita duplicados en el mismo día)
+// Marcar Asistencia QR
 app.post('/api/asistencia/marcar', (req, res) => {
   const { codigoQR } = req.body;
   
@@ -173,7 +174,6 @@ app.post('/api/asistencia/marcar', (req, res) => {
     const hoy = getFechaPeru();
     const horaActual = getHoraPeru();
 
-    // 🔍 Validar si el usuario ya marcó hoy
     db.get('SELECT * FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [usuario.codigo, hoy], (err, yaMarco) => {
       if (err) return res.status(500).json({ success: false, mensaje: 'Error al verificar marcación.' });
 
@@ -187,7 +187,6 @@ app.post('/api/asistencia/marcar', (req, res) => {
         });
       }
 
-      // Si no ha marcado hoy, procede a registrar
       const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
 
       db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [usuario.codigo, hoy, horaActual, estado], (err) => {
@@ -220,8 +219,7 @@ app.get('/api/asistencia/hoy', (req, res) => {
   });
 });
 
-// API Rankings y Sumatoria de Puntos
-// API Rankings y Sumatoria de Puntos (Excluye al Director)
+// API Rankings (Excluye al Director)
 app.get('/api/rankings', (req, res) => {
   const query = `
     SELECT 
@@ -240,7 +238,7 @@ app.get('/api/rankings', (req, res) => {
       ), 0) AS puntaje_acumulado
     FROM usuarios u
     LEFT JOIN asistencias a ON u.codigo = a.usuario_codigo
-    WHERE u.rol IN ('Docente', 'Alumno') -- 👈 Solo toma en cuenta a Docentes y Alumnos
+    WHERE u.rol IN ('Docente', 'Alumno')
     GROUP BY u.id
     ORDER BY puntaje_acumulado DESC
   `;
@@ -248,7 +246,6 @@ app.get('/api/rankings', (req, res) => {
   db.all(query, [], (err, rows) => {
     if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
 
-    // Filtrar estrictamente por cada rol (el Director no entrará en ninguno)
     const docentes = rows.filter(r => r.rol === 'Docente');
     const alumnos = rows.filter(r => r.rol === 'Alumno');
 

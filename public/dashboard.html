@@ -19,7 +19,7 @@
     <div>
       <!-- Header Sidebar con Logo Local -->
       <div class="flex items-center gap-3 p-4 border-b border-slate-800">
-        <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-12 h-12 object-contain">
+        <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-12 h-12 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'">
         <div>
           <h2 class="text-white font-bold text-sm leading-tight tracking-wider">I.E. SANTA ROSA</h2>
           <span class="text-[11px] text-slate-400 font-medium">Control Asistencial</span>
@@ -68,7 +68,7 @@
     <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
       <div>
         <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">PANEL DIRECTIVO</h1>
-        <p class="text-xs font-medium text-slate-500">Gestión total y métricas de asistencia en tiempo real</p>
+        <p class="text-xs font-medium text-slate-500" id="director-saludo">Gestión total y métricas de asistencia en tiempo real</p>
       </div>
 
       <div class="flex items-center gap-4">
@@ -109,7 +109,7 @@
         </div>
       </div>
 
-      <!-- Card Marcaciones -->
+      <!-- Card Marcaciones Puntuales -->
       <div class="bg-gradient-to-r from-teal-400 to-cyan-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
         <div>
           <span class="text-xs font-extrabold uppercase tracking-wider text-teal-100">Puntuales Hoy</span>
@@ -143,7 +143,7 @@
         <div class="flex items-center justify-between mb-5">
           <div>
             <h2 class="text-lg font-bold text-slate-800">Cronograma de Asistencia Diaria</h2>
-            <p class="text-xs text-slate-500 font-medium">Últimos registros reportados por el escáner</p>
+            <p class="text-xs text-slate-500 font-medium">Últimos registros reportados por el escáner hoy</p>
           </div>
           <a href="reportes.html" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors">
             Ver reporte completo <i class="fa-solid fa-arrow-right text-[10px]"></i>
@@ -216,12 +216,19 @@
   <script src="js/auth.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      // Verificar sesión activa de Director
+      // Verificar sesión activa
       if (typeof checkAuth === 'function') {
         checkAuth('Director');
       }
 
-      // Imprimir fecha actual dinámica en español
+      // Nombre del usuario activo si existe en localStorage
+      const sessionData = JSON.parse(localStorage.getItem('user_session') || localStorage.getItem('usuario') || '{}');
+      if (sessionData.nombre) {
+        const saludo = document.getElementById('director-saludo');
+        if (saludo) saludo.innerText = `Bienvenido(a), ${sessionData.nombre}`;
+      }
+
+      // Imprimir fecha actual dinámica
       const elemFecha = document.getElementById('fecha-actual');
       if (elemFecha) {
         elemFecha.innerText = new Date().toLocaleDateString('es-PE', { 
@@ -232,154 +239,135 @@
         });
       }
 
-      // Ejecutar la lectura general de datos
+      // Ejecutar la lectura de métricas y marcaciones
       cargarMetricasDashboard();
     });
 
     async function cargarMetricasDashboard() {
-  // -------------------------------------------------------------------------
-  // 1. OBTENER TOTAL DE ESTUDIANTES Y DOCENTES REGISTRADOS (MÉTRICAS MATRICULADOS)
-  // -------------------------------------------------------------------------
-  try {
-    let resUsuarios = await fetch('/api/estudiantes');
-    if (!resUsuarios.ok) resUsuarios = await fetch('/api/usuarios');
-    
-    if (resUsuarios.ok) {
-      const listaUsuarios = await resUsuarios.json();
-      
-      const totalAlumnos = listaUsuarios.filter(u => 
-        (u.rol && u.rol.toLowerCase() === 'alumno') || 
-        (u.tipo && u.tipo.toLowerCase() === 'alumno') ||
-        (!u.rol && !u.tipo)
-      ).length;
+      // 1. OBTENER TOTAL DE ESTUDIANTES Y DOCENTES
+      try {
+        let resUsuarios = await fetch('/api/estudiantes');
+        if (!resUsuarios.ok) resUsuarios = await fetch('/api/usuarios');
+        
+        if (resUsuarios.ok) {
+          const listaUsuarios = await resUsuarios.json();
+          
+          const totalAlumnos = listaUsuarios.filter(u => 
+            (u.rol && u.rol.toLowerCase() === 'alumno') || 
+            (u.tipo && u.tipo.toLowerCase() === 'alumno') ||
+            (!u.rol && !u.tipo)
+          ).length;
 
-      const totalDocentes = listaUsuarios.filter(u => 
-        (u.rol && (u.rol.toLowerCase() === 'docente' || u.rol.toLowerCase() === 'auxiliar')) || 
-        (u.tipo && (u.tipo.toLowerCase() === 'docente' || u.tipo.toLowerCase() === 'auxiliar'))
-      ).length;
+          const totalDocentes = listaUsuarios.filter(u => 
+            (u.rol && (u.rol.toLowerCase() === 'docente' || u.rol.toLowerCase() === 'auxiliar')) || 
+            (u.tipo && (u.tipo.toLowerCase() === 'docente' || u.tipo.toLowerCase() === 'auxiliar'))
+          ).length;
 
-      const elemEstudiantes = document.getElementById('total-estudiantes');
-      const elemDocentes = document.getElementById('total-docentes');
-      
-      if (elemEstudiantes) elemEstudiantes.innerText = totalAlumnos;
-      if (elemDocentes) elemDocentes.innerText = totalDocentes;
-    }
-  } catch (errUsuarios) {
-    console.warn("Error al consultar directorio de usuarios:", errUsuarios);
-  }
-
-  // -------------------------------------------------------------------------
-  // 2. OBTENER ÚNICAMENTE MARCACIONES REALES DEL ESCÁNER
-  // -------------------------------------------------------------------------
-  try {
-    let datosOriginales = [];
-
-    // Priorizar endpoints de marcaciones/asistencias directas del escáner
-    let resMarcaciones = await fetch('/api/asistencias');
-    if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/marcaciones');
-    if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/reportes/consolidado');
-
-    if (resMarcaciones.ok) {
-      datosOriginales = await resMarcaciones.json();
-    }
-
-    const tbody = document.getElementById('tabla-dashboard-recent');
-    if (tbody) tbody.innerHTML = '';
-
-    // -------------------------------------------------------------------------
-    // FILTRO ESTRICTO: Solo alumnos con marcación REAL efectuada hoy
-    // -------------------------------------------------------------------------
-    const marcacionesEfectivas = datosOriginales.filter(item => {
-      // 1. Debe tener un campo de hora con valor real (no vacio, null o "--:--")
-      const horaValida = item.hora || item.hora_ingreso || item.hora_registro || item.hora_escaneo || item.fecha_hora || item.created_at || item.createdAt || item.timestamp;
-      
-      // 2. O debe tener marcación explícita reportada por el escáner
-      const tieneMarcacionReal = (horaValida && String(horaValida).trim() !== '' && horaValida !== '--:--') || 
-                                (item.tardanzas > 0) || 
-                                (item.asistencias > 0 && item.hora);
-
-      return tieneMarcacionReal;
-    });
-
-    // Si nadie ha escaneado su QR el día de hoy
-    if (!marcacionesEfectivas || marcacionesEfectivas.length === 0) {
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400 font-semibold">Sin registros de marcación hoy</td></tr>';
-      }
-      actualizarTarjetasContadores(0, 0);
-      return;
-    }
-
-    let puntualesTotal = 0;
-    let tardanzasTotal = 0;
-
-    // -------------------------------------------------------------------------
-    // 3. RENDERIZAR SOLO A LOS ALUMNOS QUE ESCANEARON SU QR
-    // -------------------------------------------------------------------------
-    marcacionesEfectivas.forEach((item, index) => {
-      const estadoUpper = String(item.estado || '').toUpperCase();
-      const esTarde = estadoUpper === 'TARDE' || (item.tardanzas && item.tardanzas > 0);
-      const esPuntual = estadoUpper === 'PUNTUAL' || estadoUpper === 'PRESENTE' || (!esTarde && item.asistencias > 0);
-
-      if (esTarde) {
-        tardanzasTotal++;
-      } else if (esPuntual) {
-        puntualesTotal++;
+          const elemEstudiantes = document.getElementById('total-estudiantes');
+          const elemDocentes = document.getElementById('total-docentes');
+          
+          if (elemEstudiantes) elemEstudiantes.innerText = totalAlumnos;
+          if (elemDocentes) elemDocentes.innerText = totalDocentes;
+        }
+      } catch (errUsuarios) {
+        console.warn("Error al consultar directorio de usuarios:", errUsuarios);
       }
 
-      // Mostrar únicamente en la tabla del Cronograma
-      if (tbody && index < 5) {
-        const estadoBadge = esTarde 
-          ? '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">TARDE</span>'
-          : '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">PUNTUAL</span>';
+      // 2. OBTENER MARCACIONES REALES DEL ESCÁNER
+      try {
+        let datosOriginales = [];
 
-        let rawHora = item.hora || item.hora_ingreso || item.hora_registro || item.hora_escaneo || item.fecha_hora || item.created_at || item.createdAt || item.timestamp;
-        let horaFormateada = '--:--';
+        let resMarcaciones = await fetch('/api/asistencias');
+        if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/asistencia/hoy');
+        if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/marcaciones');
+        if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/reportes/consolidado');
 
-        if (rawHora && typeof rawHora === 'string') {
-          if (rawHora.includes('T') || (rawHora.includes('-') && rawHora.includes(':'))) {
-            const d = new Date(rawHora);
-            if (!isNaN(d.getTime())) {
-              horaFormateada = d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
-            }
-          } else if (/^\d{1,2}:\d{2}/.test(rawHora)) {
-            if (rawHora.toLowerCase().includes('m')) {
-              horaFormateada = rawHora;
-            } else {
-              const partes = rawHora.split(':');
-              horaFormateada = `${partes[0].padStart(2, '0')}:${partes[1]}`;
-            }
-          } else {
-            horaFormateada = rawHora;
-          }
+        if (resMarcaciones.ok) {
+          datosOriginales = await resMarcaciones.json();
         }
 
-        tbody.innerHTML += `
-          <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
-            <td class="py-3 px-3 font-mono font-bold text-slate-700">${item.codigo || item.id || 'N/A'}</td>
-            <td class="py-3 px-3 font-semibold text-slate-800">${item.nombre || item.nombre_completo || 'Usuario'}</td>
-            <td class="py-3 px-3 text-slate-500 font-medium">${item.aula || item.materia_aula || item.grado || 'General'}</td>
-            <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">${horaFormateada}</td>
-            <td class="py-3 px-3 text-center">${estadoBadge}</td>
-          </tr>
-        `;
+        const tbody = document.getElementById('tabla-dashboard-recent');
+        if (tbody) tbody.innerHTML = '';
+
+        // Filtrar solo registros válidos
+        const marcacionesEfectivas = datosOriginales.filter(item => {
+          const horaValida = item.hora || item.hora_ingreso || item.hora_registro || item.hora_escaneo || item.fecha_hora || item.created_at || item.createdAt || item.timestamp;
+          
+          return (horaValida && String(horaValida).trim() !== '' && horaValida !== '--:--') || 
+                 (item.tardanzas > 0) || 
+                 (item.asistencias > 0 && item.hora);
+        });
+
+        if (!marcacionesEfectivas || marcacionesEfectivas.length === 0) {
+          if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400 font-semibold">Sin registros de marcación hoy</td></tr>';
+          }
+          actualizarTarjetasContadores(0, 0);
+          return;
+        }
+
+        let puntualesTotal = 0;
+        let tardanzasTotal = 0;
+
+        // Renderizar registros
+        marcacionesEfectivas.forEach((item, index) => {
+          const estadoUpper = String(item.estado || '').toUpperCase();
+          const esTarde = estadoUpper === 'TARDE' || estadoUpper === 'TARDANZA' || (item.tardanzas && item.tardanzas > 0);
+          const esPuntual = estadoUpper === 'PUNTUAL' || estadoUpper === 'PRESENTE' || (!esTarde && item.asistencias > 0);
+
+          if (esTarde) {
+            tardanzasTotal++;
+          } else if (esPuntual) {
+            puntualesTotal++;
+          }
+
+          if (tbody && index < 6) {
+            const estadoBadge = esTarde 
+              ? '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">TARDE</span>'
+              : '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">PUNTUAL</span>';
+
+            let rawHora = item.hora || item.hora_ingreso || item.hora_registro || item.hora_escaneo || item.fecha_hora || item.created_at || item.createdAt || item.timestamp;
+            let horaFormateada = '--:--';
+
+            if (rawHora && typeof rawHora === 'string') {
+              if (rawHora.includes('T') || (rawHora.includes('-') && rawHora.includes(':'))) {
+                const d = new Date(rawHora);
+                if (!isNaN(d.getTime())) {
+                  horaFormateada = d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
+                }
+              } else if (/^\d{1,2}:\d{2}/.test(rawHora)) {
+                horaFormateada = rawHora;
+              } else {
+                horaFormateada = rawHora;
+              }
+            }
+
+            tbody.innerHTML += `
+              <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+                <td class="py-3 px-3 font-mono font-bold text-slate-700">${item.codigo || item.id || 'N/A'}</td>
+                <td class="py-3 px-3 font-semibold text-slate-800">${item.nombre || item.nombre_completo || 'Usuario'}</td>
+                <td class="py-3 px-3 text-slate-500 font-medium">${item.aula || item.materia_aula || item.grado || item.rol || 'General'}</td>
+                <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">${horaFormateada}</td>
+                <td class="py-3 px-3 text-center">${estadoBadge}</td>
+              </tr>
+            `;
+          }
+        });
+
+        actualizarTarjetasContadores(puntualesTotal, tardanzasTotal);
+
+      } catch (errReportes) {
+        console.error("Error al cargar marcaciones:", errReportes);
       }
-    });
+    }
 
-    actualizarTarjetasContadores(puntualesTotal, tardanzasTotal);
+    function actualizarTarjetasContadores(puntuales, tardanzas) {
+      const elemPuntuales = document.getElementById('total-asistencias') || document.getElementById('total-puntuales');
+      const elemTardanzas = document.getElementById('total-tardanzas');
 
-  } catch (errReportes) {
-    console.error("Error al cargar marcaciones:", errReportes);
-  }
-}
-
-function actualizarTarjetasContadores(puntuales, tardanzas) {
-  const elemPuntuales = document.getElementById('total-puntuales') || document.getElementById('total-asistencias');
-  const elemTardanzas = document.getElementById('total-tardanzas');
-
-  if (elemPuntuales) elemPuntuales.innerText = puntuales;
-  if (elemTardanzas) elemTardanzas.innerText = tardanzas;
-}
+      if (elemPuntuales) elemPuntuales.innerText = puntuales;
+      if (elemTardanzas) elemTardanzas.innerText = tardanzas;
+    }
   </script>
 </body>
 </html>
