@@ -153,19 +153,38 @@ app.delete('/api/usuarios/:id', (req, res) => {
   });
 });
 
-// Marcar Asistencia QR (Ajustado con fecha/hora de Perú)
+// Marcar Asistencia QR (Evita duplicados en el mismo día)
 app.post('/api/asistencia/marcar', (req, res) => {
   const { codigoQR } = req.body;
+  
   db.get('SELECT * FROM usuarios WHERE codigo = ?', [codigoQR], (err, usuario) => {
     if (err || !usuario) return res.status(404).json({ success: false, mensaje: 'Código QR no registrado.' });
 
     const hoy = getFechaPeru();
     const horaActual = getHoraPeru();
-    const estado = horaActual > '08:00:00' ? 'TARDANZA' : 'PUNTUAL';
 
-    db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [codigoQR, hoy, horaActual, estado], (err) => {
-      if (err) return res.status(500).json({ success: false, mensaje: 'Error al marcar.' });
-      res.json({ success: true, mensaje: `Marcación [${estado}] registrada para ${usuario.nombre}`, usuario });
+    // 🔍 Validar si el usuario ya marcó hoy
+    db.get('SELECT * FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [codigoQR, hoy], (err, yaMarco) => {
+      if (err) return res.status(500).json({ success: false, mensaje: 'Error al verificar marcación.' });
+
+      if (yaMarco) {
+        // Retornamos un estado duplicado
+        return res.status(400).json({ 
+          success: false, 
+          duplicado: true,
+          mensaje: `Atención: ${usuario.nombre} ya registró su asistencia el día de hoy a las ${yaMarco.hora}.`,
+          usuario,
+          horaAnterior: yaMarco.hora
+        });
+      }
+
+      // Si no ha marcado hoy, procede a registrar
+      const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
+
+      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [codigoQR, hoy, horaActual, estado], (err) => {
+        if (err) return res.status(500).json({ success: false, mensaje: 'Error al marcar.' });
+        res.json({ success: true, mensaje: `Marcación [${estado}] registrada para ${usuario.nombre}`, usuario, hora: horaActual, estado });
+      });
     });
   });
 });

@@ -88,7 +88,7 @@
 
   </main>
 
-  <!-- Ventana Emergente (Modal Pop-Up de Confirmación) -->
+  <!-- Modal 1: Marcación Registrada (Éxito) -->
   <div id="modal-asistencia" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-slate-100 p-5 md:p-6 text-center transform transition-all">
       <div id="modal-icon" class="text-4xl md:text-5xl mb-2">✅</div>
@@ -102,8 +102,28 @@
         <p><span class="font-bold text-slate-500">Estado:</span> <span id="modal-estado" class="font-bold">-</span></p>
       </div>
 
-      <button onclick="cerrarModalYContinuar()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition-colors text-sm">
+      <button onclick="cerrarModalYContinuar('modal-asistencia')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition-colors text-sm">
         Aceptar
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal 2: Ya Registrado Hoy (Advertencia / Duplicado) -->
+  <div id="modal-duplicado" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-amber-100 p-5 md:p-6 text-center transform transition-all">
+      <div class="text-4xl md:text-5xl mb-2">⚠️</div>
+      <h3 class="text-base md:text-lg font-extrabold text-amber-600">¡Ya Registró Asistencia!</h3>
+      <p class="text-xs text-slate-500 mt-1">Solo se permite una marcación diaria por usuario.</p>
+      
+      <div class="bg-amber-50/60 border border-amber-200 rounded-xl p-3 md:p-4 my-4 text-left text-xs space-y-2">
+        <p><span class="font-bold text-amber-900">Nombre:</span> <span id="modal-dup-nombre" class="font-bold text-slate-800">-</span></p>
+        <p><span class="font-bold text-amber-900">Código:</span> <span id="modal-dup-codigo" class="font-mono text-slate-700">-</span></p>
+        <p><span class="font-bold text-amber-900">Aula/Asignación:</span> <span id="modal-dup-aula" class="text-slate-700">-</span></p>
+        <p><span class="font-bold text-amber-900">Hora Registrada:</span> <span id="modal-dup-hora" class="font-bold text-amber-700">-</span></p>
+      </div>
+
+      <button onclick="cerrarModalYContinuar('modal-duplicado')" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition-colors text-sm">
+        Entendido
       </button>
     </div>
   </div>

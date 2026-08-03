@@ -4,7 +4,7 @@ let escaneoBloqueado = false;
 document.addEventListener("DOMContentLoaded", () => {
   if (typeof checkAuth === 'function') checkAuth();
   initScanner();
-  loadMarcaciones();
+  if (typeof loadMarcaciones === 'function') loadMarcaciones();
 });
 
 function initScanner() {
@@ -72,37 +72,51 @@ async function onScanSuccess(decodedText) {
 
     const data = await res.json();
 
+    // 1. CASO DUPLICADO: Si el servidor responde que ya registró asistencia hoy
+    if (data.duplicado || (!res.ok && data.horaAnterior)) {
+      const usuario = data.usuario || {};
+      mostrarPopUpDuplicado({
+        nombre: usuario.nombre || data.nombre || 'Usuario Registrado',
+        codigo: codigoLimpio,
+        aula: usuario.materia_aula || usuario.aula || 'Sin Asignación',
+        horaAnterior: data.horaAnterior || horaActual
+      });
+      return;
+    }
+
+    // 2. CASO ÉXITO: Marcación registrada correctamente
     if (data.success) {
       const usuario = data.usuario || data.alumno || {};
       const nombreRegistrado = usuario.nombre || data.nombre || 'Usuario Registrado';
+      const horaRegistrada = data.hora || horaActual;
       const estadoTexto = data.estado || (data.tardanza ? 'TARDE' : 'PUNTUAL');
 
-      // 1. Mostrar Pop-Up con la información
       mostrarPopUp({
         exito: true,
         nombre: nombreRegistrado,
         codigo: codigoLimpio,
         aula: usuario.materia_aula || usuario.aula || 'Sin Asignación',
-        hora: horaActual,
+        hora: horaRegistrada,
         estado: estadoTexto
       });
 
-      // 2. Insertar instantáneamente en la tabla lateral
+      // Insertar instantáneamente en la tabla lateral
       agregarFilaEnTabla({
         codigo: codigoLimpio,
         nombre: nombreRegistrado,
-        hora: horaActual,
+        hora: horaRegistrada,
         estado: estadoTexto
       });
 
     } else {
+      // 3. OTROS ERRORES (Código no encontrado, etc.)
       mostrarPopUp({
         exito: false,
         nombre: 'No Registrado',
         codigo: codigoLimpio,
         aula: '-',
         hora: horaActual,
-        estado: data.message || 'Error al procesar'
+        estado: data.mensaje || data.message || 'Error al procesar'
       });
     }
   } catch (err) {
@@ -154,6 +168,7 @@ function agregarFilaEnTabla(registro) {
   tbody.insertBefore(nuevaFila, tbody.firstChild);
 }
 
+// Mostrar Modal de Éxito / Error General
 function mostrarPopUp(info) {
   const iconEl = document.getElementById('modal-icon');
   const titleEl = document.getElementById('modal-title');
@@ -185,8 +200,25 @@ function mostrarPopUp(info) {
   if (modal) modal.classList.remove('hidden');
 }
 
-function cerrarModalYContinuar() {
-  const modal = document.getElementById('modal-asistencia');
+// Mostrar Modal de Registro Duplicado
+function mostrarPopUpDuplicado(info) {
+  const nombreEl = document.getElementById('modal-dup-nombre');
+  const codigoEl = document.getElementById('modal-dup-codigo');
+  const aulaEl = document.getElementById('modal-dup-aula');
+  const horaEl = document.getElementById('modal-dup-hora');
+
+  if (nombreEl) nombreEl.innerText = info.nombre;
+  if (codigoEl) codigoEl.innerText = info.codigo;
+  if (aulaEl) aulaEl.innerText = info.aula;
+  if (horaEl) horaEl.innerText = info.horaAnterior;
+
+  const modalDup = document.getElementById('modal-duplicado');
+  if (modalDup) modalDup.classList.remove('hidden');
+}
+
+// Función general para cerrar cualquier modal y reanudar el escáner
+function cerrarModalYContinuar(idModal = 'modal-asistencia') {
+  const modal = document.getElementById(idModal);
   if (modal) modal.classList.add('hidden');
   
   setTimeout(() => {
@@ -200,55 +232,3 @@ function cerrarModalYContinuar() {
     }
   }, 300);
 }
-
-app.get('/api/asistencia/hoy', async (req, res) => {
-  try {
-    // 1. Obtener la fecha actual formateada en la zona horaria de Perú (YYYY-MM-DD)
-    const fechaHoyPeru = new Date().toLocaleDateString('es-PE', {
-      timeZone: 'America/Lima',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).split('/').reverse().join('-'); // Convierte DD/MM/YYYY a YYYY-MM-DD
-
-    // 2. Consulta SQL flexible:
-    // Unimos con 'usuarios' para obtener el nombre actualizado y filtramos por la fecha de hoy
-    const query = `
-      SELECT 
-        a.codigo,
-        COALESCE(u.nombre, a.nombre, 'Usuario Registrado') AS nombre,
-        COALESCE(u.materia_aula, u.aula, 'Sin asignación') AS rol_asignacion,
-        a.hora,
-        a.estado,
-        a.fecha
-      FROM asistencia a
-      LEFT JOIN usuarios u ON UPPER(a.codigo) = UPPER(u.codigo)
-      WHERE DATE(a.fecha) = $1 
-         OR a.fecha LIKE $2
-         OR a.fecha = $1
-      ORDER BY a.id DESC;
-    `;
-
-    // Ejecutar consulta (adaptar según tu cliente SQL: db.query, pool.query, sqlite, etc.)
-    const { rows } = await db.query(query, [fechaHoyPeru, `${fechaHoyPeru}%`]);
-
-    // 3. Normalizar la respuesta para asegurar que el frontend siempre reciba campos válidos
-    const marcacionesNormalizadas = (rows || []).map(item => {
-      const esTarde = item.estado && (item.estado.toUpperCase() === 'TARDE' || item.estado.toUpperCase() === 'TARDANZA');
-      return {
-        codigo: item.codigo || '-',
-        nombre: item.nombre || 'Usuario Registrado',
-        rol: item.rol_asignacion || '-',
-        hora: item.hora || (item.fecha ? new Date(item.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '-'),
-        estado: item.estado ? item.estado.toUpperCase() : (esTarde ? 'TARDE' : 'PUNTUAL')
-      };
-    });
-
-    return res.status(200).json(marcacionesNormalizadas);
-
-  } catch (error) {
-    console.error("Error al obtener marcaciones de hoy:", error);
-    // Devolver un array vacío con 200 o status 500 para evitar que el frontend colapse
-    return res.status(500).json({ error: true, message: "Error al consultar las marcaciones de hoy" });
-  }
-});
