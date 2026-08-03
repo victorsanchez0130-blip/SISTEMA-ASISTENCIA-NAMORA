@@ -61,10 +61,7 @@ db.serialize(() => {
   // Insertar usuarios por defecto si no existen
   db.get("SELECT * FROM usuarios WHERE rol = 'Director'", (err, row) => {
     if (!row) {
-      db.run("INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES ('DIR-SRN-001', 'Director General', 'Director', 'Dirección General')");
-      db.run("INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES ('DOC-SRN-101', 'Mg. Pedro Alva', 'Docente', 'Matemática')");
-      db.run("INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES ('ALU-SRN-001', 'María Gómez', 'Alumno', 'Secundaria 1ro A')");
-    }
+      db.run("INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES ('DIR-SRN-001', 'Director Manuel Asencio Málaga', 'Director', 'Dirección General')");    }
   });
 });
 
@@ -179,7 +176,7 @@ app.post('/api/asistencia/marcar', (req, res) => {
       }
 
       // Si no ha marcado hoy, procede a registrar
-      const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
+      const estado = horaActual > '08:00:00' ? 'TARDANZA' : 'PUNTUAL';
 
       db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [codigoQR, hoy, horaActual, estado], (err) => {
         if (err) return res.status(500).json({ success: false, mensaje: 'Error al marcar.' });
