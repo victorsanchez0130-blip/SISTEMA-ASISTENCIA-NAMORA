@@ -202,10 +202,10 @@ app.get('/api/rankings', (req, res) => {
       u.materia_aula AS asignacion,
       COALESCE(SUM(
         CASE 
-          WHEN UPPER(a.estado) = 'PUNTUAL' THEN 10
-          WHEN UPPER(a.estado) = 'TARDE' OR UPPER(a.estado) = 'TARDANZA' THEN -5
-          WHEN UPPER(a.estado) = 'JUSTIFICADA' THEN 0
-          WHEN UPPER(a.estado) = 'INJUSTIFICADA' THEN -10
+          WHEN UPPER(a.estado) = 'PUNTUAL' THEN 2.0
+          WHEN UPPER(a.estado) = 'TARDE' OR UPPER(a.estado) = 'TARDANZA' THEN 1.0
+          WHEN UPPER(a.estado) = 'JUSTIFICADA' THEN 0.5 
+          WHEN UPPER(a.estado) = 'INJUSTIFICADA' THEN 0.0
           ELSE 0
         END
       ), 0) AS puntaje_acumulado
