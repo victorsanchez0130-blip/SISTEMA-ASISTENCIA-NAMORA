@@ -95,7 +95,7 @@ app.post('/api/auth/login', (req, res) => {
     res.json({
       success: true,
       mensaje: 'Acceso concedido',
-      redirectUrl: rolNormalizado === 'Director' ? 'index.html' : 'escaner.html',
+      redirectUrl: rolNormalizado === 'Director' ? 'dashboard.html' : 'escaner.html',
       usuario: {
         id: usuario.id,
         codigo: usuario.codigo,
