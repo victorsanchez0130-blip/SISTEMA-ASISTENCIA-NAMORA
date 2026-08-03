@@ -168,7 +168,7 @@ function filtrarTablaLocal() {
   });
 }
 
-// Función Helper para dibujar el membrete estándar
+// Dibujar membrete oficial
 function agregarMembreteInstitucional(doc, titulo) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
@@ -184,7 +184,139 @@ function agregarMembreteInstitucional(doc, titulo) {
   doc.line(14, 26, 196, 26);
 }
 
-// Generador Reporte Docentes PDF
+// Generar Ficha Individual REAL (Sincronizada)
+async function generarFichaAlumnoPDF() {
+  const codSel = document.getElementById('selectAlumnoIndividual')?.value;
+  if (!codSel || codSel === 'todos') {
+    alert("Por favor, seleccione un alumno específico en el menú desplegable 'Filtrar Alumno'.");
+    return;
+  }
+
+  const alumno = datosReporteGlobal.find(a => a.codigo === codSel);
+  if (!alumno) {
+    alert("No se encontraron datos para el alumno seleccionado.");
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const fechaFiltro = document.getElementById('filtroFecha')?.value || '';
+
+  agregarMembreteInstitucional(doc, "FICHA INDIVIDUAL DE ASISTENCIA Y PUNTUALIDAD");
+
+  // Encabezado con Datos Reales del Alumno
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42);
+
+  doc.text("CÓDIGO ALUMNO:", 14, 34);
+  doc.setFont("helvetica", "normal");
+  doc.text(alumno.codigo, 55, 34);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("APELLIDOS Y NOMBRES:", 14, 40);
+  doc.setFont("helvetica", "normal");
+  doc.text(alumno.nombre, 55, 40);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("AULA / SECCIÓN:", 14, 46);
+  doc.setFont("helvetica", "normal");
+  doc.text(alumno.aula || alumno.materia_aula || '-', 55, 46);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("PERÍODO EVALUADO:", 14, 52);
+  doc.setFont("helvetica", "normal");
+  doc.text(fechaFiltro || "General", 55, 52);
+
+  // Cuadro Resumen de Metricas
+  const resumenData = [[
+    `${alumno.asistencias || 0}`,
+    `${alumno.tardanzas || 0}`,
+    `${alumno.faltas || 0}`,
+    `${alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : (alumno.puntos || 0)} pts`
+  ]];
+
+  doc.autoTable({
+    startY: 58,
+    head: [['PUNTUALES', 'TARDANZAS', 'FALTAS', 'PUNTAJE']],
+    body: resumenData,
+    theme: 'grid',
+    headStyles: { fillColor: [0, 102, 51], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+    styles: { halign: 'center', fontSize: 10, fontStyle: 'bold' }
+  });
+
+  // Consultar la API para traer marcaciones REALES
+  let historialFiltrado = [];
+  try {
+    const res = await fetch(`/api/asistencias/alumno/${alumno.codigo}`);
+    if (res.ok) {
+      const dataAsistencias = await res.json();
+      
+      // Filtrar por fecha seleccionada si aplica
+      if (fechaFiltro) {
+        historialFiltrado = dataAsistencias.filter(reg => reg.fecha === fechaFiltro || reg.fecha_hora?.startsWith(fechaFiltro));
+      } else {
+        historialFiltrado = dataAsistencias;
+      }
+    }
+  } catch (err) {
+    console.warn("No se pudo obtener el historial detallado del servidor:", err);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 12);
+
+  let bodyHistorial = [];
+
+  if (historialFiltrado.length > 0) {
+    bodyHistorial = historialFiltrado.map(reg => {
+      const fechaReg = reg.fecha || reg.fecha_hora?.split(' ')[0] || fechaFiltro;
+      const horaReg = reg.hora || (reg.fecha_hora?.split(' ')[1]) || '-';
+      const estadoReg = (reg.estado || 'REGISTRADO').toUpperCase();
+      const obsReg = reg.observacion || (estadoReg === 'TARDE' ? 'Ingreso fuera de horario regular' : 'Ingreso registrado en escáner');
+
+      const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      let nombreDia = 'Registrado';
+      if (fechaReg) {
+        const d = new Date(fechaReg + 'T00:00:00');
+        if (!isNaN(d.getTime())) nombreDia = diasSemana[d.getDay()];
+      }
+
+      return [fechaReg, nombreDia, horaReg, estadoReg, obsReg];
+    });
+  } else {
+    // Si NO tiene registros reales, NO se llena información falsa
+    bodyHistorial = [
+      ['-', '-', '-', '-', 'Sin registros de asistencia en el período seleccionado']
+    ];
+  }
+
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 16,
+    head: [['FECHA', 'DÍA', 'HORA ENTRADA', 'ESTADO', 'OBSERVACIÓN']],
+    body: bodyHistorial,
+    theme: 'grid',
+    headStyles: { fillColor: [71, 85, 105], textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 8 }
+  });
+
+  // Firmas al Pie
+  const posY = doc.lastAutoTable.finalY + 30;
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(100);
+
+  doc.line(30, posY, 85, posY);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Auxiliar / Auxiliar de Disciplina", 57.5, posY + 5, { align: "center" });
+
+  doc.line(125, posY, 180, posY);
+  doc.text("Dirección / Dirección Académica", 152.5, posY + 5, { align: "center" });
+
+  doc.save(`Ficha_Asistencia_${alumno.codigo}.pdf`);
+}
+
 function generarDocentesPDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -221,7 +353,6 @@ function generarDocentesPDF() {
   doc.save(`Reporte_Docentes_${tipo}.pdf`);
 }
 
-// Generador Reporte Grado PDF
 function generarGradoPDF() {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -267,99 +398,4 @@ function generarGradoPDF() {
 
   const nombreArchivo = `Reporte_Alumnos_${valNivel}_${valGrado}_${valSeccion}.pdf`.replace(/\s+/g, '_');
   doc.save(nombreArchivo);
-}
-
-// Generador de Ficha Individual del Alumno (Sincronizada con el diseño institucional exacto)
-function generarFichaAlumnoPDF() {
-  const codSel = document.getElementById('selectAlumnoIndividual')?.value;
-  if (!codSel || codSel === 'todos') {
-    alert("Por favor, seleccione un alumno específico en el menú desplegable 'Filtrar Alumno'.");
-    return;
-  }
-
-  const alumno = datosReporteGlobal.find(a => a.codigo === codSel);
-  if (!alumno) {
-    alert("No se encontraron datos para el alumno seleccionado.");
-    return;
-  }
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  const fecha = document.getElementById('filtroFecha')?.value || getFechaPeru();
-
-  agregarMembreteInstitucional(doc, "FICHA INDIVIDUAL DE ASISTENCIA Y PUNTUALIDAD");
-
-  // Sección Datos del Alumno
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(15, 23, 42);
-
-  doc.text("CÓDIGO ALUMNO:", 14, 34);
-  doc.setFont("helvetica", "normal");
-  doc.text(alumno.codigo, 55, 34);
-
-  doc.setFont("helvetica", "bold");
-  doc.text("APELLIDOS Y NOMBRES:", 14, 40);
-  doc.setFont("helvetica", "normal");
-  doc.text(alumno.nombre, 55, 40);
-
-  doc.setFont("helvetica", "bold");
-  doc.text("AULA / SECCIÓN:", 14, 46);
-  doc.setFont("helvetica", "normal");
-  doc.text(alumno.aula || alumno.materia_aula || '-', 55, 46);
-
-  doc.setFont("helvetica", "bold");
-  doc.text("PERÍODO EVALUADO:", 14, 52);
-  doc.setFont("helvetica", "normal");
-  doc.text(fecha, 55, 52);
-
-  // Tabla Resumen
-  const resumenData = [[
-    `${alumno.asistencias || 0}`,
-    `${alumno.tardanzas || 0}`,
-    `${alumno.faltas || 0}`,
-    `${alumno.puntajeTotal || 0} pts`
-  ]];
-
-  doc.autoTable({
-    startY: 58,
-    head: [['PUNTUALES', 'TARDANZAS', 'FALTAS', 'PUNTAJE']],
-    body: resumenData,
-    theme: 'grid',
-    headStyles: { fillColor: [0, 102, 51], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
-    styles: { halign: 'center', fontSize: 10, fontStyle: 'bold' }
-  });
-
-  // Historial de Registros
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 12);
-
-  const historialEjemplo = [
-    [fecha, "Registrado", "07:42 AM", alumno.asistencias > 0 ? "PUNTUAL" : "FALTA", "Ingreso normal en molinete"]
-  ];
-
-  doc.autoTable({
-    startY: doc.lastAutoTable.finalY + 16,
-    head: [['FECHA', 'DÍA', 'HORA ENTRADA', 'ESTADO', 'OBSERVACIÓN']],
-    body: historialEjemplo,
-    theme: 'grid',
-    headStyles: { fillColor: [71, 85, 105], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 8 }
-  });
-
-  // Firmas al Pie
-  const posY = doc.lastAutoTable.finalY + 30;
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(100);
-
-  doc.line(30, posY, 85, posY);
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.text("Auxiliar / Auxiliar de Disciplina", 57.5, posY + 5, { align: "center" });
-
-  doc.line(125, posY, 180, posY);
-  doc.text("Dirección / Dirección Académica", 152.5, posY + 5, { align: "center" });
-
-  doc.save(`Ficha_Asistencia_${alumno.codigo}.pdf`);
 }
