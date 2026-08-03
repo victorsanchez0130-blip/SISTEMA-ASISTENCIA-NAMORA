@@ -1,15 +1,47 @@
-let html5QrcodeScanner;
+let html5QrCode;
 let escaneoBloqueado = false;
 
 document.addEventListener("DOMContentLoaded", () => {
-  checkAuth();
+  if (typeof checkAuth === 'function') checkAuth();
   initScanner();
   loadMarcaciones();
 });
 
 function initScanner() {
-  html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
-  html5QrcodeScanner.render(onScanSuccess);
+  html5QrCode = new Html5Qrcode("reader");
+
+  // Configuración para el área de escaneo
+  const config = { 
+    fps: 10, 
+    qrbox: { width: 220, height: 220 } 
+  };
+
+  // Intentar abrir la cámara trasera (environment) para smartphones
+  html5QrCode.start(
+    { facingMode: "environment" }, 
+    config, 
+    onScanSuccess, 
+    () => {
+      // Búsqueda continua de QR (errores silenciosos)
+    }
+  ).catch(err => {
+    console.warn("No se pudo iniciar cámara trasera, probando cámara genérica/frontal:", err);
+    
+    // Intento secundario si no detecta la trasera o es laptop con webcam
+    html5QrCode.start(
+      { facingMode: "user" }, 
+      config, 
+      onScanSuccess, 
+      null
+    ).catch(err2 => {
+      console.error("Error definitivo al iniciar la cámara:", err2);
+      const feedback = document.getElementById('scan-feedback');
+      if (feedback) {
+        feedback.innerText = "No se pudo acceder a la cámara. Asegúrate de otorgar permisos en tu navegador.";
+        feedback.className = "mt-4 block p-3 rounded-lg text-center font-bold text-xs bg-red-100 text-red-700";
+      }
+    });
+  });
 }
 
 async function onScanSuccess(decodedText) {
@@ -19,56 +51,69 @@ async function onScanSuccess(decodedText) {
   const match = decodedText.match(/(ALU|DOC|DIR|AUX)-SRN-\d+/i);
   const codigoLimpio = match ? match[0].toUpperCase() : decodedText.trim();
 
-  // Bloquear escaneos y pausar la cámara
+  // Bloquear escaneos y pausar la cámara mientras se muestra la ventana emergente
   escaneoBloqueado = true;
-  if (html5QrcodeScanner) {
+  if (html5QrCode) {
     try {
-      html5QrcodeScanner.pause(true);
+      html5QrCode.pause(true);
     } catch (e) {
       console.warn("No se pudo pausar el escáner:", e);
     }
   }
 
-  const res = await fetch('/api/asistencia/marcar', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ codigoQR: codigoLimpio, codigo: codigoLimpio })
-  });
-
-  const data = await res.json();
   const horaActual = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-  if (data.success) {
-    const usuario = data.usuario || data.alumno || {};
-    const nombreRegistrado = usuario.nombre || data.nombre || 'Usuario Registrado';
-    const estadoTexto = data.estado || (data.tardanza ? 'TARDE' : 'PUNTUAL');
-
-    // 1. Mostrar Pop-Up con la información
-    mostrarPopUp({
-      exito: true,
-      nombre: nombreRegistrado,
-      codigo: codigoLimpio,
-      aula: usuario.materia_aula || usuario.aula || 'Sin Asignación',
-      hora: horaActual,
-      estado: estadoTexto
+  try {
+    const res = await fetch('/api/asistencia/marcar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigoQR: codigoLimpio, codigo: codigoLimpio })
     });
 
-    // 2. INSERTAR INSTANTÁNEAMENTE EN LA TABLA DE LA DERECHA
-    agregarFilaEnTabla({
-      codigo: codigoLimpio,
-      nombre: nombreRegistrado,
-      hora: horaActual,
-      estado: estadoTexto
-    });
+    const data = await res.json();
 
-  } else {
+    if (data.success) {
+      const usuario = data.usuario || data.alumno || {};
+      const nombreRegistrado = usuario.nombre || data.nombre || 'Usuario Registrado';
+      const estadoTexto = data.estado || (data.tardanza ? 'TARDE' : 'PUNTUAL');
+
+      // 1. Mostrar Pop-Up con la información
+      mostrarPopUp({
+        exito: true,
+        nombre: nombreRegistrado,
+        codigo: codigoLimpio,
+        aula: usuario.materia_aula || usuario.aula || 'Sin Asignación',
+        hora: horaActual,
+        estado: estadoTexto
+      });
+
+      // 2. Insertar instantáneamente en la tabla lateral
+      agregarFilaEnTabla({
+        codigo: codigoLimpio,
+        nombre: nombreRegistrado,
+        hora: horaActual,
+        estado: estadoTexto
+      });
+
+    } else {
+      mostrarPopUp({
+        exito: false,
+        nombre: 'No Registrado',
+        codigo: codigoLimpio,
+        aula: '-',
+        hora: horaActual,
+        estado: data.message || 'Error al procesar'
+      });
+    }
+  } catch (err) {
+    console.error("Error en petición de marcación:", err);
     mostrarPopUp({
       exito: false,
-      nombre: 'No Registrado',
+      nombre: 'Error de Servidor',
       codigo: codigoLimpio,
       aula: '-',
       hora: horaActual,
-      estado: data.message || 'Error al procesar'
+      estado: 'Sin respuesta de red'
     });
   }
 }
@@ -83,11 +128,11 @@ function agregarFilaEnTabla(registro) {
     tbody.innerHTML = '';
   }
 
-  // Verificar si la marcación de este código ya está mostrada en pantalla para no duplicar la fila
+  // Evitar agregar duplicados inmediatos en la vista
   const filasExistentes = tbody.querySelectorAll('tr');
   for (let fila of filasExistentes) {
     if (fila.innerText.includes(registro.codigo)) {
-      return; // Ya fue agregado visualmente
+      return; 
     }
   }
 
@@ -110,35 +155,45 @@ function agregarFilaEnTabla(registro) {
 }
 
 function mostrarPopUp(info) {
-  document.getElementById('modal-icon').innerText = info.exito ? '✅' : '❌';
-  document.getElementById('modal-title').innerText = info.exito ? 'Marcación Registrada' : 'Error en Marcación';
-  document.getElementById('modal-nombre').innerText = info.nombre;
-  document.getElementById('modal-codigo').innerText = info.codigo;
-  document.getElementById('modal-aula').innerText = info.aula;
-  document.getElementById('modal-hora').innerText = info.hora;
+  const iconEl = document.getElementById('modal-icon');
+  const titleEl = document.getElementById('modal-title');
+  const nombreEl = document.getElementById('modal-nombre');
+  const codigoEl = document.getElementById('modal-codigo');
+  const aulaEl = document.getElementById('modal-aula');
+  const horaEl = document.getElementById('modal-hora');
+  const estadoEl = document.getElementById('modal-estado');
 
-  const elEstado = document.getElementById('modal-estado');
-  elEstado.innerText = info.estado;
-  
-  if (info.exito) {
-    elEstado.className = (info.estado === 'TARDE' || info.estado === 'TARDANZA') 
-      ? 'font-bold text-amber-600' 
-      : 'font-bold text-green-600';
-  } else {
-    elEstado.className = 'font-bold text-red-600';
+  if (iconEl) iconEl.innerText = info.exito ? '✅' : '❌';
+  if (titleEl) titleEl.innerText = info.exito ? 'Marcación Registrada' : 'Error en Marcación';
+  if (nombreEl) nombreEl.innerText = info.nombre;
+  if (codigoEl) codigoEl.innerText = info.codigo;
+  if (aulaEl) aulaEl.innerText = info.aula;
+  if (horaEl) horaEl.innerText = info.hora;
+
+  if (estadoEl) {
+    estadoEl.innerText = info.estado;
+    if (info.exito) {
+      estadoEl.className = (info.estado === 'TARDE' || info.estado === 'TARDANZA') 
+        ? 'font-bold text-amber-600' 
+        : 'font-bold text-green-600';
+    } else {
+      estadoEl.className = 'font-bold text-red-600';
+    }
   }
 
-  document.getElementById('modal-asistencia').classList.remove('hidden');
+  const modal = document.getElementById('modal-asistencia');
+  if (modal) modal.classList.remove('hidden');
 }
 
 function cerrarModalYContinuar() {
-  document.getElementById('modal-asistencia').classList.add('hidden');
+  const modal = document.getElementById('modal-asistencia');
+  if (modal) modal.classList.add('hidden');
   
   setTimeout(() => {
     escaneoBloqueado = false;
-    if (html5QrcodeScanner) {
+    if (html5QrCode) {
       try {
-        html5QrcodeScanner.resume();
+        html5QrCode.resume();
       } catch (e) {
         console.warn("No se pudo reanudar el escáner:", e);
       }
