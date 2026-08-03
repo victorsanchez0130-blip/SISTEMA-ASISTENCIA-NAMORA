@@ -36,7 +36,7 @@ function getHoraPeru() {
   return new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour12: false });
 }
 
-// Creación de tablas e inserción de datos iniciales
+// Creación de tablas e inserción de datos iniciales sin fallos de restricción UNIQUE
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -58,14 +58,12 @@ db.serialize(() => {
     )
   `);
 
-  // Insertar usuarios por defecto si no existen
-  db.get("SELECT * FROM usuarios WHERE rol = 'Director'", (err, row) => {
-    if (!row) {
-      db.run("INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES ('DIR-SRN-001', 'Director General', 'Director', 'Dirección General')");
-      db.run("INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES ('DOC-SRN-101', 'Mg. Pedro Alva', 'Docente', 'Matemática')");
-      db.run("INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES ('ALU-SRN-001', 'María Gómez', 'Alumno', 'Secundaria 1ro A')");
-    }
-  });
+  // Insertar usuarios por defecto evitando colisiones UNIQUE en reinicios de servidor
+  const stmt = db.prepare("INSERT OR IGNORE INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)");
+  stmt.run('DIR-SRN-001', 'Director General', 'Director', 'Dirección General');
+  stmt.run('DOC-SRN-101', 'Mg. Pedro Alva', 'Docente', 'Matemática');
+  stmt.run('ALU-SRN-001', 'María Gómez', 'Alumno', 'Secundaria 1ro A');
+  stmt.finalize();
 });
 
 // API Login
