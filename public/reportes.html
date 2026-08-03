@@ -44,15 +44,15 @@
         </div>
 
         <!-- Filtro por Aula y Buscador -->
-        <div style="display:flex; gap:15px; margin-bottom:20px; background:#f8fafc; padding:12px; border-radius:8px; flex-wrap:wrap; align-items:center;">
+        <div style="display:flex; gap:15px; margin-bottom:12px; background:#f8fafc; padding:12px; border-radius:8px; flex-wrap:wrap; align-items:center;">
           <div style="display:flex; align-items:center; gap:8px;">
             <label style="font-size:13px; font-weight:bold; color:#475569;">Filtro por Aula:</label>
-            <select id="filtroNivel" class="form-control" style="width:130px;" onchange="filtrarTablaLocal()">
+            <select id="filtroNivel" class="form-control" style="width:130px;" onchange="actualizarFiltrosYTabla()">
               <option value="Todos">Todos</option>
               <option value="Secundaria">Secundaria</option>
               <option value="Primaria">Primaria</option>
             </select>
-            <select id="filtroGrado" class="form-control" style="width:90px;" onchange="filtrarTablaLocal()">
+            <select id="filtroGrado" class="form-control" style="width:90px;" onchange="actualizarFiltrosYTabla()">
               <option value="Todos">Todos</option>
               <option value="1ro">1ro</option>
               <option value="2do">2do</option>
@@ -61,7 +61,7 @@
               <option value="5to">5to</option>
               <option value="6to">6to</option>
             </select>
-            <select id="filtroSeccion" class="form-control" style="width:70px;" onchange="filtrarTablaLocal()">
+            <select id="filtroSeccion" class="form-control" style="width:70px;" onchange="actualizarFiltrosYTabla()">
               <option value="Todos">Todos</option>
               <option value="A">A</option>
               <option value="B">B</option>
@@ -75,6 +75,14 @@
           </div>
         </div>
 
+        <!-- Menú Desplegable: Filtrar Alumno -->
+        <div style="display:flex; gap:10px; margin-bottom:20px; background:#f1f5f9; padding:10px 12px; border-radius:8px; align-items:center;">
+          <label style="font-size:13px; font-weight:bold; color:#334155; min-width:110px;">Filtrar Alumno:</label>
+          <select id="selectAlumnoIndividual" class="form-control" style="flex-grow:1;" onchange="filtrarTablaLocal()">
+            <option value="todos">-- Todos los alumnos del aula --</option>
+          </select>
+        </div>
+
         <div class="table-container">
           <table>
             <thead>
@@ -84,8 +92,7 @@
                 <th>AULA / ASIGNACIÓN</th>
                 <th style="color: #16a34a;">ASIST.</th>
                 <th style="color: #ca8a04;">TARD.</th>
-                <th style="color: #2563eb;">F. JUST.</th>
-                <th style="color: #dc2626;">F. INJ.</th>
+                <th style="color: #dc2626;">FALTAS</th>
                 <th>PUNTAJE</th>
               </tr>
             </thead>
