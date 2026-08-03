@@ -44,7 +44,7 @@
         </div>
 
         <!-- Filtro por Aula y Buscador -->
-        <div style="display:flex; gap:15px; margin-bottom:20px; background:#f8fafc; padding:12px; border-radius:8px;">
+        <div style="display:flex; gap:15px; margin-bottom:20px; background:#f8fafc; padding:12px; border-radius:8px; flex-wrap:wrap; align-items:center;">
           <div style="display:flex; align-items:center; gap:8px;">
             <label style="font-size:13px; font-weight:bold; color:#475569;">Filtro por Aula:</label>
             <select id="filtroNivel" class="form-control" style="width:130px;" onchange="filtrarTablaLocal()">
@@ -59,12 +59,14 @@
               <option value="3ro">3ro</option>
               <option value="4to">4to</option>
               <option value="5to">5to</option>
+              <option value="6to">6to</option>
             </select>
             <select id="filtroSeccion" class="form-control" style="width:70px;" onchange="filtrarTablaLocal()">
               <option value="Todos">Todos</option>
               <option value="A">A</option>
               <option value="B">B</option>
               <option value="C">C</option>
+              <option value="D">D</option>
             </select>
           </div>
 

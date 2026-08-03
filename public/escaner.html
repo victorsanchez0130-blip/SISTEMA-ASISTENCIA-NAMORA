@@ -7,22 +7,22 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
   <link rel="stylesheet" href="css/styles.css">
 </head>
-<body class="bg-slate-100">
+<body class="bg-slate-100 relative">
   <header class="bg-white border-b border-slate-200 py-3 px-6 flex justify-between items-center shadow-sm">
-  <!-- Logo y Nombre con Color Visible -->
-  <div class="flex items-center gap-3">
-    <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-10 h-10 object-contain">
-    <h2 class="text-slate-900 font-extrabold text-xl tracking-wide">I.E. SANTA ROSA</h2>
-  </div>
-  <!-- Módulo de Marcación (Texto Más Grande) -->
+    <!-- Logo y Nombre con Color Visible -->
+    <div class="flex items-center gap-3">
+      <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-10 h-10 object-contain">
+      <h2 class="text-slate-900 font-extrabold text-xl tracking-wide">I.E. SANTA ROSA</h2>
+    </div>
+    <!-- Módulo de Marcación -->
     <p class="text-base md:text-lg text-blue-600 font-bold uppercase tracking-wide">
       Módulo de Marcación Diaria (Solo Lectura / Escáner)
     </p>
-  <!-- Botón Cerrar Sesión -->
-  <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition-colors">
-    Cerrar Sesión
-  </button>
-</header>
+    <!-- Botón Cerrar Sesión -->
+    <button onclick="logout()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition-colors">
+      Cerrar Sesión
+    </button>
+  </header>
 
   <main class="max-w-5xl mx-auto mt-6 p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -39,6 +39,7 @@
             <tr class="bg-slate-50 border-b border-slate-200 text-slate-500">
               <th class="p-2">Código</th>
               <th class="p-2">Nombre</th>
+              <th class="p-2 text-center">Hora</th>
               <th class="p-2 text-center">Estado</th>
             </tr>
           </thead>
@@ -47,6 +48,26 @@
       </div>
     </div>
   </main>
+
+  <!-- Ventana Emergente (Modal Pop-Up) -->
+  <div id="modal-asistencia" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-slate-100 p-6 text-center transform transition-all">
+      <div id="modal-icon" class="text-5xl mb-2">✅</div>
+      <h3 id="modal-title" class="text-lg font-extrabold text-slate-800">Marcación Registrada</h3>
+      
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 my-4 text-left text-xs space-y-2">
+        <p><span class="font-bold text-slate-500">Nombre:</span> <span id="modal-nombre" class="font-bold text-slate-800">-</span></p>
+        <p><span class="font-bold text-slate-500">Código:</span> <span id="modal-codigo" class="font-mono text-slate-700">-</span></p>
+        <p><span class="font-bold text-slate-500">Aula/Asignación:</span> <span id="modal-aula" class="text-slate-700">-</span></p>
+        <p><span class="font-bold text-slate-500">Hora de Marcación:</span> <span id="modal-hora" class="font-bold text-blue-600">-</span></p>
+        <p><span class="font-bold text-slate-500">Estado:</span> <span id="modal-estado" class="font-bold">-</span></p>
+      </div>
+
+      <button onclick="cerrarModalYContinuar()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition-colors">
+        Aceptar
+      </button>
+    </div>
+  </div>
 
   <script src="js/auth.js"></script>
   <script src="js/scanner.js"></script>
