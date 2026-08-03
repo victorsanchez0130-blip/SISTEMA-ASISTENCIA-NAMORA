@@ -211,22 +211,22 @@ async function generarFichaAlumnoPDF() {
 
   doc.text("CÓDIGO ALUMNO:", 14, 34);
   doc.setFont("helvetica", "normal");
-  doc.text(alumno.codigo, 55, 34);
+  doc.text(alumno.codigo, 60, 34);
 
   doc.setFont("helvetica", "bold");
   doc.text("APELLIDOS Y NOMBRES:", 14, 40);
   doc.setFont("helvetica", "normal");
-  doc.text(alumno.nombre, 55, 40);
+  doc.text(alumno.nombre, 60, 40);
 
   doc.setFont("helvetica", "bold");
   doc.text("AULA / SECCIÓN:", 14, 46);
   doc.setFont("helvetica", "normal");
-  doc.text(alumno.aula || alumno.materia_aula || '-', 55, 46);
+  doc.text(alumno.aula || alumno.materia_aula || '-', 60, 46);
 
   doc.setFont("helvetica", "bold");
   doc.text("PERÍODO EVALUADO:", 14, 52);
   doc.setFont("helvetica", "normal");
-  doc.text(fechaFiltro || "General", 55, 52);
+  doc.text(fechaFiltro || "General", 60, 52);
 
   // Cuadro Resumen de Metricas
   const resumenData = [[
