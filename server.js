@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Configuración de la Base de Datos con soporte para Disco Persistente en la Nube (Railway)
+// Configuración de la Base de Datos con soporte para Disco Persistente en Railway
 const dbPath = process.env.RAILWAY_VOLUME_MOUNT_PATH 
   ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'asistencia.db') 
   : 'asistencia.db';
@@ -19,6 +19,22 @@ const db = new sqlite3.Database(dbPath, (err) => {
   if (err) console.error('Error al conectar con SQLite:', err.message);
   else console.log('Base de datos conectada correctamente en:', dbPath);
 });
+
+// Helper para obtener fecha actual en zona horaria de Perú (YYYY-MM-DD)
+function getFechaPeru() {
+  const d = new Date();
+  const options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };
+  const parts = new Intl.DateTimeFormat('es-PE', options).formatToParts(d);
+  const year = parts.find(p => p.type === 'year').value;
+  const month = parts.find(p => p.type === 'month').value;
+  const day = parts.find(p => p.type === 'day').value;
+  return `${year}-${month}-${day}`;
+}
+
+// Helper para obtener hora actual en zona horaria de Perú (HH:MM:SS)
+function getHoraPeru() {
+  return new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour12: false });
+}
 
 // Creación de tablas e inserción de datos iniciales
 db.serialize(() => {
@@ -89,7 +105,7 @@ app.get('/api/usuarios', (req, res) => {
   });
 });
 
-// Crear Usuario (Con código aleatorio limpio)
+// Crear Usuario
 app.post('/api/usuarios', (req, res) => {
   const { nombre, rol, materia_aula } = req.body;
 
@@ -137,19 +153,78 @@ app.delete('/api/usuarios/:id', (req, res) => {
   });
 });
 
-// Marcar Asistencia QR
+// Marcar Asistencia QR (Ajustado con fecha/hora de Perú)
 app.post('/api/asistencia/marcar', (req, res) => {
   const { codigoQR } = req.body;
   db.get('SELECT * FROM usuarios WHERE codigo = ?', [codigoQR], (err, usuario) => {
     if (err || !usuario) return res.status(404).json({ success: false, mensaje: 'Código QR no registrado.' });
 
-    const hoy = new Date().toISOString().slice(0, 10);
-    const horaActual = new Date().toLocaleTimeString('es-PE', { hour12: false });
+    const hoy = getFechaPeru();
+    const horaActual = getHoraPeru();
     const estado = horaActual > '08:00:00' ? 'TARDANZA' : 'PUNTUAL';
 
     db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [codigoQR, hoy, horaActual, estado], (err) => {
       if (err) return res.status(500).json({ success: false, mensaje: 'Error al marcar.' });
       res.json({ success: true, mensaje: `Marcación [${estado}] registrada para ${usuario.nombre}`, usuario });
+    });
+  });
+});
+
+// NVO: API Obtener Marcaciones de Hoy (Dashboard/Cronograma)
+app.get('/api/asistencia/hoy', (req, res) => {
+  const hoy = getFechaPeru();
+  const query = `
+    SELECT 
+      a.usuario_codigo AS codigo,
+      u.nombre,
+      u.materia_aula AS rol,
+      a.hora,
+      a.estado
+    FROM asistencias a
+    JOIN usuarios u ON a.usuario_codigo = u.codigo
+    WHERE a.fecha = ?
+    ORDER BY a.id DESC
+  `;
+
+  db.all(query, [hoy], (err, rows) => {
+    if (err) return res.status(500).json([]);
+    res.json(rows || []);
+  });
+});
+
+// NVO: API Rankings y Sumatoria de Puntos Integrada
+app.get('/api/rankings', (req, res) => {
+  const query = `
+    SELECT 
+      u.codigo,
+      u.nombre,
+      u.rol,
+      u.materia_aula AS asignacion,
+      COALESCE(SUM(
+        CASE 
+          WHEN UPPER(a.estado) = 'PUNTUAL' THEN 10
+          WHEN UPPER(a.estado) = 'TARDE' OR UPPER(a.estado) = 'TARDANZA' THEN -5
+          WHEN UPPER(a.estado) = 'JUSTIFICADA' THEN 0
+          WHEN UPPER(a.estado) = 'INJUSTIFICADA' THEN -10
+          ELSE 0
+        END
+      ), 0) AS puntaje_acumulado
+    FROM usuarios u
+    LEFT JOIN asistencias a ON u.codigo = a.usuario_codigo
+    GROUP BY u.id
+    ORDER BY puntaje_acumulado DESC
+  `;
+
+  db.all(query, [], (err, rows) => {
+    if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
+
+    const docentes = rows.filter(r => r.rol === 'Docente');
+    const alumnos = rows.filter(r => r.rol === 'Alumno' || r.rol === 'Director');
+
+    res.json({
+      success: true,
+      docentes,
+      alumnos
     });
   });
 });
@@ -167,7 +242,7 @@ app.post('/api/asistencia/manual', (req, res) => {
   });
 });
 
-// Reporte Consolidado (Filtrado solo para Alumnos y con asignación asegurada)
+// Reporte Consolidado
 app.get('/api/reportes/consolidado', (req, res) => {
   db.all("SELECT * FROM usuarios WHERE rol = 'Alumno'", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
@@ -191,7 +266,7 @@ app.get('/api/reportes/consolidado', (req, res) => {
           codigo: u.codigo,
           nombre: u.nombre,
           rol: u.rol,
-          aula: u.materia_aula || u.aula || u.grado_seccion || 'Sin Asignación',
+          aula: u.materia_aula || 'Sin Asignación',
           asistencias: asistenciasCount,
           tardanzas,
           fJustificadas,
