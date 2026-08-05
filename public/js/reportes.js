@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ----------------------------------------------------
-// CAMBIO DINÁMICO DEL INPUT DE FECHA (DÍA / SEMANA / MES)
+// CAMBIO DINÁMICO DEL INPUT DE FECHA Y CÁLCULO DE DÍAS
 // ----------------------------------------------------
 
 function actualizarTipoSelectorFecha() {
@@ -51,6 +51,39 @@ function obtenerMesActual() {
   return `${hoy.getFullYear()}-${mes < 10 ? '0' + mes : mes}`;
 }
 
+/**
+ * Retorna el número de días laborables / totales del periodo según el tipo de reporte seleccionado.
+ */
+function obtenerTotalDiasPeriodo() {
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
+  const fechaVal = document.getElementById('filtroFecha')?.value || '';
+
+  if (tipoInput.includes('Semanal')) {
+    return 5; // Semana escolar regular (Lunes a Viernes)
+  }
+
+  if (tipoInput.includes('Mensual')) {
+    if (!fechaVal) return 22; // Valor predeterminado
+    
+    const [anio, mes] = fechaVal.split('-').map(Number);
+    if (!anio || !mes) return 22;
+
+    // Calcular días de Lunes a Viernes en el mes
+    let diasHabiles = 0;
+    const totalDiasMes = new Date(anio, mes, 0).getDate();
+
+    for (let dia = 1; dia <= totalDiasMes; dia++) {
+      const dayOfWeek = new Date(anio, mes - 1, dia).getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Excluir Sábados (6) y Domingos (0)
+        diasHabiles++;
+      }
+    }
+    return diasHabiles;
+  }
+
+  return 1; // Reporte Diario
+}
+
 // ----------------------------------------------------
 // CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR
 // ----------------------------------------------------
@@ -69,7 +102,6 @@ async function cargarConsolidado() {
     
     datosReporteGlobal = await res.json();
     
-    // Al cargar los datos actualizamos el select y la tabla
     actualizarOpcionesAlumnosSegunAula();
     renderizarTablaReportes();
   } catch (err) {
@@ -79,9 +111,6 @@ async function cargarConsolidado() {
   }
 }
 
-/**
- * Filtra los datos globales aplicando únicamente los criterios de Aula (Nivel, Grado, Sección)
- */
 function obtenerAlumnosPorAula() {
   const nivel = document.getElementById('filtroNivel')?.value || 'Todos';
   const grado = document.getElementById('filtroGrado')?.value || 'Todos';
@@ -90,17 +119,9 @@ function obtenerAlumnosPorAula() {
   return datosReporteGlobal.filter(item => {
     const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
 
-    // 1. Filtro por Nivel Educativo
-    if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) {
-      return false;
-    }
+    if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) return false;
+    if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
 
-    // 2. Filtro por Grado
-    if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) {
-      return false;
-    }
-
-    // 3. Filtro por Sección
     if (seccion !== 'Todos') {
       const seccionNormalizada = seccion.toUpperCase();
       const partesAula = aulaStr.split(' ');
@@ -115,9 +136,6 @@ function obtenerAlumnosPorAula() {
   });
 }
 
-/**
- * Puebla el menú desplegable 'Filtrar Alumno' únicamente con los alumnos que coinciden con el Aula seleccionada
- */
 function actualizarOpcionesAlumnosSegunAula() {
   const selectAlumno = document.getElementById('selectAlumnoIndividual');
   if (!selectAlumno) return;
@@ -134,7 +152,6 @@ function actualizarOpcionesAlumnosSegunAula() {
     selectAlumno.appendChild(option);
   });
 
-  // Conservar la selección previa si el alumno sigue estando presente dentro del grupo filtrado
   if (valorSeleccionadoPrevio && Array.from(selectAlumno.options).some(o => o.value === valorSeleccionadoPrevio)) {
     selectAlumno.value = valorSeleccionadoPrevio;
   } else {
@@ -148,7 +165,6 @@ function configurarEventosFiltros() {
     selectTipo.addEventListener('change', actualizarTipoSelectorFecha);
   }
 
-  // Al cambiar Nivel, Grado o Sección re-poblamos el select de Alumnos y renderizamos la tabla
   ['filtroNivel', 'filtroGrado', 'filtroSeccion'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -159,7 +175,6 @@ function configurarEventosFiltros() {
     }
   });
 
-  // Eventos para el select individual y el buscador por texto
   const selectAlumno = document.getElementById('selectAlumnoIndividual');
   if (selectAlumno) {
     selectAlumno.addEventListener('change', renderizarTablaReportes);
@@ -183,15 +198,12 @@ function obtenerAlumnosFiltradosBase() {
   const alumnoSeleccionado = document.getElementById('selectAlumnoIndividual')?.value || 'todos';
   const busqueda = (document.getElementById('filtroBusqueda')?.value || '').toLowerCase().trim();
 
-  // Partimos únicamente de los alumnos que ya pertenecen al Aula seleccionada
   let resultado = obtenerAlumnosPorAula();
 
-  // Aplicar filtro por Selección Individual de Alumno
   if (alumnoSeleccionado !== 'todos') {
     resultado = resultado.filter(item => (item.codigo || '').toUpperCase() === alumnoSeleccionado.toUpperCase());
   }
 
-  // Aplicar filtro por Búsqueda libre
   if (busqueda !== '') {
     resultado = resultado.filter(item => {
       const nom = (item.nombre || '').toLowerCase();
@@ -220,16 +232,23 @@ function renderizarTablaReportes() {
     return;
   }
 
+  const totalDiasPeriodo = obtenerTotalDiasPeriodo();
+
   filtrados.forEach(d => {
-    const totalFaltas = (d.fJustificadas || 0) + (d.fInjustificadas || 0);
+    const asist = d.asistencias || 0;
+    const tard = d.tardanzas || 0;
+    const faltasJust = d.fJustificadas || 0;
+    const faltasInjust = d.fInjustificadas || 0;
+    const totalFaltas = faltasJust + faltasInjust;
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><strong>${d.codigo || '-'}</strong></td>
       <td>${d.nombre || '-'}</td>
       <td>${d.aula || d.materia_aula || 'Sin Asignación'}</td>
-      <td style="text-align: center; color: #16a34a; font-weight: bold;">${d.asistencias || 0}</td>
-      <td style="text-align: center; color: #d97706; font-weight: bold;">${d.tardanzas || 0}</td>
-      <td style="text-align: center; color: #dc2626; font-weight: bold;">${totalFaltas}</td>
+      <td style="text-align: center; color: #16a34a; font-weight: bold;">${asist} / ${totalDiasPeriodo}</td>
+      <td style="text-align: center; color: #d97706; font-weight: bold;">${tard} / ${totalDiasPeriodo}</td>
+      <td style="text-align: center; color: #dc2626; font-weight: bold;">${totalFaltas} / ${totalDiasPeriodo}</td>
       <td style="text-align: center; font-weight: bold; background-color: #f8fafc;">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
     `;
     tbody.appendChild(tr);
@@ -309,16 +328,16 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   });
 
-  const totalEvaluado = (metricas.puntuales + metricas.tardanzas + metricas.faltas) || 1;
-  const pctPuntual = Math.round((metricas.puntuales / totalEvaluado) * 100);
-  const pctTardanza = Math.round((metricas.tardanzas / totalEvaluado) * 100);
-  const pctFaltas = Math.round((metricas.faltas / totalEvaluado) * 100);
+  const maxDias = metricas.totalPeriodo || 1;
+  const pctPuntual = Math.round((metricas.puntuales / maxDias) * 100);
+  const pctTardanza = Math.round((metricas.tardanzas / maxDias) * 100);
+  const pctFaltas = Math.round((metricas.faltas / maxDias) * 100);
 
   const tablaMetricasHead = [["PUNTUALES", "TARDANZAS", "FALTAS", "PUNTAJE"]];
   const tablaMetricasBody = [[
-    `${metricas.puntuales} (${pctPuntual}%)`,
-    `${metricas.tardanzas} (${pctTardanza}%)`,
-    `${metricas.faltas} (${pctFaltas}%)`,
+    `${metricas.puntuales}/${maxDias} (${pctPuntual}%)`,
+    `${metricas.tardanzas}/${maxDias} (${pctTardanza}%)`,
+    `${metricas.faltas}/${maxDias} (${pctFaltas}%)`,
     `${metricas.puntaje} pts`
   ]];
 
@@ -431,7 +450,8 @@ async function generarFichaAlumnoPDF() {
     puntuales: alumno.asistencias || 0,
     tardanzas: alumno.tardanzas || 0,
     faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
-    puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0
+    puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
+    totalPeriodo: obtenerTotalDiasPeriodo()
   };
 
   await construirPDFModeloEstandar({
@@ -480,7 +500,13 @@ async function generarGradoPDF() {
     nombre: `Consolidado Aula (${filtrados.length} Alumnos)`,
     aula: `Grado: ${grado} | Sección: ${seccion}`,
     periodo: `${tipo} (${fecha || 'General'})`,
-    metricas: { puntuales: totPuntual, tardanzas: totTardanza, faltas: totFaltas, puntaje: totPuntos },
+    metricas: { 
+      puntuales: totPuntual, 
+      tardanzas: totTardanza, 
+      faltas: totFaltas, 
+      puntaje: totPuntos,
+      totalPeriodo: obtenerTotalDiasPeriodo() * filtrados.length
+    },
     historial,
     nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
   });
@@ -504,7 +530,7 @@ async function generarDocentesPDF() {
     nombre: "Plana Docente I.E. Santa Rosa",
     aula: "Dirección Académica",
     periodo: `${tipo} (${fecha || 'General'})`,
-    metricas: { puntuales: 0, tardanzas: 0, faltas: 0, puntaje: 0 },
+    metricas: { puntuales: 0, tardanzas: 0, faltas: 0, puntaje: 0, totalPeriodo: obtenerTotalDiasPeriodo() },
     historial,
     nombreArchivo: `Reporte_Docentes_${fecha || 'General'}.pdf`
   });
