@@ -260,14 +260,168 @@ function filtrarTablaLocal() {
   });
 }
 
+// ==========================================
+// GENERACIÓN DE REPORTES EN PDF (jsPDF + autoTable)
+// ==========================================
+
+function obtenerInstanciaPDF() {
+  if (window.jspdf && window.jspdf.jsPDF) {
+    return window.jspdf.jsPDF;
+  }
+  if (window.jsPDF) {
+    return window.jsPDF;
+  }
+  return null;
+}
+
 function generarDocentesPDF() {
-  alert("Generando PDF de Docentes...");
+  const jsPDFClass = obtenerInstanciaPDF();
+  if (!jsPDFClass) {
+    alert("La librería jsPDF no está cargada correctamente.");
+    return;
+  }
+
+  const doc = new jsPDFClass();
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+
+  doc.setFontSize(16);
+  doc.setTextColor(15, 23, 42);
+  doc.text("I.E. SANTA ROSA - REPORTE DE DOCENTES", 14, 15);
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Tipo: ${tipo} | Fecha/Periodo: ${fecha}`, 14, 22);
+
+  // Filtrar solo docentes si existen en datosReporteGlobal o generar vacante estructurada
+  const docentes = datosReporteGlobal.filter(d => d.rol === 'Docente');
+
+  const headers = [["CÓDIGO", "NOMBRE", "ASIGNACIÓN", "ASIST.", "TARD.", "FALTAS", "PUNTAJE"]];
+  const rows = docentes.map(d => [
+    d.codigo || '-',
+    d.nombre || '-',
+    d.materia_aula || d.aula || 'Docente',
+    `${d.asistencias || 0}`,
+    `${d.tardanzas || 0}`,
+    `${(d.fJustificadas || 0) + (d.fInjustificadas || 0)}`,
+    `${d.puntajeTotal || 0} pts`
+  ]);
+
+  if (rows.length === 0) {
+    doc.text("No hay datos de docentes registrados para este periodo.", 14, 32);
+  } else {
+    doc.autoTable({
+      startY: 28,
+      head: headers,
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [15, 23, 42] }
+    });
+  }
+
+  doc.save(`Reporte_Docentes_${fecha}.pdf`);
 }
 
 function generarGradoPDF() {
-  alert("Generando PDF por Grado...");
+  const jsPDFClass = obtenerInstanciaPDF();
+  if (!jsPDFClass) {
+    alert("La librería jsPDF no está cargada correctamente.");
+    return;
+  }
+
+  const doc = new jsPDFClass();
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+  const nivel = document.getElementById('filtroNivel')?.value || 'Todos';
+  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+
+  doc.setFontSize(16);
+  doc.setTextColor(2, 132, 199);
+  doc.text("I.E. SANTA ROSA - REPORTE POR AULA / GRADO", 14, 15);
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Filtros: Nivel ${nivel} | Grado ${grado} | Sección ${seccion} | Periodo: ${fecha}`, 14, 22);
+
+  const filtrados = obtenerAlumnosFiltradosBase();
+
+  const headers = [["CÓDIGO", "NOMBRE", "AULA", "ASIST.", "TARD.", "FALTAS", "PUNTAJE"]];
+  const rows = filtrados.map(d => [
+    d.codigo || '-',
+    d.nombre || '-',
+    d.aula || d.materia_aula || '-',
+    `${d.asistencias || 0}`,
+    `${d.tardanzas || 0}`,
+    `${(d.fJustificadas || 0) + (d.fInjustificadas || 0)}`,
+    `${d.puntajeTotal || 0} pts`
+  ]);
+
+  doc.autoTable({
+    startY: 28,
+    head: headers,
+    body: rows,
+    theme: 'striped',
+    headStyles: { fillColor: [2, 132, 199] }
+  });
+
+  doc.save(`Reporte_Grado_${grado}_${seccion}_${fecha}.pdf`);
 }
 
 function generarFichaAlumnoPDF() {
-  alert("Generando Ficha de Alumno PDF...");
+  const jsPDFClass = obtenerInstanciaPDF();
+  if (!jsPDFClass) {
+    alert("La librería jsPDF no está cargada correctamente.");
+    return;
+  }
+
+  const selectAlumno = document.getElementById('selectAlumnoIndividual')?.value;
+  if (!selectAlumno || selectAlumno === 'todos') {
+    alert("Por favor, selecciona un alumno específico en el menú desplegable 'Filtrar Alumno' para generar su ficha individual.");
+    return;
+  }
+
+  const alumno = datosReporteGlobal.find(d => (d.codigo || d.id || d.nombre) === selectAlumno);
+  if (!alumno) {
+    alert("No se encontraron los datos del alumno seleccionado.");
+    return;
+  }
+
+  const doc = new jsPDFClass();
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const maxDias = calcularDiasHabiles(tipo, fecha);
+
+  doc.setFontSize(18);
+  doc.setTextColor(22, 163, 74);
+  doc.text("I.E. SANTA ROSA - FICHA INDIVIDUAL DEL ALUMNO", 14, 20);
+
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(200);
+  doc.line(14, 24, 196, 24);
+
+  doc.setFontSize(11);
+  doc.setTextColor(30);
+  doc.text(`Nombre del Alumno: ${alumno.nombre}`, 14, 34);
+  doc.text(`Código: ${alumno.codigo || '-'}`, 14, 42);
+  doc.text(`Aula / Asignación: ${alumno.aula || alumno.materia_aula || 'Sin asignación'}`, 14, 50);
+  doc.text(`Reporte: ${tipo} (${fecha})`, 14, 58);
+
+  const totalFaltas = (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0);
+
+  const headers = [["METRICA", "CANTIDAD / EVALUACIÓN"]];
+  const rows = [
+    ["Asistencias", `${alumno.asistencias || 0} / ${maxDias} días`],
+    ["Tardanzas", `${alumno.tardanzas || 0} / ${maxDias} días`],
+    ["Faltas Totales", `${totalFaltas} / ${maxDias} días`],
+    ["Puntaje Acumulado", `${alumno.puntajeTotal || 0} puntos`]
+  ];
+
+  doc.autoTable({
+    startY: 66,
+    head: headers,
+    body: rows,
+    theme: 'grid',
+    headStyles: { fillColor: [22, 163, 74] }
+  });
+
+  doc.save(`Ficha_${alumno.codigo || alumno.nombre}_${fecha}.pdf`);
 }
