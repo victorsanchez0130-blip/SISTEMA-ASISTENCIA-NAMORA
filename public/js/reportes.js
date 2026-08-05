@@ -23,7 +23,8 @@ const FERIADOS_PERU_MMDD = [
 
 document.addEventListener('DOMContentLoaded', () => {
   configurarEventosFiltros();
-  actualizarTipoSelectorFecha(false); // Pasar 'false' para evitar autorenderizado de PDF/Carga al inicio
+  // Se envía 'false' para evitar autodescargas o ejecuciones involuntarias al cargar
+  actualizarTipoSelectorFecha(false);
 });
 
 // ----------------------------------------------------
@@ -44,10 +45,9 @@ function actualizarTipoSelectorFecha(ejecutarCarga = true) {
     contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" value="${obtenerFechaHoy()}">`;
   }
 
-  // Escuchar el cambio en el nuevo input insertado
   document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
-  
-  // SOLUCIÓN AL AUTO-GENERADO: Solo carga datos si el usuario cambió el filtro manualmente
+
+  // Solo ejecuta la carga si la acción vino de una interacción explícita
   if (ejecutarCarga) {
     cargarConsolidado();
   }
@@ -254,7 +254,6 @@ function configurarEventosFiltros() {
     busqueda.addEventListener('input', renderizarTablaReportes);
   }
 
-  // BOTONES CON ACCIÓN EXPLÍCITA DE CLIC
   document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
   document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
@@ -384,7 +383,7 @@ async function guardarEdicionAsistencia(event) {
     if (response.ok && (resultado.success || resultado.ok)) {
       alert("¡Asistencia actualizada correctamente!");
       cerrarModalEditar();
-      cargarConsolidado(); 
+      cargarConsolidado();
     } else {
       alert("Error al actualizar: " + (resultado.mensaje || resultado.error || "No se pudo completar la acción."));
     }
@@ -505,16 +504,29 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setTextColor(30, 41, 59);
   doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
 
-  // SE AGREGA COLUMNA 'DOCENTE' Y SE REAJUSTAN ANCHOS
+  // ENCABEZADOS Y MAPEO MEJORADO PARA CAPTURAR DOCENTES
   const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN", "DOCENTE"]];
-  const rowsHistorial = historial.map(h => [
-    h.fecha || '-',
-    obtenerNombreDia(h.fecha),
-    h.hora || '-',
-    (h.estado || '-').toUpperCase(),
-    obtenerObservacionEstado(h.estado),
-    h.docente || h.profesor || '-'
-  ]);
+  
+  const rowsHistorial = historial.map(h => {
+    // Escanea múltiples propiedades posibles entregadas por la BD/API
+    const nombreDocente = h.docente_nombre 
+      || h.nombre_docente 
+      || h.docente 
+      || h.profesor 
+      || h.profesor_nombre 
+      || h.nombre 
+      || h.docente_completo 
+      || '-';
+
+    return [
+      h.fecha || '-',
+      obtenerNombreDia(h.fecha),
+      h.hora || '-',
+      (h.estado || '-').toUpperCase(),
+      obtenerObservacionEstado(h.estado),
+      nombreDocente
+    ];
+  });
 
   if (rowsHistorial.length === 0) {
     rowsHistorial.push(["-", "-", "-", "SIN REGISTROS", "No existen registros de marcación en el periodo", "-"]);
