@@ -14,6 +14,7 @@ async function cargarRankings() {
     listaDocentes = data.docentes || [];
     listaAlumnos = data.alumnos || [];
 
+    // Renderizar Tabla Docentes
     const tbodyDocentes = document.getElementById('tbodyRankingDocentes');
     if (tbodyDocentes) {
       tbodyDocentes.innerHTML = '';
@@ -25,14 +26,15 @@ async function cargarRankings() {
             <tr class="border-b border-slate-100 text-xs hover:bg-slate-50">
               <td class="p-3 font-bold text-slate-700">#${index + 1}</td>
               <td class="p-3 font-medium text-slate-800">${d.nombre}</td>
-              <td class="p-3 text-slate-600">${d.materia_aula || '-'}</td>
-              <td class="p-3 font-bold text-sky-600">${d.puntajeTotal || 0} pts</td>
+              <td class="p-3 text-slate-600">${d.asignacion || '-'}</td>
+              <td class="p-3 font-bold text-sky-600">${d.puntaje_acumulado || 0} pts</td>
             </tr>
           `;
         });
       }
     }
 
+    // Renderizar Tabla Alumnos
     const tbodyAlumnos = document.getElementById('tbodyRankingAlumnos');
     if (tbodyAlumnos) {
       tbodyAlumnos.innerHTML = '';
@@ -44,8 +46,8 @@ async function cargarRankings() {
             <tr class="border-b border-slate-100 text-xs hover:bg-slate-50">
               <td class="p-3 font-bold text-slate-700">#${index + 1}</td>
               <td class="p-3 font-medium text-slate-800">${a.nombre}</td>
-              <td class="p-3 text-slate-600">${a.materia_aula || '-'}</td>
-              <td class="p-3 font-bold text-emerald-600">${a.puntajeTotal || 0} pts</td>
+              <td class="p-3 text-slate-600">${a.asignacion || '-'}</td>
+              <td class="p-3 font-bold text-emerald-600">${a.puntaje_acumulado || 0} pts</td>
             </tr>
           `;
         });
@@ -55,12 +57,6 @@ async function cargarRankings() {
   } catch (error) {
     console.error('Error al cargar los rankings:', error);
   }
-}
-
-function obtenerInstanciaPDF() {
-  if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
-  if (window.jsPDF) return window.jsPDF;
-  return null;
 }
 
 function agregarMembreteInstitucional(doc, titulo) {
@@ -84,20 +80,16 @@ function imprimirRankingDocentesPDF() {
     return;
   }
 
-  const jsPDFClass = obtenerInstanciaPDF();
-  if (!jsPDFClass) {
-    alert("La librería jsPDF no está disponible.");
-    return;
-  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
 
-  const doc = new jsPDFClass();
   agregarMembreteInstitucional(doc, "RANKING OFICIAL DE MÉRITOS - DOCENTES");
 
   const bodyData = listaDocentes.map((d, index) => [
     `#${index + 1}`,
     d.nombre,
-    d.materia_aula || '-',
-    `${d.puntajeTotal || 0} pts`
+    d.asignacion || '-',
+    `${d.puntaje_acumulado || 0} pts`
   ]);
 
   doc.autoTable({
@@ -118,20 +110,16 @@ function imprimirRankingAlumnosPDF() {
     return;
   }
 
-  const jsPDFClass = obtenerInstanciaPDF();
-  if (!jsPDFClass) {
-    alert("La librería jsPDF no está disponible.");
-    return;
-  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
 
-  const doc = new jsPDFClass();
   agregarMembreteInstitucional(doc, "RANKING OFICIAL DE MÉRITOS - ALUMNOS");
 
   const bodyData = listaAlumnos.map((a, index) => [
     `#${index + 1}`,
     a.nombre,
-    a.materia_aula || '-',
-    `${a.puntajeTotal || 0} pts`
+    a.asignacion || '-',
+    `${a.puntaje_acumulado || 0} pts`
   ]);
 
   doc.autoTable({

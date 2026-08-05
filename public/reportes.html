@@ -26,7 +26,7 @@
         
         <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
           <div style="display:flex; align-items:center; gap:8px;">
-            <select id="filtroTipo" class="form-control" style="width: 170px;">
+            <select id="filtroTipo" class="form-control" style="width: 170px;" onchange="cambiarTipoFiltroFecha()">
               <option value="Diario">Reporte Diario</option>
               <option value="Semanal">Reporte Semanal</option>
               <option value="Mensual">Reporte Mensual</option>
@@ -34,25 +34,26 @@
           </div>
 
           <div id="contenedorFecha">
-            <input type="date" id="filtroFecha" class="form-control" style="width: 170px;">
+            <input type="date" id="filtroFecha" class="form-control" style="width: 170px;" onchange="cargarReportes()">
           </div>
 
           <div style="margin-left: auto; display:flex; gap:10px;">
-            <button id="btnReporteDocentes" class="btn-submit" style="background:#0f172a;">📄 Docentes PDF</button>
-            <button id="btnReporteGrado" class="btn-submit" style="background:#0284c7;">📊 Grado PDF</button>
-            <button id="btnFichaAlumno" class="btn-submit" style="background:#16a34a;">📄 Ficha Alumno PDF</button>
+            <button onclick="generarDocentesPDF()" class="btn-submit" style="background:#0f172a;">📄 Docentes PDF</button>
+            <button onclick="generarGradoPDF()" class="btn-submit" style="background:#0284c7;">📊 Grado PDF</button>
+            <button onclick="generarFichaAlumnoPDF()" class="btn-submit" style="background:#16a34a;">📄 Ficha Alumno PDF</button>
           </div>
         </div>
 
+        <!-- Filtro por Aula y Buscador -->
         <div style="display:flex; gap:15px; margin-bottom:12px; background:#f8fafc; padding:12px; border-radius:8px; flex-wrap:wrap; align-items:center;">
           <div style="display:flex; align-items:center; gap:8px;">
             <label style="font-size:13px; font-weight:bold; color:#475569;">Filtro por Aula:</label>
-            <select id="filtroNivel" class="form-control" style="width:130px;">
+            <select id="filtroNivel" class="form-control" style="width:130px;" onchange="actualizarFiltrosYTabla()">
               <option value="Todos">Todos</option>
               <option value="Secundaria">Secundaria</option>
               <option value="Primaria">Primaria</option>
             </select>
-            <select id="filtroGrado" class="form-control" style="width:90px;">
+            <select id="filtroGrado" class="form-control" style="width:90px;" onchange="actualizarFiltrosYTabla()">
               <option value="Todos">Todos</option>
               <option value="1ro">1ro</option>
               <option value="2do">2do</option>
@@ -61,7 +62,7 @@
               <option value="5to">5to</option>
               <option value="6to">6to</option>
             </select>
-            <select id="filtroSeccion" class="form-control" style="width:70px;">
+            <select id="filtroSeccion" class="form-control" style="width:70px;" onchange="actualizarFiltrosYTabla()">
               <option value="Todos">Todos</option>
               <option value="A">A</option>
               <option value="B">B</option>
@@ -71,14 +72,15 @@
           </div>
 
           <div style="flex-grow:1; display:flex; align-items:center;">
-            <input type="text" id="filtroBusqueda" class="form-control" placeholder="🔍 Buscar por nombre o código...">
+            <input type="text" id="filtroNombre" class="form-control" placeholder="🔍 Buscar por nombre..." onkeyup="filtrarTablaLocal()">
           </div>
         </div>
 
+        <!-- Menú Desplegable: Filtrar Alumno -->
         <div style="display:flex; gap:10px; margin-bottom:20px; background:#f1f5f9; padding:10px 12px; border-radius:8px; align-items:center;">
           <label style="font-size:13px; font-weight:bold; color:#334155; min-width:110px;">Filtrar Alumno:</label>
-          <select id="selectAlumnoIndividual" class="form-control" style="flex-grow:1;">
-            <option value="todos">-- Seleccionar Alumno --</option>
+          <select id="selectAlumnoIndividual" class="form-control" style="flex-grow:1;" onchange="filtrarTablaLocal()">
+            <option value="todos">-- Todos los alumnos del aula --</option>
           </select>
         </div>
 
@@ -103,6 +105,7 @@
     </main>
   </div>
 
+  <!-- Modal para Editar Asistencia Directiva -->
   <div id="modal-editar-asistencia" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px; z-index: 9999;">
     <div style="background: white; width: 100%; max-width: 420px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -119,7 +122,7 @@
         <input type="hidden" id="edit-codigo-input">
         
         <div class="form-group">
-          <label style="font-size: 13px; font-weight: bold; color: #475569; margin-bottom: 6px; display: block;">Nuevo Estado de Asistencia:</label>
+          <label>Nuevo Estado de Asistencia:</label>
           <select id="edit-estado-select" class="form-control" style="font-weight: 700;">
             <option value="PUNTUAL">🟢 PUNTUAL (Asistencia normal)</option>
             <option value="TARDE">🟡 TARDANZA (Llegó a destiempo)</option>

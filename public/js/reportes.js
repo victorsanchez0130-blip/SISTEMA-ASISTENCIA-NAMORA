@@ -1,8 +1,24 @@
+// Variable global para almacenar los datos del consolidado recuperados de la API
 let datosReporteGlobal = [];
 
+/**
+ * Lista de feriados nacionales estandarizados en Perú (MM-DD)
+ */
 const FERIADOS_PERU_MMDD = [
-  '01-01', '05-01', '06-07', '06-29', '07-23', '07-28', '07-29',
-  '08-06', '08-30', '10-08', '11-01', '12-08', '12-09', '12-25'
+  '01-01', // Año Nuevo
+  '05-01', // Día del Trabajo
+  '06-07', // Batalla de Arica y Día de la Bandera
+  '06-29', // San Pedro y San Pablo
+  '07-23', // Día de la Fuerza Aérea del Perú
+  '07-28', // Fiestas Patrias
+  '07-29', // Fiestas Patrias
+  '08-06', // Batalla de Junín
+  '08-30', // Santa Rosa de Lima
+  '10-08', // Combate de Angamos
+  '11-01', // Día de Todos los Santos
+  '12-08', // Inmaculada Concepción
+  '12-09', // Batalla de Ayacucho
+  '12-25'  // Navidad
 ];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -10,18 +26,22 @@ document.addEventListener('DOMContentLoaded', () => {
   actualizarTipoSelectorFecha();
 });
 
+// ----------------------------------------------------
+// CAMBIO DINÁMICO DEL INPUT DE FECHA Y CÁLCULO DE DÍAS
+// ----------------------------------------------------
+
 function actualizarTipoSelectorFecha() {
-  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
-  const contenedorFecha = document.getElementById('contenedorFecha');
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
+  const contenedorFecha = document.getElementById('filtroFecha')?.parentElement;
   
   if (!contenedorFecha) return;
 
-  if (tipoInput === 'Semanal') {
-    contenedorFecha.innerHTML = `<input type="week" id="filtroFecha" class="form-control" style="width: 170px;" value="${obtenerSemanaActual()}">`;
-  } else if (tipoInput === 'Mensual') {
-    contenedorFecha.innerHTML = `<input type="month" id="filtroFecha" class="form-control" style="width: 170px;" value="${obtenerMesActual()}">`;
+  if (tipoInput.includes('Semanal')) {
+    contenedorFecha.innerHTML = `<input type="week" id="filtroFecha" class="form-control" value="${obtenerSemanaActual()}">`;
+  } else if (tipoInput.includes('Mensual')) {
+    contenedorFecha.innerHTML = `<input type="month" id="filtroFecha" class="form-control" value="${obtenerMesActual()}">`;
   } else {
-    contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" style="width: 170px;" value="${obtenerFechaHoy()}">`;
+    contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" value="${obtenerFechaHoy()}">`;
   }
 
   document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
@@ -48,87 +68,111 @@ function obtenerMesActual() {
   return `${hoy.getFullYear()}-${mes < 10 ? '0' + mes : mes}`;
 }
 
+/**
+ * Verifica si una fecha dada en formato Date es un día laborable (Lunes a Viernes y NO feriado)
+ */
 function esDiaLaborable(fecha) {
   const dayOfWeek = fecha.getDay();
-  if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false; // Excluir Sábados (6) y Domingos (0)
+
   const mesStr = String(fecha.getMonth() + 1).padStart(2, '0');
   const diaStr = String(fecha.getDate()).padStart(2, '0');
-  return !FERIADOS_PERU_MMDD.includes(`${mesStr}-${diaStr}`);
+  const claveMMDD = `${mesStr}-${diaStr}`;
+
+  return !FERIADOS_PERU_MMDD.includes(claveMMDD);
 }
 
+/**
+ * Retorna el número exacto de días lectivos del periodo descartando fines de semana y feriados.
+ */
 function obtenerTotalDiasPeriodo() {
-  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
   const fechaVal = document.getElementById('filtroFecha')?.value || '';
 
-  if (tipoInput === 'Diario') {
+  // 1. REPORTE DIARIO
+  if (!tipoInput.includes('Semanal') && !tipoInput.includes('Mensual')) {
     if (!fechaVal) return 1;
     const [a, m, d] = fechaVal.split('-').map(Number);
-    return esDiaLaborable(new Date(a, m - 1, d)) ? 1 : 0;
+    const fechaObj = new Date(a, m - 1, d);
+    return esDiaLaborable(fechaObj) ? 1 : 0;
   }
 
-  if (tipoInput === 'Semanal') {
+  // 2. REPORTE SEMANAL
+  if (tipoInput.includes('Semanal')) {
     if (!fechaVal) return 5;
+    
+    // Parsear semana ISO (Ej: "2026-W28")
     const partes = fechaVal.split('-W');
     if (partes.length !== 2) return 5;
+
     const anio = Number(partes[0]);
     const semana = Number(partes[1]);
+
+    // Calcular el Lunes de dicha semana ISO
     const simple = new Date(anio, 0, 1 + (semana - 1) * 7);
     const dow = simple.getDay();
     const ISOweekStart = simple;
-    if (dow <= 4) ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-    else ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+    if (dow <= 4)
+      ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+    else
+      ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
 
     let diasLectivos = 0;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 5; i++) { // De Lunes a Viernes
       const diaActual = new Date(ISOweekStart);
       diaActual.setDate(ISOweekStart.getDate() + i);
-      if (esDiaLaborable(diaActual)) diasLectivos++;
+      if (esDiaLaborable(diaActual)) {
+        diasLectivos++;
+      }
     }
     return diasLectivos;
   }
 
-  if (tipoInput === 'Mensual') {
+  // 3. REPORTE MENSUAL
+  if (tipoInput.includes('Mensual')) {
     if (!fechaVal) return 22;
+    
     const [anio, mes] = fechaVal.split('-').map(Number);
     if (!anio || !mes) return 22;
+
     let diasLectivos = 0;
     const totalDiasMes = new Date(anio, mes, 0).getDate();
+
     for (let dia = 1; dia <= totalDiasMes; dia++) {
-      if (esDiaLaborable(new Date(anio, mes - 1, dia))) diasLectivos++;
+      const fechaObj = new Date(anio, mes - 1, dia);
+      if (esDiaLaborable(fechaObj)) {
+        diasLectivos++;
+      }
     }
     return diasLectivos;
   }
+
   return 1;
 }
+
+// ----------------------------------------------------
+// CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR
+// ----------------------------------------------------
 
 async function cargarConsolidado() {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
   const fechaVal = document.getElementById('filtroFecha')?.value || '';
 
+  let tipo = 'Diario';
+  if (tipoInput.includes('Semanal')) tipo = 'Semanal';
+  if (tipoInput.includes('Mensual')) tipo = 'Mensual';
+
   try {
-    const res = await fetch(`/api/reportes/consolidado?tipo=${tipoInput}&fecha=${encodeURIComponent(fechaVal)}`);
+    const res = await fetch(`/api/reportes/consolidado?tipo=${tipo}&fecha=${encodeURIComponent(fechaVal)}`);
     if (!res.ok) throw new Error("Error en la respuesta del servidor");
     
-    const data = await res.json();
+    datosReporteGlobal = await res.json();
     
-    let listaCruda = Array.isArray(data) ? data : (data.data || data.alumnos || data.reporte || []);
-
-    datosReporteGlobal = listaCruda.map(item => ({
-      codigo: item.codigo || '-',
-      nombre: item.nombre || 'Sin Nombre',
-      aula: item.aula || item.materia_aula || 'Sin Asignación',
-      asistencias: item.asistencias || 0,
-      tardanzas: item.tardanzas || 0,
-      faltas: item.faltas || 0,
-      puntajeTotal: item.puntajeTotal !== undefined ? item.puntajeTotal : 0
-    }));
-
     actualizarOpcionesAlumnosSegunAula();
     renderizarTablaReportes();
   } catch (err) {
     console.error("Error al cargar datos del reporte:", err);
     datosReporteGlobal = [];
-    actualizarOpcionesAlumnosSegunAula();
     renderizarTablaReportes();
   }
 }
@@ -138,16 +182,22 @@ function obtenerAlumnosPorAula() {
   const grado = document.getElementById('filtroGrado')?.value || 'Todos';
   const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
 
-  if (!Array.isArray(datosReporteGlobal)) return [];
-
   return datosReporteGlobal.filter(item => {
-    const aulaStr = (item.aula || '').toUpperCase();
+    const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
+
     if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) return false;
     if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
+
     if (seccion !== 'Todos') {
       const seccionNormalizada = seccion.toUpperCase();
-      if (!aulaStr.endsWith(seccionNormalizada) && !aulaStr.includes(` ${seccionNormalizada} `)) return false;
+      const partesAula = aulaStr.split(' ');
+      const ultimaLetra = partesAula[partesAula.length - 1];
+
+      if (ultimaLetra !== seccionNormalizada && !aulaStr.endsWith(` ${seccionNormalizada}`)) {
+        return false;
+      }
     }
+
     return true;
   });
 }
@@ -159,8 +209,9 @@ function actualizarOpcionesAlumnosSegunAula() {
   const valorSeleccionadoPrevio = selectAlumno.value;
   selectAlumno.innerHTML = '<option value="todos">-- Seleccionar Alumno --</option>';
 
-  const alumnosFiltrados = obtenerAlumnosPorAula();
-  alumnosFiltrados.forEach(alumno => {
+  const alumnosDelAula = obtenerAlumnosPorAula();
+
+  alumnosDelAula.forEach(alumno => {
     const option = document.createElement('option');
     option.value = alumno.codigo;
     option.textContent = `${alumno.nombre} (${alumno.codigo})`;
@@ -175,22 +226,39 @@ function actualizarOpcionesAlumnosSegunAula() {
 }
 
 function configurarEventosFiltros() {
-  document.getElementById('filtroTipo')?.addEventListener('change', actualizarTipoSelectorFecha);
+  const selectTipo = document.getElementById('filtroTipo');
+  if (selectTipo) {
+    selectTipo.addEventListener('change', actualizarTipoSelectorFecha);
+  }
 
   ['filtroNivel', 'filtroGrado', 'filtroSeccion'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', () => {
-      actualizarOpcionesAlumnosSegunAula();
-      renderizarTablaReportes();
-    });
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', () => {
+        actualizarOpcionesAlumnosSegunAula();
+        renderizarTablaReportes();
+      });
+    }
   });
 
-  document.getElementById('selectAlumnoIndividual')?.addEventListener('change', renderizarTablaReportes);
-  document.getElementById('filtroBusqueda')?.addEventListener('input', renderizarTablaReportes);
+  const selectAlumno = document.getElementById('selectAlumnoIndividual');
+  if (selectAlumno) {
+    selectAlumno.addEventListener('change', renderizarTablaReportes);
+  }
+
+  const busqueda = document.getElementById('filtroBusqueda');
+  if (busqueda) {
+    busqueda.addEventListener('input', renderizarTablaReportes);
+  }
 
   document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
   document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
 }
+
+// ----------------------------------------------------
+// FILTRADO Y RENDERIZADO EN TABLA HTML
+// ----------------------------------------------------
 
 function obtenerAlumnosFiltradosBase() {
   const alumnoSeleccionado = document.getElementById('selectAlumnoIndividual')?.value || 'todos';
@@ -235,19 +303,21 @@ function renderizarTablaReportes() {
   filtrados.forEach(d => {
     const asist = d.asistencias || 0;
     const tard = d.tardanzas || 0;
-    const faltas = d.faltas || 0;
+    const faltasJust = d.fJustificadas || 0;
+    const faltasInjust = d.fInjustificadas || 0;
+    const totalFaltas = faltasJust + faltasInjust;
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><strong>${d.codigo || '-'}</strong></td>
       <td>${d.nombre || '-'}</td>
-      <td>${d.aula || 'Sin Asignación'}</td>
+      <td>${d.aula || d.materia_aula || 'Sin Asignación'}</td>
       <td style="text-align: center; color: #16a34a; font-weight: bold;">${asist} / ${totalDiasPeriodo}</td>
       <td style="text-align: center; color: #d97706; font-weight: bold;">${tard} / ${totalDiasPeriodo}</td>
-      <td style="text-align: center; color: #dc2626; font-weight: bold;">${faltas} / ${totalDiasPeriodo}</td>
+      <td style="text-align: center; color: #dc2626; font-weight: bold;">${totalFaltas} / ${totalDiasPeriodo}</td>
       <td style="text-align: center; font-weight: bold; background-color: #f8fafc;">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
       <td style="text-align: center;">
-        <button onclick="abrirModalEditar('${d.codigo}', '${d.nombre ? d.nombre.replace(/'/g, "\\'") : ''}')" style="background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
+        <button onclick="abrirModalEditar('${d.codigo}', '${d.nombre.replace(/'/g, "\\'")}')" style="background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
           ✏️ Editar
         </button>
       </td>
@@ -256,45 +326,30 @@ function renderizarTablaReportes() {
   });
 }
 
-async function abrirModalEditar(codigo, nombre) {
+// ----------------------------------------------------
+// CONTROLADOR DE EDICIÓN DIRECTIVA (MODAL)
+// ----------------------------------------------------
+
+function abrirModalEditar(codigo, nombre) {
   const modal = document.getElementById('modal-editar-asistencia');
   const inputCodigo = document.getElementById('edit-codigo-input');
   const spanNombre = document.getElementById('edit-nombre-alumno');
   const spanCodigo = document.getElementById('edit-codigo-alumno');
-  const selectEstado = document.getElementById('edit-estado-select');
 
   if (inputCodigo) inputCodigo.value = codigo;
   if (spanNombre) spanNombre.innerText = nombre;
   if (spanCodigo) spanCodigo.innerText = codigo;
 
-  const fechaVal = document.getElementById('filtroFecha')?.value || obtenerFechaHoy();
-  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
-
-  try {
-    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(codigo)}&tipo=${tipoInput}&fecha=${fechaVal}`);
-    if (res.ok) {
-      const historial = await res.json();
-      if (historial.length > 0 && selectEstado) {
-        const estadoActual = (historial[0].estado || '').toUpperCase();
-        if (estadoActual.includes('TARDE') || estadoActual.includes('TARDANZA')) {
-          selectEstado.value = 'TARDE';
-        } else if (estadoActual.includes('FALTA') || estadoActual.includes('INJUSTIFICADA')) {
-          selectEstado.value = 'FALTA';
-        } else {
-          selectEstado.value = 'PUNTUAL';
-        }
-      }
-    }
-  } catch (e) {
-    console.error("No se pudo obtener el estado actual:", e);
+  if (modal) {
+    modal.style.display = 'flex';
   }
-
-  if (modal) modal.style.display = 'flex';
 }
 
 function cerrarModalEditar() {
   const modal = document.getElementById('modal-editar-asistencia');
-  if (modal) modal.style.display = 'none';
+  if (modal) {
+    modal.style.display = 'none';
+  }
 }
 
 async function guardarEdicionAsistencia(event) {
@@ -313,23 +368,31 @@ async function guardarEdicionAsistencia(event) {
     const response = await fetch('/api/asistencia/editar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codigo, estado: nuevoEstado, fecha: fechaVal })
+      body: JSON.stringify({ 
+        codigo: codigo, 
+        estado: nuevoEstado, 
+        fecha: fechaVal 
+      })
     });
 
     const resultado = await response.json();
 
-    if (response.ok && resultado.success) {
+    if (response.ok && (resultado.success || resultado.ok)) {
       alert("¡Asistencia actualizada correctamente!");
       cerrarModalEditar();
-      cargarConsolidado();
+      cargarConsolidado(); // Recarga los datos y actualiza la tabla automáticamente
     } else {
-      alert("Error al actualizar: " + (resultado.mensaje || "No se pudo completar la acción."));
+      alert("Error al actualizar: " + (resultado.mensaje || resultado.error || "No se pudo completar la acción."));
     }
   } catch (error) {
-    console.error("Error de red al guardar asistencia:", error);
-    alert("Error de conexión con el servidor.");
+    console.error("Error de red al guardar la edición de asistencia:", error);
+    alert("Error de conexión con el servidor en Railway.");
   }
 }
+
+// ----------------------------------------------------
+// GENERACIÓN DE REPORTES EN PDF
+// ----------------------------------------------------
 
 function obtenerInstanciaPDF() {
   if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
@@ -348,9 +411,10 @@ function obtenerNombreDia(fechaStr) {
 
 function obtenerObservacionEstado(estado) {
   const est = (estado || '').toUpperCase();
-  if (est === 'PUNTUAL') return 'Ingreso dentro del horario regular';
+  if (est === 'PUNTUAL' || est === 'ASISTENCIA') return 'Ingreso dentro del horario regular';
   if (est === 'TARDANZA' || est === 'TARDE') return 'Ingreso fuera de horario regular';
-  if (est === 'INJUSTIFICADA' || est === 'FALTA') return 'Inasistencia sin justificación registrada';
+  if (est === 'JUSTIFICADA') return 'Falta justificada con documento';
+  if (est === 'INJUSTIFICADA' || est === 'FALTA') return 'Inasistencia sin justificación';
   return 'Registro de marcación';
 }
 
@@ -386,8 +450,17 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     startY: 28,
     body: tablaDatos,
     theme: 'plain',
-    styles: { fontSize: 9, cellPadding: 4, lineColor: [203, 213, 225], lineWidth: 0.5, textColor: [51, 65, 85] },
-    columnStyles: { 0: { cellWidth: 85 }, 1: { cellWidth: 95 } }
+    styles: {
+      fontSize: 9,
+      cellPadding: 4,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.5,
+      textColor: [51, 65, 85]
+    },
+    columnStyles: {
+      0: { cellWidth: 85 },
+      1: { cellWidth: 95 }
+    }
   });
 
   const maxDias = metricas.totalPeriodo || 1;
@@ -395,18 +468,32 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   const pctTardanza = Math.round((metricas.tardanzas / maxDias) * 100);
   const pctFaltas = Math.round((metricas.faltas / maxDias) * 100);
 
+  const tablaMetricasHead = [["PUNTUALES", "TARDANZAS", "FALTAS", "PUNTAJE"]];
+  const tablaMetricasBody = [[
+    `${metricas.puntuales}/${maxDias} (${pctPuntual}%)`,
+    `${metricas.tardanzas}/${maxDias} (${pctTardanza}%)`,
+    `${metricas.faltas}/${maxDias} (${pctFaltas}%)`,
+    `${metricas.puntaje} pts`
+  ]];
+
   doc.autoTable({
     startY: doc.lastAutoTable.finalY + 6,
-    head: [["PUNTUALES", "TARDANZAS", "FALTAS", "PUNTAJE"]],
-    body: [[
-      `${metricas.puntuales}/${maxDias} (${isNaN(pctPuntual) ? 0 : pctPuntual}%)`,
-      `${metricas.tardanzas}/${maxDias} (${isNaN(pctTardanza) ? 0 : pctTardanza}%)`,
-      `${metricas.faltas}/${maxDias} (${isNaN(pctFaltas) ? 0 : pctFaltas}%)`,
-      `${metricas.puntaje} pts`
-    ]],
+    head: tablaMetricasHead,
+    body: tablaMetricasBody,
     theme: 'grid',
-    headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold', halign: 'center', fontSize: 9 },
-    bodyStyles: { halign: 'center', fontSize: 10, fontStyle: 'bold', textColor: [15, 23, 42] }
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [30, 41, 59],
+      fontStyle: 'bold',
+      halign: 'center',
+      fontSize: 9
+    },
+    bodyStyles: {
+      halign: 'center',
+      fontSize: 10,
+      fontStyle: 'bold',
+      textColor: [15, 23, 42]
+    }
   });
 
   doc.setFont("helvetica", "bold");
@@ -414,6 +501,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setTextColor(30, 41, 59);
   doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
 
+  const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN"]];
   const rowsHistorial = historial.map(h => [
     h.fecha || '-',
     obtenerNombreDia(h.fecha),
@@ -428,12 +516,27 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   doc.autoTable({
     startY: doc.lastAutoTable.finalY + 14,
-    head: [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN"]],
+    head: headersHistorial,
     body: rowsHistorial,
     theme: 'striped',
-    headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
-    bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
-    columnStyles: { 0: { halign: 'center', cellWidth: 28 }, 1: { halign: 'center', cellWidth: 24 }, 2: { halign: 'center', cellWidth: 28 }, 3: { halign: 'center', cellWidth: 28 }, 4: { cellWidth: 72 } }
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'center'
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [51, 65, 85]
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 28 },
+      1: { halign: 'center', cellWidth: 24 },
+      2: { halign: 'center', cellWidth: 28 },
+      3: { halign: 'center', cellWidth: 28 },
+      4: { cellWidth: 72 }
+    }
   });
 
   const finalY = doc.lastAutoTable.finalY + 30;
@@ -441,6 +544,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   doc.setLineWidth(0.5);
   doc.setDrawColor(148, 163, 184);
+
   doc.line(30, posY, 85, posY);
   doc.line(125, posY, 180, posY);
 
@@ -471,52 +575,59 @@ async function generarFichaAlumnoPDF() {
 
   let historial = [];
   try {
-    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(alumno.codigo)}&tipo=${tipo}&fecha=${fecha}`);
+    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(alumno.codigo)}`);
     if (res.ok) historial = await res.json();
   } catch (e) {
     console.error("Error recuperando historial del alumno:", e);
   }
 
+  const metricas = {
+    puntuales: alumno.asistencias || 0,
+    tardanzas: alumno.tardanzas || 0,
+    faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
+    puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
+    totalPeriodo: obtenerTotalDiasPeriodo()
+  };
+
   await construirPDFModeloEstandar({
     titulo: "FICHA INDIVIDUAL DE ASISTENCIA Y PUNTUALIDAD",
     codigo: alumno.codigo || '-',
     nombre: alumno.nombre || '-',
-    aula: alumno.aula || 'Sin Asignación',
+    aula: alumno.aula || alumno.materia_aula || 'Sin Asignación',
     periodo: `${tipo} (${fecha || 'General'})`,
-    metricas: {
-      puntuales: alumno.asistencias || 0,
-      tardanzas: alumno.tardanzas || 0,
-      faltas: alumno.faltas || 0,
-      puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
-      totalPeriodo: obtenerTotalDiasPeriodo()
-    },
+    metricas,
     historial,
     nombreArchivo: `Ficha_Asistencia_${alumno.codigo}.pdf`
   });
 }
 
 async function generarGradoPDF() {
+  const filtrados = obtenerAlumnosFiltradosBase();
+  if (filtrados.length === 0) {
+    alert("No existen registros con los filtros seleccionados.");
+    return;
+  }
+
   const grado = document.getElementById('filtroGrado')?.value || 'Todos';
   const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
   const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
   const fecha = document.getElementById('filtroFecha')?.value || '';
 
-  let historial = [];
-  try {
-    const res = await fetch(`/api/reportes/historial-detallado?codigo=AULA-${grado}-${seccion}&tipo=${tipo}&fecha=${fecha}`);
-    if (res.ok) historial = await res.json();
-  } catch (e) {
-    console.error("Error recuperando historial de grado:", e);
-  }
-
-  const filtrados = obtenerAlumnosFiltradosBase();
   let totPuntual = 0, totTardanza = 0, totFaltas = 0, totPuntos = 0;
   filtrados.forEach(a => {
     totPuntual += (a.asistencias || 0);
     totTardanza += (a.tardanzas || 0);
-    totFaltas += (a.faltas || 0);
+    totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
     totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
   });
+
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial general:", e);
+  }
 
   await construirPDFModeloEstandar({
     titulo: `CONSOLIDADO DE ASISTENCIA - GRADO ${grado} ${seccion}`,
@@ -529,7 +640,7 @@ async function generarGradoPDF() {
       tardanzas: totTardanza, 
       faltas: totFaltas, 
       puntaje: totPuntos,
-      totalPeriodo: Math.max(1, obtenerTotalDiasPeriodo() * Math.max(1, filtrados.length))
+      totalPeriodo: obtenerTotalDiasPeriodo() * filtrados.length
     },
     historial,
     nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
@@ -542,15 +653,11 @@ async function generarDocentesPDF() {
 
   let historial = [];
   try {
-    const res = await fetch(`/api/reportes/historial-detallado?codigo=PERSONAL-DOCENTE&tipo=${tipo}&fecha=${fecha}`);
+    const res = await fetch(`/api/reportes/historial-detallado`);
     if (res.ok) historial = await res.json();
   } catch (e) {
     console.error("Error recuperando historial docentes:", e);
   }
-
-  const puntualesDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'PUNTUAL').length;
-  const tardanzasDoc = historial.filter(h => ['TARDANZA', 'TARDE'].includes((h.estado || '').toUpperCase())).length;
-  const faltasDoc = historial.filter(h => ['INJUSTIFICADA', 'FALTA'].includes((h.estado || '').toUpperCase())).length;
 
   await construirPDFModeloEstandar({
     titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
@@ -558,13 +665,7 @@ async function generarDocentesPDF() {
     nombre: "Plana Docente I.E. Santa Rosa",
     aula: "Dirección Académica",
     periodo: `${tipo} (${fecha || 'General'})`,
-    metricas: { 
-      puntuales: puntualesDoc, 
-      tardanzas: tardanzasDoc, 
-      faltas: faltasDoc, 
-      puntaje: 0, 
-      totalPeriodo: Math.max(1, obtenerTotalDiasPeriodo()) 
-    },
+    metricas: { puntuales: 0, tardanzas: 0, faltas: 0, puntaje: 0, totalPeriodo: obtenerTotalDiasPeriodo() },
     historial,
     nombreArchivo: `Reporte_Docentes_${fecha || 'General'}.pdf`
   });
