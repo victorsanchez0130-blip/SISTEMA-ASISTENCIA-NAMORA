@@ -10,7 +10,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Configuración de la Base de Datos con soporte para Disco Persistente en Railway
 const dbPath = process.env.RAILWAY_VOLUME_MOUNT_PATH 
   ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'asistencia.db') 
   : 'asistencia.db';
@@ -20,7 +19,6 @@ const db = new sqlite3.Database(dbPath, (err) => {
   else console.log('Base de datos conectada correctamente en:', dbPath);
 });
 
-// Helper para obtener fecha actual en zona horaria de Perú (YYYY-MM-DD)
 function getFechaPeru() {
   const d = new Date();
   const options = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };
@@ -31,12 +29,10 @@ function getFechaPeru() {
   return `${year}-${month}-${day}`;
 }
 
-// Helper para obtener hora actual en zona horaria de Perú (HH:MM:SS)
 function getHoraPeru() {
   return new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour12: false });
 }
 
-// Creación de tablas y actualización forzada del rol del Director
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -58,12 +54,10 @@ db.serialize(() => {
     )
   `);
 
-  // 1. Insertar el registro si no existe
   const stmt = db.prepare("INSERT OR IGNORE INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)");
   stmt.run('DIR-SRN-001', 'Director Manuel Asencio Málaga', 'Director', 'Dirección General');
   stmt.finalize();
 
-  // 2. FORZAR la corrección del rol y nombre por si fue editado o guardado como 'Docente'
   db.run(`
     UPDATE usuarios 
     SET rol = 'Director', nombre = 'Director Manuel Asencio Málaga', materia_aula = 'Dirección General'
@@ -74,7 +68,6 @@ db.serialize(() => {
   });
 });
 
-// API Login
 app.post('/api/auth/login', (req, res) => {
   const { codigo } = req.body;
   if (!codigo) {
@@ -106,7 +99,6 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-// Listar Usuarios
 app.get('/api/usuarios', (req, res) => {
   db.all('SELECT * FROM usuarios ORDER BY id DESC', [], (err, rows) => {
     if (err) return res.status(500).json([]);
@@ -114,7 +106,6 @@ app.get('/api/usuarios', (req, res) => {
   });
 });
 
-// Crear Usuario
 app.post('/api/usuarios', (req, res) => {
   const { nombre, rol, materia_aula } = req.body;
 
@@ -140,7 +131,6 @@ app.post('/api/usuarios', (req, res) => {
   });
 });
 
-// Editar Usuario
 app.put('/api/usuarios/:id', (req, res) => {
   const { id } = req.params;
   const { nombre, rol, materia_aula } = req.body;
@@ -150,7 +140,6 @@ app.put('/api/usuarios/:id', (req, res) => {
   });
 });
 
-// Eliminar Usuario
 app.delete('/api/usuarios/:id', (req, res) => {
   const { id } = req.params;
   db.get('SELECT codigo FROM usuarios WHERE id = ?', [id], (err, row) => {
@@ -162,7 +151,6 @@ app.delete('/api/usuarios/:id', (req, res) => {
   });
 });
 
-// Marcar Asistencia QR
 app.post('/api/asistencia/marcar', (req, res) => {
   const { codigoQR } = req.body;
   
@@ -195,7 +183,6 @@ app.post('/api/asistencia/marcar', (req, res) => {
   });
 });
 
-// API Obtener Marcaciones de Hoy
 app.get('/api/asistencia/hoy', (req, res) => {
   const hoy = getFechaPeru();
   const query = `
@@ -217,7 +204,6 @@ app.get('/api/asistencia/hoy', (req, res) => {
   });
 });
 
-// API Rankings (Excluye al Director)
 app.get('/api/rankings', (req, res) => {
   const query = `
     SELECT 
@@ -255,7 +241,6 @@ app.get('/api/rankings', (req, res) => {
   });
 });
 
-// Modificar Asistencia Manual
 app.post('/api/asistencia/manual', (req, res) => {
   const { usuario_codigo, fecha, estado } = req.body;
   db.get('SELECT id FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [usuario_codigo, fecha], (err, row) => {
@@ -268,7 +253,6 @@ app.post('/api/asistencia/manual', (req, res) => {
   });
 });
 
-// Helper para obtener el Lunes ISO
 function obtenerLunesISO(valorWeek) {
   if (!valorWeek || !valorWeek.includes('-W')) return null;
   const partes = valorWeek.split('-W');
@@ -286,7 +270,6 @@ function obtenerLunesISO(valorWeek) {
   return `${a}-${m}-${d}`;
 }
 
-// Helper para sumar días a cadenas YYYY-MM-DD
 function sumarDiasFecha(fechaStr, dias) {
   const partes = fechaStr.split('-');
   const f = new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10));
@@ -297,36 +280,35 @@ function sumarDiasFecha(fechaStr, dias) {
   return `${a}-${m}-${d}`;
 }
 
-// Reporte Consolidado
+// Endpoint Consolidado Optimizado
 app.get('/api/reportes/consolidado', (req, res) => {
-  const { tipo, fecha } = req.query;
+  let { tipo, fecha } = req.query;
 
-  let fechaInicio = null;
-  let fechaFin = null;
+  if (!fecha) {
+    fecha = getFechaPeru();
+  }
 
-  if (tipo && fecha) {
-    if (tipo === 'Diario') {
-      fechaInicio = fecha;
-      fechaFin = fecha;
-    } else if (tipo === 'Semanal') {
-      const lunesStr = obtenerLunesISO(fecha);
-      if (lunesStr) {
-        fechaInicio = lunesStr;
-        fechaFin = sumarDiasFecha(lunesStr, 4); // Lunes a Viernes
-      }
-    } else if (tipo === 'Mensual') {
-      const partes = fecha.split('-');
-      if (partes.length === 2) {
-        const anio = parseInt(partes[0], 10);
-        const mes = parseInt(partes[1], 10);
-        const ultimoDia = new Date(anio, mes, 0).getDate();
-        fechaInicio = `${fecha}-01`;
-        fechaFin = `${fecha}-${String(ultimoDia).padStart(2, '0')}`;
-      }
+  let fechaInicio = fecha;
+  let fechaFin = fecha;
+
+  if (tipo === 'Semanal') {
+    const lunesStr = obtenerLunesISO(fecha);
+    if (lunesStr) {
+      fechaInicio = lunesStr;
+      fechaFin = sumarDiasFecha(lunesStr, 4);
+    }
+  } else if (tipo === 'Mensual') {
+    const partes = fecha.split('-');
+    if (partes.length >= 2) {
+      const anio = parseInt(partes[0], 10);
+      const mes = parseInt(partes[1], 10);
+      const ultimoDia = new Date(anio, mes, 0).getDate();
+      fechaInicio = `${partes[0]}-${String(mes).padStart(2, '0')}-01`;
+      fechaFin = `${partes[0]}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
     }
   }
 
-  db.all("SELECT * FROM usuarios WHERE rol = 'Alumno'", [], (err, usuarios) => {
+  db.all("SELECT * FROM usuarios WHERE LOWER(rol) = 'alumno' OR rol IS NULL OR rol = ''", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
 
     let sqlAsistencias = 'SELECT * FROM asistencias';
@@ -358,7 +340,7 @@ app.get('/api/reportes/consolidado', (req, res) => {
           id: u.id,
           codigo: u.codigo,
           nombre: u.nombre,
-          rol: u.rol,
+          rol: u.rol || 'Alumno',
           aula: u.materia_aula || 'Sin Asignación',
           asistencias: asistenciasCount,
           tardanzas,
