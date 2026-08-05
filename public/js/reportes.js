@@ -23,14 +23,14 @@ const FERIADOS_PERU_MMDD = [
 
 document.addEventListener('DOMContentLoaded', () => {
   configurarEventosFiltros();
-  actualizarTipoSelectorFecha();
+  actualizarTipoSelectorFecha(false); // Pasar 'false' para evitar autorenderizado de PDF/Carga al inicio
 });
 
 // ----------------------------------------------------
 // CAMBIO DINÁMICO DEL INPUT DE FECHA Y CÁLCULO DE DÍAS
 // ----------------------------------------------------
 
-function actualizarTipoSelectorFecha() {
+function actualizarTipoSelectorFecha(ejecutarCarga = true) {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
   const contenedorFecha = document.getElementById('filtroFecha')?.parentElement;
   
@@ -44,8 +44,13 @@ function actualizarTipoSelectorFecha() {
     contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" value="${obtenerFechaHoy()}">`;
   }
 
+  // Escuchar el cambio en el nuevo input insertado
   document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
-  cargarConsolidado();
+  
+  // SOLUCIÓN AL AUTO-GENERADO: Solo carga datos si el usuario cambió el filtro manualmente
+  if (ejecutarCarga) {
+    cargarConsolidado();
+  }
 }
 
 function obtenerFechaHoy() {
@@ -73,7 +78,7 @@ function obtenerMesActual() {
  */
 function esDiaLaborable(fecha) {
   const dayOfWeek = fecha.getDay();
-  if (dayOfWeek === 0 || dayOfWeek === 6) return false; // Excluir Sábados (6) y Domingos (0)
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false;
 
   const mesStr = String(fecha.getMonth() + 1).padStart(2, '0');
   const diaStr = String(fecha.getDate()).padStart(2, '0');
@@ -101,14 +106,12 @@ function obtenerTotalDiasPeriodo() {
   if (tipoInput.includes('Semanal')) {
     if (!fechaVal) return 5;
     
-    // Parsear semana ISO (Ej: "2026-W28")
     const partes = fechaVal.split('-W');
     if (partes.length !== 2) return 5;
 
     const anio = Number(partes[0]);
     const semana = Number(partes[1]);
 
-    // Calcular el Lunes de dicha semana ISO
     const simple = new Date(anio, 0, 1 + (semana - 1) * 7);
     const dow = simple.getDay();
     const ISOweekStart = simple;
@@ -118,7 +121,7 @@ function obtenerTotalDiasPeriodo() {
       ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
 
     let diasLectivos = 0;
-    for (let i = 0; i < 5; i++) { // De Lunes a Viernes
+    for (let i = 0; i < 5; i++) {
       const diaActual = new Date(ISOweekStart);
       diaActual.setDate(ISOweekStart.getDate() + i);
       if (esDiaLaborable(diaActual)) {
@@ -228,7 +231,7 @@ function actualizarOpcionesAlumnosSegunAula() {
 function configurarEventosFiltros() {
   const selectTipo = document.getElementById('filtroTipo');
   if (selectTipo) {
-    selectTipo.addEventListener('change', actualizarTipoSelectorFecha);
+    selectTipo.addEventListener('change', () => actualizarTipoSelectorFecha(true));
   }
 
   ['filtroNivel', 'filtroGrado', 'filtroSeccion'].forEach(id => {
@@ -251,6 +254,7 @@ function configurarEventosFiltros() {
     busqueda.addEventListener('input', renderizarTablaReportes);
   }
 
+  // BOTONES CON ACCIÓN EXPLÍCITA DE CLIC
   document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
   document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
@@ -380,7 +384,7 @@ async function guardarEdicionAsistencia(event) {
     if (response.ok && (resultado.success || resultado.ok)) {
       alert("¡Asistencia actualizada correctamente!");
       cerrarModalEditar();
-      cargarConsolidado(); // Recarga los datos y actualiza la tabla automáticamente
+      cargarConsolidado(); 
     } else {
       alert("Error al actualizar: " + (resultado.mensaje || resultado.error || "No se pudo completar la acción."));
     }
@@ -501,17 +505,19 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setTextColor(30, 41, 59);
   doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
 
-  const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN"]];
+  // SE AGREGA COLUMNA 'DOCENTE' Y SE REAJUSTAN ANCHOS
+  const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN", "DOCENTE"]];
   const rowsHistorial = historial.map(h => [
     h.fecha || '-',
     obtenerNombreDia(h.fecha),
     h.hora || '-',
     (h.estado || '-').toUpperCase(),
-    obtenerObservacionEstado(h.estado)
+    obtenerObservacionEstado(h.estado),
+    h.docente || h.profesor || '-'
   ]);
 
   if (rowsHistorial.length === 0) {
-    rowsHistorial.push(["-", "-", "-", "SIN REGISTROS", "No existen registros de marcación en el periodo"]);
+    rowsHistorial.push(["-", "-", "-", "SIN REGISTROS", "No existen registros de marcación en el periodo", "-"]);
   }
 
   doc.autoTable({
@@ -531,11 +537,12 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       textColor: [51, 65, 85]
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 28 },
-      1: { halign: 'center', cellWidth: 24 },
-      2: { halign: 'center', cellWidth: 28 },
-      3: { halign: 'center', cellWidth: 28 },
-      4: { cellWidth: 72 }
+      0: { halign: 'center', cellWidth: 22 },
+      1: { halign: 'center', cellWidth: 20 },
+      2: { halign: 'center', cellWidth: 24 },
+      3: { halign: 'center', cellWidth: 22 },
+      4: { cellWidth: 52 },
+      5: { cellWidth: 40 }
     }
   });
 
