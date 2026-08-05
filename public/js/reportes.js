@@ -2,9 +2,56 @@
 let datosReporteGlobal = [];
 
 document.addEventListener('DOMContentLoaded', () => {
-  cargarConsolidado();
   configurarEventosFiltros();
+  actualizarTipoSelectorFecha();
 });
+
+// ----------------------------------------------------
+// CAMBIO DINÁMICO DEL INPUT DE FECHA (DÍA / SEMANA / MES)
+// ----------------------------------------------------
+
+function actualizarTipoSelectorFecha() {
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
+  const contenedorFecha = document.getElementById('filtroFecha')?.parentElement;
+  
+  if (!contenedorFecha) return;
+
+  const fechaActualVal = document.getElementById('filtroFecha')?.value || '';
+
+  if (tipoInput.includes('Semanal')) {
+    contenedorFecha.innerHTML = `<input type="week" id="filtroFecha" class="form-control" value="${obtenerSemanaActual()}">`;
+  } else if (tipoInput.includes('Mensual')) {
+    contenedorFecha.innerHTML = `<input type="month" id="filtroFecha" class="form-control" value="${obtenerMesActual()}">`;
+  } else {
+    contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" value="${obtenerFechaHoy()}">`;
+  }
+
+  // Re-vincular el evento change al nuevo input generado
+  document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
+  
+  // Cargar datos automáticamente al cambiar el tipo
+  cargarConsolidado();
+}
+
+function obtenerFechaHoy() {
+  const hoy = new Date();
+  return hoy.toISOString().split('T')[0];
+}
+
+function obtenerSemanaActual() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getFullYear()}-W${weekNo < 10 ? '0' + weekNo : weekNo}`;
+}
+
+function obtenerMesActual() {
+  const hoy = new Date();
+  const mes = hoy.getMonth() + 1;
+  return `${hoy.getFullYear()}-${mes < 10 ? '0' + mes : mes}`;
+}
 
 // ----------------------------------------------------
 // CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR
@@ -12,15 +59,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function cargarConsolidado() {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
-  const fecha = document.getElementById('filtroFecha')?.value || '';
+  const fechaVal = document.getElementById('filtroFecha')?.value || '';
 
-  // Normalizar la selección de tipo para la API del backend
   let tipo = 'Diario';
   if (tipoInput.includes('Semanal')) tipo = 'Semanal';
   if (tipoInput.includes('Mensual')) tipo = 'Mensual';
 
   try {
-    const res = await fetch(`/api/reportes/consolidado?tipo=${tipo}&fecha=${fecha}`);
+    const res = await fetch(`/api/reportes/consolidado?tipo=${tipo}&fecha=${encodeURIComponent(fechaVal)}`);
     if (!res.ok) throw new Error("Error en la respuesta del servidor");
     
     datosReporteGlobal = await res.json();
@@ -53,14 +99,12 @@ function poblarSelectAlumnos(datos) {
 }
 
 function configurarEventosFiltros() {
-  const btnFiltrar = document.getElementById('btnFiltrar');
-  if (btnFiltrar) {
-    btnFiltrar.addEventListener('click', cargarConsolidado);
+  const selectTipo = document.getElementById('filtroTipo');
+  if (selectTipo) {
+    selectTipo.addEventListener('change', actualizarTipoSelectorFecha);
   }
 
   const inputsFiltro = [
-    'filtroTipo', 
-    'filtroFecha', 
     'filtroNivel', 
     'filtroGrado', 
     'filtroSeccion', 
@@ -71,20 +115,13 @@ function configurarEventosFiltros() {
   inputsFiltro.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      el.addEventListener('change', () => {
-        if (id === 'filtroTipo' || id === 'filtroFecha') {
-          cargarConsolidado();
-        } else {
-          renderizarTablaReportes();
-        }
-      });
+      el.addEventListener('change', renderizarTablaReportes);
       if (id === 'filtroBusqueda') {
         el.addEventListener('input', renderizarTablaReportes);
       }
     }
   });
 
-  // Eventos para la exportación de PDFs
   document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
   document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
@@ -105,22 +142,18 @@ function obtenerAlumnosFiltradosBase() {
     const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
     const codigoStr = (item.codigo || '').toUpperCase();
 
-    // 1. Filtro por Alumno Individual
     if (alumnoSeleccionado !== 'todos' && codigoStr !== alumnoSeleccionado.toUpperCase()) {
       return false;
     }
 
-    // 2. Filtro por Nivel Educativo
     if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) {
       return false;
     }
 
-    // 3. Filtro por Grado
     if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) {
       return false;
     }
 
-    // 4. Filtro por Sección
     if (seccion !== 'Todos') {
       const seccionNormalizada = seccion.toUpperCase();
       const partesAula = aulaStr.split(' ');
@@ -131,7 +164,6 @@ function obtenerAlumnosFiltradosBase() {
       }
     }
 
-    // 5. Búsqueda libre por Nombre o Código
     if (busqueda !== '') {
       const nom = (item.nombre || '').toLowerCase();
       const cod = (item.codigo || '').toLowerCase();
@@ -214,7 +246,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   const doc = new jsPDFClass();
 
-  // Encabezado principal
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(30, 41, 59);
@@ -223,7 +254,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setFontSize(11);
   doc.text(titulo.toUpperCase(), 105, 22, { align: "center" });
 
-  // Tabla con los datos generales
   const tablaDatos = [
     [
       { content: `CÓDIGO ALUMNO / REGISTRO:\n${codigo}`, styles: { fontStyle: 'bold' } },
@@ -252,7 +282,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   });
 
-  // Métricas acumuladas y porcentajes
   const totalEvaluado = (metricas.puntuales + metricas.tardanzas + metricas.faltas) || 1;
   const pctPuntual = Math.round((metricas.puntuales / totalEvaluado) * 100);
   const pctTardanza = Math.round((metricas.tardanzas / totalEvaluado) * 100);
@@ -286,7 +315,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   });
 
-  // Listado detallado día por día
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(30, 41, 59);
@@ -330,7 +358,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   });
 
-  // Firmas institucionales
   const finalY = doc.lastAutoTable.finalY + 30;
   const posY = finalY > 260 ? 260 : finalY;
 
@@ -348,10 +375,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   doc.save(nombreArchivo);
 }
-
-// ----------------------------------------------------
-// FUNCIONES ASOCIADAS A BOTONES PDF
-// ----------------------------------------------------
 
 async function generarFichaAlumnoPDF() {
   const selectAlumno = document.getElementById('selectAlumnoIndividual')?.value;
