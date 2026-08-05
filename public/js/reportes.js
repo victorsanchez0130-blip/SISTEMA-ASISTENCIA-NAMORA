@@ -11,8 +11,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // ----------------------------------------------------
 
 async function cargarConsolidado() {
-  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
   const fecha = document.getElementById('filtroFecha')?.value || '';
+
+  // Normalizar la selección de tipo para la API del backend
+  let tipo = 'Diario';
+  if (tipoInput.includes('Semanal')) tipo = 'Semanal';
+  if (tipoInput.includes('Mensual')) tipo = 'Mensual';
 
   try {
     const res = await fetch(`/api/reportes/consolidado?tipo=${tipo}&fecha=${fecha}`);
@@ -53,7 +58,16 @@ function configurarEventosFiltros() {
     btnFiltrar.addEventListener('click', cargarConsolidado);
   }
 
-  const inputsFiltro = ['filtroTipo', 'filtroFecha', 'filtroGrado', 'filtroSeccion', 'filtroBusqueda'];
+  const inputsFiltro = [
+    'filtroTipo', 
+    'filtroFecha', 
+    'filtroNivel', 
+    'filtroGrado', 
+    'filtroSeccion', 
+    'filtroBusqueda',
+    'selectAlumnoIndividual'
+  ];
+
   inputsFiltro.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
@@ -70,7 +84,7 @@ function configurarEventosFiltros() {
     }
   });
 
-  // Vincular eventos de generación de PDF
+  // Eventos para la exportación de PDFs
   document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
   document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
@@ -81,22 +95,49 @@ function configurarEventosFiltros() {
 // ----------------------------------------------------
 
 function obtenerAlumnosFiltradosBase() {
+  const nivel = document.getElementById('filtroNivel')?.value || 'Todos';
   const grado = document.getElementById('filtroGrado')?.value || 'Todos';
   const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+  const alumnoSeleccionado = document.getElementById('selectAlumnoIndividual')?.value || 'todos';
   const busqueda = (document.getElementById('filtroBusqueda')?.value || '').toLowerCase().trim();
 
   return datosReporteGlobal.filter(item => {
     const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
-    
-    // Validar Grado y Sección dentro de la cadena del aula (Ej: "3° A")
-    if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
-    if (seccion !== 'Todos' && !aulaStr.includes(seccion.toUpperCase())) return false;
+    const codigoStr = (item.codigo || '').toUpperCase();
 
-    // Buscador por nombre o código
+    // 1. Filtro por Alumno Individual
+    if (alumnoSeleccionado !== 'todos' && codigoStr !== alumnoSeleccionado.toUpperCase()) {
+      return false;
+    }
+
+    // 2. Filtro por Nivel Educativo
+    if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) {
+      return false;
+    }
+
+    // 3. Filtro por Grado
+    if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) {
+      return false;
+    }
+
+    // 4. Filtro por Sección
+    if (seccion !== 'Todos') {
+      const seccionNormalizada = seccion.toUpperCase();
+      const partesAula = aulaStr.split(' ');
+      const ultimaLetra = partesAula[partesAula.length - 1];
+
+      if (ultimaLetra !== seccionNormalizada && !aulaStr.endsWith(` ${seccionNormalizada}`)) {
+        return false;
+      }
+    }
+
+    // 5. Búsqueda libre por Nombre o Código
     if (busqueda !== '') {
       const nom = (item.nombre || '').toLowerCase();
       const cod = (item.codigo || '').toLowerCase();
-      if (!nom.includes(busqueda) && !cod.includes(busqueda)) return false;
+      if (!nom.includes(busqueda) && !cod.includes(busqueda)) {
+        return false;
+      }
     }
 
     return true;
@@ -121,6 +162,7 @@ function renderizarTablaReportes() {
   }
 
   filtrados.forEach(d => {
+    const totalFaltas = (d.fJustificadas || 0) + (d.fInjustificadas || 0);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><strong>${d.codigo || '-'}</strong></td>
@@ -128,17 +170,16 @@ function renderizarTablaReportes() {
       <td>${d.aula || d.materia_aula || 'Sin Asignación'}</td>
       <td style="text-align: center; color: #16a34a; font-weight: bold;">${d.asistencias || 0}</td>
       <td style="text-align: center; color: #d97706; font-weight: bold;">${d.tardanzas || 0}</td>
-      <td style="text-align: center; color: #0284c7;">${d.fJustificadas || 0}</td>
-      <td style="text-align: center; color: #dc2626; font-weight: bold;">${d.fInjustificadas || 0}</td>
+      <td style="text-align: center; color: #dc2626; font-weight: bold;">${totalFaltas}</td>
       <td style="text-align: center; font-weight: bold; background-color: #f8fafc;">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-// ==========================================
-// GENERACIÓN DE REPORTES EN PDF (MODELO ESTÁNDAR)
-// ==========================================
+// ----------------------------------------------------
+// GENERACIÓN DE REPORTES EN PDF
+// ----------------------------------------------------
 
 function obtenerInstanciaPDF() {
   if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
@@ -173,7 +214,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   const doc = new jsPDFClass();
 
-  // Encabezado institucional
+  // Encabezado principal
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(30, 41, 59);
@@ -182,7 +223,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setFontSize(11);
   doc.text(titulo.toUpperCase(), 105, 22, { align: "center" });
 
-  // Ficha de Datos Principales
+  // Tabla con los datos generales
   const tablaDatos = [
     [
       { content: `CÓDIGO ALUMNO / REGISTRO:\n${codigo}`, styles: { fontStyle: 'bold' } },
@@ -211,7 +252,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   });
 
-  // Métricas y Porcentajes
+  // Métricas acumuladas y porcentajes
   const totalEvaluado = (metricas.puntuales + metricas.tardanzas + metricas.faltas) || 1;
   const pctPuntual = Math.round((metricas.puntuales / totalEvaluado) * 100);
   const pctTardanza = Math.round((metricas.tardanzas / totalEvaluado) * 100);
@@ -245,7 +286,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   });
 
-  // Tabla del Historial Detallado
+  // Listado detallado día por día
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(30, 41, 59);
@@ -289,7 +330,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   });
 
-  // Sección de Firmas Institucionales
+  // Firmas institucionales
   const finalY = doc.lastAutoTable.finalY + 30;
   const posY = finalY > 260 ? 260 : finalY;
 
@@ -309,7 +350,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 }
 
 // ----------------------------------------------------
-// ACCIONES DE BOTONES PDF
+// FUNCIONES ASOCIADAS A BOTONES PDF
 // ----------------------------------------------------
 
 async function generarFichaAlumnoPDF() {
