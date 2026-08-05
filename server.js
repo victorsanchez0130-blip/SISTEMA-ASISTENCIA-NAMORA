@@ -283,13 +283,18 @@ function calcularFechasRango(tipo, fecha) {
   return { fechaInicio, fechaFin };
 }
 
+// ==========================================
+// ENDPOINT: CONSOLIDADO DE REPORTES
+// ==========================================
 app.get('/api/reportes/consolidado', (req, res) => {
   let { tipo, fecha } = req.query;
   const { fechaInicio, fechaFin } = calcularFechasRango(tipo, fecha);
 
-  db.all("SELECT * FROM usuarios", [], (err, usuarios) => {
+  // 1. Obtenemos TODOS los usuarios registrados
+  db.all("SELECT * FROM usuarios ORDER BY nombre ASC", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
 
+    // 2. Buscamos las asistencias dentro del rango de fechas
     db.all('SELECT * FROM asistencias WHERE fecha >= ? AND fecha <= ? AND tipo_marcacion = \'ENTRADA\'', [fechaInicio, fechaFin], (err, asistencias) => {
       if (err) return res.status(500).json([]);
 
@@ -324,10 +329,15 @@ app.get('/api/reportes/consolidado', (req, res) => {
   });
 });
 
+// ==========================================
+// ENDPOINT: RANKINGS Y PUNTAJES
+// ==========================================
 app.get('/api/rankings', (req, res) => {
+  // 1. Obtenemos TODOS los usuarios de la BD
   db.all("SELECT * FROM usuarios", [], (err, usuarios) => {
     if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
 
+    // 2. Traemos todas las asistencias registradas
     db.all("SELECT * FROM asistencias WHERE tipo_marcacion = 'ENTRADA'", [], (err, asistencias) => {
       if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
 
@@ -353,12 +363,13 @@ app.get('/api/rankings', (req, res) => {
         };
       });
 
+      // Filtrado por roles flexible (sensible a minúsculas/mayúsculas)
       const docentes = listaCompleta
         .filter(u => (u.rol || '').toLowerCase().includes('docente'))
         .sort((a, b) => b.puntajeTotal - a.puntajeTotal);
 
       const alumnos = listaCompleta
-        .filter(u => (u.rol || '').toLowerCase().includes('alumno') || !u.rol || u.rol === '')
+        .filter(u => (u.rol || '').toLowerCase().includes('alumno') || (u.rol || '').toLowerCase().includes('estudiante') || u.rol === 'Alumno')
         .sort((a, b) => b.puntajeTotal - a.puntajeTotal);
 
       res.json({ success: true, docentes, alumnos });
