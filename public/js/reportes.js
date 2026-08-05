@@ -16,8 +16,6 @@ function actualizarTipoSelectorFecha() {
   
   if (!contenedorFecha) return;
 
-  const fechaActualVal = document.getElementById('filtroFecha')?.value || '';
-
   if (tipoInput.includes('Semanal')) {
     contenedorFecha.innerHTML = `<input type="week" id="filtroFecha" class="form-control" value="${obtenerSemanaActual()}">`;
   } else if (tipoInput.includes('Mensual')) {
@@ -70,7 +68,9 @@ async function cargarConsolidado() {
     if (!res.ok) throw new Error("Error en la respuesta del servidor");
     
     datosReporteGlobal = await res.json();
-    poblarSelectAlumnos(datosReporteGlobal);
+    
+    // Al cargar los datos actualizamos el select y la tabla
+    actualizarOpcionesAlumnosSegunAula();
     renderizarTablaReportes();
   } catch (err) {
     console.error("Error al cargar datos del reporte:", err);
@@ -79,22 +79,66 @@ async function cargarConsolidado() {
   }
 }
 
-function poblarSelectAlumnos(datos) {
+/**
+ * Filtra los datos globales aplicando únicamente los criterios de Aula (Nivel, Grado, Sección)
+ */
+function obtenerAlumnosPorAula() {
+  const nivel = document.getElementById('filtroNivel')?.value || 'Todos';
+  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+
+  return datosReporteGlobal.filter(item => {
+    const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
+
+    // 1. Filtro por Nivel Educativo
+    if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) {
+      return false;
+    }
+
+    // 2. Filtro por Grado
+    if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) {
+      return false;
+    }
+
+    // 3. Filtro por Sección
+    if (seccion !== 'Todos') {
+      const seccionNormalizada = seccion.toUpperCase();
+      const partesAula = aulaStr.split(' ');
+      const ultimaLetra = partesAula[partesAula.length - 1];
+
+      if (ultimaLetra !== seccionNormalizada && !aulaStr.endsWith(` ${seccionNormalizada}`)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+/**
+ * Puebla el menú desplegable 'Filtrar Alumno' únicamente con los alumnos que coinciden con el Aula seleccionada
+ */
+function actualizarOpcionesAlumnosSegunAula() {
   const selectAlumno = document.getElementById('selectAlumnoIndividual');
   if (!selectAlumno) return;
 
-  const valorPrevio = selectAlumno.value;
+  const valorSeleccionadoPrevio = selectAlumno.value;
   selectAlumno.innerHTML = '<option value="todos">-- Seleccionar Alumno --</option>';
 
-  datos.forEach(alumno => {
+  const alumnosDelAula = obtenerAlumnosPorAula();
+
+  alumnosDelAula.forEach(alumno => {
     const option = document.createElement('option');
     option.value = alumno.codigo;
     option.textContent = `${alumno.nombre} (${alumno.codigo})`;
     selectAlumno.appendChild(option);
   });
 
-  if (valorPrevio && Array.from(selectAlumno.options).some(o => o.value === valorPrevio)) {
-    selectAlumno.value = valorPrevio;
+  // Conservar la selección previa si el alumno sigue estando presente dentro del grupo filtrado
+  if (valorSeleccionadoPrevio && Array.from(selectAlumno.options).some(o => o.value === valorSeleccionadoPrevio)) {
+    selectAlumno.value = valorSeleccionadoPrevio;
+  } else {
+    selectAlumno.value = 'todos';
   }
 }
 
@@ -104,23 +148,27 @@ function configurarEventosFiltros() {
     selectTipo.addEventListener('change', actualizarTipoSelectorFecha);
   }
 
-  const inputsFiltro = [
-    'filtroNivel', 
-    'filtroGrado', 
-    'filtroSeccion', 
-    'filtroBusqueda',
-    'selectAlumnoIndividual'
-  ];
-
-  inputsFiltro.forEach(id => {
+  // Al cambiar Nivel, Grado o Sección re-poblamos el select de Alumnos y renderizamos la tabla
+  ['filtroNivel', 'filtroGrado', 'filtroSeccion'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      el.addEventListener('change', renderizarTablaReportes);
-      if (id === 'filtroBusqueda') {
-        el.addEventListener('input', renderizarTablaReportes);
-      }
+      el.addEventListener('change', () => {
+        actualizarOpcionesAlumnosSegunAula();
+        renderizarTablaReportes();
+      });
     }
   });
+
+  // Eventos para el select individual y el buscador por texto
+  const selectAlumno = document.getElementById('selectAlumnoIndividual');
+  if (selectAlumno) {
+    selectAlumno.addEventListener('change', renderizarTablaReportes);
+  }
+
+  const busqueda = document.getElementById('filtroBusqueda');
+  if (busqueda) {
+    busqueda.addEventListener('input', renderizarTablaReportes);
+  }
 
   document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
   document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
@@ -132,48 +180,27 @@ function configurarEventosFiltros() {
 // ----------------------------------------------------
 
 function obtenerAlumnosFiltradosBase() {
-  const nivel = document.getElementById('filtroNivel')?.value || 'Todos';
-  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
-  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
   const alumnoSeleccionado = document.getElementById('selectAlumnoIndividual')?.value || 'todos';
   const busqueda = (document.getElementById('filtroBusqueda')?.value || '').toLowerCase().trim();
 
-  return datosReporteGlobal.filter(item => {
-    const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
-    const codigoStr = (item.codigo || '').toUpperCase();
+  // Partimos únicamente de los alumnos que ya pertenecen al Aula seleccionada
+  let resultado = obtenerAlumnosPorAula();
 
-    if (alumnoSeleccionado !== 'todos' && codigoStr !== alumnoSeleccionado.toUpperCase()) {
-      return false;
-    }
+  // Aplicar filtro por Selección Individual de Alumno
+  if (alumnoSeleccionado !== 'todos') {
+    resultado = resultado.filter(item => (item.codigo || '').toUpperCase() === alumnoSeleccionado.toUpperCase());
+  }
 
-    if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) {
-      return false;
-    }
-
-    if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) {
-      return false;
-    }
-
-    if (seccion !== 'Todos') {
-      const seccionNormalizada = seccion.toUpperCase();
-      const partesAula = aulaStr.split(' ');
-      const ultimaLetra = partesAula[partesAula.length - 1];
-
-      if (ultimaLetra !== seccionNormalizada && !aulaStr.endsWith(` ${seccionNormalizada}`)) {
-        return false;
-      }
-    }
-
-    if (busqueda !== '') {
+  // Aplicar filtro por Búsqueda libre
+  if (busqueda !== '') {
+    resultado = resultado.filter(item => {
       const nom = (item.nombre || '').toLowerCase();
       const cod = (item.codigo || '').toLowerCase();
-      if (!nom.includes(busqueda) && !cod.includes(busqueda)) {
-        return false;
-      }
-    }
+      return nom.includes(busqueda) || cod.includes(busqueda);
+    });
+  }
 
-    return true;
-  });
+  return resultado;
 }
 
 function renderizarTablaReportes() {
