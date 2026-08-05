@@ -131,7 +131,7 @@ app.delete('/api/usuarios/:id', (req, res) => {
 
 // Marcación estándar por QR (Entrada / Salida)
 app.post('/api/asistencia/marcar', (req, res) => {
-  const { codigoQR, tipoMarcacion } = req.body; // tipoMarcacion: 'ENTRADA' o 'SALIDA'
+  const { codigoQR, tipoMarcacion } = req.body;
   const tipoM = (tipoMarcacion || 'ENTRADA').toUpperCase();
   
   db.get('SELECT * FROM usuarios WHERE UPPER(codigo) = UPPER(?)', [codigoQR], (err, usuario) => {
@@ -168,12 +168,12 @@ app.post('/api/asistencia/marcar', (req, res) => {
   });
 });
 
-// NUEVO: Finalizar Ingreso (Marca FALTA a todos los alumnos sin registro hoy)
+// Finalizar Ingreso (Marca FALTA a todos los alumnos sin registro hoy)
 app.post('/api/asistencia/finalizar-ingreso', (req, res) => {
   const hoy = getFechaPeru();
   const horaActual = getHoraPeru();
 
-  db.all("SELECT codigo FROM usuarios WHERE LOWER(rol) = 'alumno' OR rol IS NULL OR rol = ''", [], (err, alumnos) => {
+  db.all("SELECT codigo FROM usuarios WHERE LOWER(rol) LIKE '%alumno%' OR rol IS NULL OR rol = ''", [], (err, alumnos) => {
     if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar alumnos.' });
 
     db.all("SELECT usuario_codigo FROM asistencias WHERE fecha = ? AND tipo_marcacion = 'ENTRADA'", [hoy], (err2, marcados) => {
@@ -221,13 +221,14 @@ app.get('/api/asistencia/hoy', (req, res) => {
   });
 });
 
+// CORREGIDO: Sintaxis de SELECT arreglada
 app.post('/api/asistencia/editar', (req, res) => {
   const { codigo, estado, fecha } = req.body;
   if (!codigo || !estado || !fecha) {
     return res.status(400).json({ success: false, mensaje: 'Faltan datos obligatorios.' });
   }
 
-  db.get('id FROM asistencias WHERE usuario_codigo = ? AND fecha = ? AND tipo_marcacion = \'ENTRADA\'', [codigo, fecha], (err, row) => {
+  db.get('SELECT id FROM asistencias WHERE usuario_codigo = ? AND fecha = ? AND tipo_marcacion = \'ENTRADA\'', [codigo, fecha], (err, row) => {
     if (row) {
       db.run('UPDATE asistencias SET estado = ? WHERE id = ?', [estado, row.id], () => {
         res.json({ success: true, mensaje: 'Asistencia actualizada.' });
@@ -273,7 +274,7 @@ function calcularFechasRango(tipo, fecha) {
       fechaFin = sumarDiasFecha(lunesStr, 4);
     }
   } else if (tipo === 'Mensual') {
-    const partes = fecha.split('-');
+    const partes = (fecha || '').split('-');
     if (partes.length >= 2) {
       const anio = parseInt(partes[0], 10);
       const mes = parseInt(partes[1], 10);
@@ -285,11 +286,12 @@ function calcularFechasRango(tipo, fecha) {
   return { fechaInicio, fechaFin };
 }
 
+// CORREGIDO: Consolidado de Reportes (soporta cualquier usuario registrado)
 app.get('/api/reportes/consolidado', (req, res) => {
   let { tipo, fecha } = req.query;
   const { fechaInicio, fechaFin } = calcularFechasRango(tipo, fecha);
 
-  db.all("SELECT * FROM usuarios WHERE LOWER(rol) = 'alumno' OR rol IS NULL OR rol = ''", [], (err, usuarios) => {
+  db.all("SELECT * FROM usuarios", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
 
     db.all('SELECT * FROM asistencias WHERE fecha >= ? AND fecha <= ? AND tipo_marcacion = \'ENTRADA\'', [fechaInicio, fechaFin], (err, asistencias) => {
@@ -297,17 +299,16 @@ app.get('/api/reportes/consolidado', (req, res) => {
 
       const consolidado = usuarios.map(u => {
         const marcaciones = asistencias.filter(a => a.usuario_codigo === u.codigo);
-        let asistenciasCount = 0, tardanzas = 0, fJustificadas = 0, fInjustificadas = 0;
+        let asistenciasCount = 0, tardanzas = 0, faltas = 0;
 
         marcaciones.forEach(m => {
           const estado = (m.estado || '').toUpperCase();
           if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') asistenciasCount++;
           else if (estado === 'TARDANZA' || estado === 'TARDE') tardanzas++;
-          else if (estado === 'JUSTIFICADA') fJustificadas++;
-          else if (estado === 'INJUSTIFICADA' || estado === 'FALTA') fInjustificadas++;
+          else if (estado === 'INJUSTIFICADA' || estado === 'FALTA') faltas++;
         });
 
-        const puntajeTotal = (asistenciasCount * 2.0) + (tardanzas * 1.0) + (fJustificadas * 0.5);
+        const puntajeTotal = (asistenciasCount * 2.0) + (tardanzas * 1.0);
 
         return {
           id: u.id,
@@ -317,8 +318,7 @@ app.get('/api/reportes/consolidado', (req, res) => {
           aula: u.materia_aula || 'Sin Asignación',
           asistencias: asistenciasCount,
           tardanzas,
-          fJustificadas,
-          fInjustificadas,
+          faltas,
           puntajeTotal
         };
       });
@@ -328,7 +328,50 @@ app.get('/api/reportes/consolidado', (req, res) => {
   });
 });
 
-// HISTORIAL DETALLADO FILTRADO ESTRICTAMENTE POR TIPO Y FECHA (Para Fichas y Reportes PDF)
+// NUEVO: Endpoint para Rankings de Mérito
+app.get('/api/rankings', (req, res) => {
+  db.all("SELECT * FROM usuarios", [], (err, usuarios) => {
+    if (err) return res.status(500).json({ docentes: [], alumnos: [] });
+
+    db.all("SELECT * FROM asistencias WHERE tipo_marcacion = 'ENTRADA'", [], (err, asistencias) => {
+      if (err) return res.status(500).json({ docentes: [], alumnos: [] });
+
+      const listaCompleta = usuarios.map(u => {
+        const marcaciones = asistencias.filter(a => a.usuario_codigo === u.codigo);
+        let asistenciasCount = 0, tardanzas = 0;
+
+        marcaciones.forEach(m => {
+          const estado = (m.estado || '').toUpperCase();
+          if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') asistenciasCount++;
+          else if (estado === 'TARDANZA' || estado === 'TARDE') tardanzas++;
+        });
+
+        const puntajeTotal = (asistenciasCount * 2.0) + (tardanzas * 1.0);
+
+        return {
+          id: u.id,
+          codigo: u.codigo,
+          nombre: u.nombre,
+          rol: u.rol || 'Alumno',
+          aula: u.materia_aula || 'Sin Asignación',
+          puntaje: puntajeTotal
+        };
+      });
+
+      const docentes = listaCompleta
+        .filter(u => (u.rol || '').toLowerCase().includes('docente'))
+        .sort((a, b) => b.puntaje - a.puntaje);
+
+      const alumnos = listaCompleta
+        .filter(u => (u.rol || '').toLowerCase().includes('alumno') || !u.rol || u.rol === '')
+        .sort((a, b) => b.puntaje - a.puntaje);
+
+      res.json({ docentes, alumnos });
+    });
+  });
+});
+
+// HISTORIAL DETALLADO (Fichas y Reportes PDF)
 app.get('/api/reportes/historial-detallado', (req, res) => {
   const { codigo, tipo, fecha } = req.query;
   const { fechaInicio, fechaFin } = calcularFechasRango(tipo, fecha);
@@ -353,9 +396,8 @@ app.get('/api/reportes/historial-detallado', (req, res) => {
     query += ` AND a.usuario_codigo = ?`;
     params.push(codigo);
   } else if (codigo === 'PERSONAL-DOCENTE') {
-    query += ` AND u.rol = 'Docente'`;
+    query += ` AND LOWER(u.rol) LIKE '%docente%'`;
   } else if (codigo && codigo.startsWith('AULA-')) {
-    // Si es reporte de grado específico
     query += ` AND (u.materia_aula LIKE ?)`;
     const partesGrado = codigo.replace('AULA-', '').split('-');
     params.push(`%${partesGrado[0]}%`);
