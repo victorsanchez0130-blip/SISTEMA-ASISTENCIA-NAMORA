@@ -316,9 +316,78 @@ function renderizarTablaReportes() {
       <td style="text-align: center; color: #d97706; font-weight: bold;">${tard} / ${totalDiasPeriodo}</td>
       <td style="text-align: center; color: #dc2626; font-weight: bold;">${totalFaltas} / ${totalDiasPeriodo}</td>
       <td style="text-align: center; font-weight: bold; background-color: #f8fafc;">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
+      <td style="text-align: center;">
+        <button onclick="abrirModalEditar('${d.codigo}', '${d.nombre.replace(/'/g, "\\'")}')" style="background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
+          ✏️ Editar
+        </button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
+}
+
+// ----------------------------------------------------
+// CONTROLADOR DE EDICIÓN DIRECTIVA (MODAL)
+// ----------------------------------------------------
+
+function abrirModalEditar(codigo, nombre) {
+  const modal = document.getElementById('modal-editar-asistencia');
+  const inputCodigo = document.getElementById('edit-codigo-input');
+  const spanNombre = document.getElementById('edit-nombre-alumno');
+  const spanCodigo = document.getElementById('edit-codigo-alumno');
+
+  if (inputCodigo) inputCodigo.value = codigo;
+  if (spanNombre) spanNombre.innerText = nombre;
+  if (spanCodigo) spanCodigo.innerText = codigo;
+
+  if (modal) {
+    modal.style.display = 'flex';
+  }
+}
+
+function cerrarModalEditar() {
+  const modal = document.getElementById('modal-editar-asistencia');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+async function guardarEdicionAsistencia(event) {
+  event.preventDefault();
+
+  const codigo = document.getElementById('edit-codigo-input')?.value;
+  const nuevoEstado = document.getElementById('edit-estado-select')?.value;
+  const fechaVal = document.getElementById('filtroFecha')?.value || obtenerFechaHoy();
+
+  if (!codigo || !nuevoEstado) {
+    alert("Faltan datos obligatorios para realizar la modificación.");
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/asistencia/editar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        codigo: codigo, 
+        estado: nuevoEstado, 
+        fecha: fechaVal 
+      })
+    });
+
+    const resultado = await response.json();
+
+    if (response.ok && (resultado.success || resultado.ok)) {
+      alert("¡Asistencia actualizada correctamente!");
+      cerrarModalEditar();
+      cargarConsolidado(); // Recarga los datos y actualiza la tabla automáticamente
+    } else {
+      alert("Error al actualizar: " + (resultado.mensaje || resultado.error || "No se pudo completar la acción."));
+    }
+  } catch (error) {
+    console.error("Error de red al guardar la edición de asistencia:", error);
+    alert("Error de conexión con el servidor en Railway.");
+  }
 }
 
 // ----------------------------------------------------
