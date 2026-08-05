@@ -50,22 +50,14 @@ db.serialize(() => {
       usuario_codigo TEXT NOT NULL,
       fecha TEXT NOT NULL,
       hora TEXT NOT NULL,
-      estado TEXT NOT NULL
+      estado TEXT NOT NULL,
+      tipo_marcacion TEXT DEFAULT 'ENTRADA'
     )
   `);
 
   const stmt = db.prepare("INSERT OR IGNORE INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)");
   stmt.run('DIR-SRN-001', 'Director Manuel Asencio Málaga', 'Director', 'Dirección General');
   stmt.finalize();
-
-  db.run(`
-    UPDATE usuarios 
-    SET rol = 'Director', nombre = 'Director Manuel Asencio Málaga', materia_aula = 'Dirección General'
-    WHERE codigo = 'DIR-SRN-001'
-  `, (err) => {
-    if (err) console.error("Error al corregir el rol del Director:", err.message);
-    else console.log("Rol de Director verificado y actualizado correctamente.");
-  });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -75,15 +67,10 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   db.get('SELECT * FROM usuarios WHERE UPPER(codigo) = UPPER(?)', [codigo.trim()], (err, usuario) => {
-    if (err) {
-      return res.status(500).json({ success: false, mensaje: 'Error interno en la base de datos.' });
-    }
-    if (!usuario) {
-      return res.status(401).json({ success: false, mensaje: 'Código no encontrado en el sistema.' });
-    }
+    if (err) return res.status(500).json({ success: false, mensaje: 'Error interno en la base de datos.' });
+    if (!usuario) return res.status(401).json({ success: false, mensaje: 'Código no encontrado en el sistema.' });
     
     const rolNormalizado = (usuario.rol || '').trim();
-
     res.json({
       success: true,
       mensaje: 'Acceso concedido',
@@ -108,7 +95,6 @@ app.get('/api/usuarios', (req, res) => {
 
 app.post('/api/usuarios', (req, res) => {
   const { nombre, rol, materia_aula } = req.body;
-
   let prefijo = 'ALU';
   if (rol === 'Docente') prefijo = 'DOC';
   if (rol === 'Auxiliar') prefijo = 'AUX';
@@ -117,17 +103,9 @@ app.post('/api/usuarios', (req, res) => {
   const aleatorio = Math.floor(1000 + Math.random() * 9000);
   const codigoGenerado = `${prefijo}-SRN-${aleatorio}`;
 
-  const queryInsert = `INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)`;
-  
-  db.run(queryInsert, [codigoGenerado, nombre, rol, materia_aula], function (err) {
-    if (err) {
-      return res.status(500).json({ success: false, mensaje: err.message });
-    }
-    res.json({
-      success: true,
-      codigo: codigoGenerado,
-      id: this.lastID
-    });
+  db.run(`INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)`, [codigoGenerado, nombre, rol, materia_aula], function (err) {
+    if (err) return res.status(500).json({ success: false, mensaje: err.message });
+    res.json({ success: true, codigo: codigoGenerado, id: this.lastID });
   });
 });
 
@@ -151,8 +129,10 @@ app.delete('/api/usuarios/:id', (req, res) => {
   });
 });
 
+// Marcación estándar por QR (Entrada / Salida)
 app.post('/api/asistencia/marcar', (req, res) => {
-  const { codigoQR } = req.body;
+  const { codigoQR, tipoMarcacion } = req.body; // tipoMarcacion: 'ENTRADA' o 'SALIDA'
+  const tipoM = (tipoMarcacion || 'ENTRADA').toUpperCase();
   
   db.get('SELECT * FROM usuarios WHERE UPPER(codigo) = UPPER(?)', [codigoQR], (err, usuario) => {
     if (err || !usuario) return res.status(404).json({ success: false, mensaje: 'Código QR no registrado.' });
@@ -160,24 +140,60 @@ app.post('/api/asistencia/marcar', (req, res) => {
     const hoy = getFechaPeru();
     const horaActual = getHoraPeru();
 
-    db.get('SELECT * FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [usuario.codigo, hoy], (err, yaMarco) => {
+    db.get('SELECT * FROM asistencias WHERE usuario_codigo = ? AND fecha = ? AND tipo_marcacion = ?', [usuario.codigo, hoy, tipoM], (err, yaMarco) => {
       if (err) return res.status(500).json({ success: false, mensaje: 'Error al verificar marcación.' });
 
       if (yaMarco) {
         return res.status(400).json({ 
           success: false, 
           duplicado: true,
-          mensaje: `Atención: ${usuario.nombre} ya registró su asistencia el día de hoy a las ${yaMarco.hora}.`,
+          mensaje: `Atención: ${usuario.nombre} ya registró su ${tipoM.toLowerCase()} el día de hoy a las ${yaMarco.hora}.`,
           usuario,
           horaAnterior: yaMarco.hora
         });
       }
 
-      const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
+      let estado = 'PUNTUAL';
+      if (tipoM === 'ENTRADA') {
+        estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
+      } else {
+        estado = 'SALIDA';
+      }
 
-      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [usuario.codigo, hoy, horaActual, estado], (err) => {
+      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado, tipo_marcacion) VALUES (?, ?, ?, ?, ?)', [usuario.codigo, hoy, horaActual, estado, tipoM], (err) => {
         if (err) return res.status(500).json({ success: false, mensaje: 'Error al marcar.' });
-        res.json({ success: true, mensaje: `Marcación [${estado}] registrada para ${usuario.nombre}`, usuario, hora: horaActual, estado });
+        res.json({ success: true, mensaje: `Marcación de ${tipoM} [${estado}] registrada para ${usuario.nombre}`, usuario, hora: horaActual, estado });
+      });
+    });
+  });
+});
+
+// NUEVO: Finalizar Ingreso (Marca FALTA a todos los alumnos sin registro hoy)
+app.post('/api/asistencia/finalizar-ingreso', (req, res) => {
+  const hoy = getFechaPeru();
+  const horaActual = getHoraPeru();
+
+  db.all("SELECT codigo FROM usuarios WHERE LOWER(rol) = 'alumno' OR rol IS NULL OR rol = ''", [], (err, alumnos) => {
+    if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar alumnos.' });
+
+    db.all("SELECT usuario_codigo FROM asistencias WHERE fecha = ? AND tipo_marcacion = 'ENTRADA'", [hoy], (err2, marcados) => {
+      if (err2) return res.status(500).json({ success: false, mensaje: 'Error al consultar asistencias.' });
+
+      const codigosMarcados = new Set(marcados.map(m => m.usuario_codigo));
+      let faltasRegistradas = 0;
+
+      const stmt = db.prepare("INSERT INTO asistencias (usuario_codigo, fecha, hora, estado, tipo_marcacion) VALUES (?, ?, ?, 'INJUSTIFICADA', 'ENTRADA')");
+
+      alumnos.forEach(alu => {
+        if (!codigosMarcados.has(alu.codigo)) {
+          stmt.run(alu.codigo, hoy, horaActual);
+          faltasRegistradas++;
+        }
+      });
+
+      stmt.finalize((err3) => {
+        if (err3) return res.status(500).json({ success: false, mensaje: 'Error al guardar faltas automáticas.' });
+        res.json({ success: true, mensaje: `Ingreso finalizado. Se registraron ${faltasRegistradas} faltas automáticas por inasistencia.` });
       });
     });
   });
@@ -191,7 +207,8 @@ app.get('/api/asistencia/hoy', (req, res) => {
       u.nombre,
       u.materia_aula AS rol,
       a.hora,
-      a.estado
+      a.estado,
+      a.tipo_marcacion
     FROM asistencias a
     JOIN usuarios u ON a.usuario_codigo = u.codigo
     WHERE a.fecha = ?
@@ -204,62 +221,20 @@ app.get('/api/asistencia/hoy', (req, res) => {
   });
 });
 
-app.get('/api/rankings', (req, res) => {
-  const query = `
-    SELECT 
-      u.codigo,
-      u.nombre,
-      u.rol,
-      u.materia_aula AS asignacion,
-      COALESCE(SUM(
-        CASE 
-          WHEN UPPER(a.estado) = 'PUNTUAL' THEN 2.0
-          WHEN UPPER(a.estado) = 'TARDE' OR UPPER(a.estado) = 'TARDANZA' THEN 1.0
-          WHEN UPPER(a.estado) = 'JUSTIFICADA' THEN 0.5 
-          WHEN UPPER(a.estado) = 'INJUSTIFICADA' THEN 0.0
-          ELSE 0
-        END
-      ), 0) AS puntaje_acumulado
-    FROM usuarios u
-    LEFT JOIN asistencias a ON u.codigo = a.usuario_codigo
-    WHERE u.rol IN ('Docente', 'Alumno')
-    GROUP BY u.id
-    ORDER BY puntaje_acumulado DESC
-  `;
-
-  db.all(query, [], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
-
-    const docentes = rows.filter(r => r.rol === 'Docente');
-    const alumnos = rows.filter(r => r.rol === 'Alumno');
-
-    res.json({
-      success: true,
-      docentes,
-      alumnos
-    });
-  });
-});
-
-// Endpoint Corregido y Requerido para Editar Asistencia
 app.post('/api/asistencia/editar', (req, res) => {
   const { codigo, estado, fecha } = req.body;
   if (!codigo || !estado || !fecha) {
-    return res.status(400).json({ success: false, mensaje: 'Faltan datos obligatorios (código, estado o fecha).' });
+    return res.status(400).json({ success: false, mensaje: 'Faltan datos obligatorios.' });
   }
 
-  db.get('SELECT id FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [codigo, fecha], (err, row) => {
-    if (err) return res.status(500).json({ success: false, mensaje: 'Error en la base de datos.' });
-
+  db.get('id FROM asistencias WHERE usuario_codigo = ? AND fecha = ? AND tipo_marcacion = \'ENTRADA\'', [codigo, fecha], (err, row) => {
     if (row) {
-      db.run('UPDATE asistencias SET estado = ? WHERE id = ?', [estado, row.id], (err2) => {
-        if (err2) return res.status(500).json({ success: false, mensaje: 'Error al actualizar.' });
-        res.json({ success: true, mensaje: 'Asistencia actualizada correctamente.' });
+      db.run('UPDATE asistencias SET estado = ? WHERE id = ?', [estado, row.id], () => {
+        res.json({ success: true, mensaje: 'Asistencia actualizada.' });
       });
     } else {
-      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [codigo, fecha, '07:30:00', estado], (err2) => {
-        if (err2) return res.status(500).json({ success: false, mensaje: 'Error al registrar.' });
-        res.json({ success: true, mensaje: 'Asistencia registrada correctamente.' });
+      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado, tipo_marcacion) VALUES (?, ?, ?, ?, \'ENTRADA\')', [codigo, fecha, '07:30:00', estado], () => {
+        res.json({ success: true, mensaje: 'Asistencia registrada.' });
       });
     }
   });
@@ -270,12 +245,10 @@ function obtenerLunesISO(valorWeek) {
   const partes = valorWeek.split('-W');
   const anio = parseInt(partes[0], 10);
   const semana = parseInt(partes[1], 10);
-
   const simple = new Date(anio, 0, 4);
   const day = simple.getDay() || 7;
   simple.setDate(simple.getDate() - day + 1);
   simple.setDate(simple.getDate() + (semana - 1) * 7);
-
   const a = simple.getFullYear();
   const m = String(simple.getMonth() + 1).padStart(2, '0');
   const d = String(simple.getDate()).padStart(2, '0');
@@ -286,21 +259,12 @@ function sumarDiasFecha(fechaStr, dias) {
   const partes = fechaStr.split('-');
   const f = new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10));
   f.setDate(f.getDate() + dias);
-  const a = f.getFullYear();
-  const m = String(f.getMonth() + 1).padStart(2, '0');
-  const d = String(f.getDate()).padStart(2, '0');
-  return `${a}-${m}-${d}`;
+  return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
 }
 
-app.get('/api/reportes/consolidado', (req, res) => {
-  let { tipo, fecha } = req.query;
-
-  if (!fecha) {
-    fecha = getFechaPeru();
-  }
-
-  let fechaInicio = fecha;
-  let fechaFin = fecha;
+function calcularFechasRango(tipo, fecha) {
+  let fechaInicio = fecha || getFechaPeru();
+  let fechaFin = fecha || getFechaPeru();
 
   if (tipo === 'Semanal') {
     const lunesStr = obtenerLunesISO(fecha);
@@ -318,19 +282,17 @@ app.get('/api/reportes/consolidado', (req, res) => {
       fechaFin = `${partes[0]}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
     }
   }
+  return { fechaInicio, fechaFin };
+}
+
+app.get('/api/reportes/consolidado', (req, res) => {
+  let { tipo, fecha } = req.query;
+  const { fechaInicio, fechaFin } = calcularFechasRango(tipo, fecha);
 
   db.all("SELECT * FROM usuarios WHERE LOWER(rol) = 'alumno' OR rol IS NULL OR rol = ''", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
 
-    let sqlAsistencias = 'SELECT * FROM asistencias';
-    let params = [];
-
-    if (fechaInicio && fechaFin) {
-      sqlAsistencias += ' WHERE fecha >= ? AND fecha <= ?';
-      params = [fechaInicio, fechaFin];
-    }
-
-    db.all(sqlAsistencias, params, (err, asistencias) => {
+    db.all('SELECT * FROM asistencias WHERE fecha >= ? AND fecha <= ? AND tipo_marcacion = \'ENTRADA\'', [fechaInicio, fechaFin], (err, asistencias) => {
       if (err) return res.status(500).json([]);
 
       const consolidado = usuarios.map(u => {
@@ -366,31 +328,37 @@ app.get('/api/reportes/consolidado', (req, res) => {
   });
 });
 
+// HISTORIAL DETALLADO FILTRADO ESTRICTAMENTE POR TIPO Y FECHA (Para Fichas y Reportes PDF)
 app.get('/api/reportes/historial-detallado', (req, res) => {
-  const { codigo, fechaInicio, fechaFin } = req.query;
+  const { codigo, tipo, fecha } = req.query;
+  const { fechaInicio, fechaFin } = calcularFechasRango(tipo, fecha);
 
   let query = `
     SELECT 
       a.fecha,
       a.hora,
       a.estado,
+      a.tipo_marcacion,
       u.codigo,
       u.nombre,
-      u.materia_aula AS aula
+      u.materia_aula AS aula,
+      u.rol
     FROM asistencias a
     JOIN usuarios u ON a.usuario_codigo = u.codigo
-    WHERE 1=1
+    WHERE a.fecha >= ? AND a.fecha <= ?
   `;
-  let params = [];
+  let params = [fechaInicio, fechaFin];
 
-  if (codigo && codigo !== 'todos') {
+  if (codigo && codigo !== 'todos' && codigo !== 'PERSONAL-DOCENTE' && !codigo.startsWith('AULA-')) {
     query += ` AND a.usuario_codigo = ?`;
     params.push(codigo);
-  }
-
-  if (fechaInicio && fechaFin) {
-    query += ` AND a.fecha >= ? AND a.fecha <= ?`;
-    params.push(fechaInicio, fechaFin);
+  } else if (codigo === 'PERSONAL-DOCENTE') {
+    query += ` AND u.rol = 'Docente'`;
+  } else if (codigo && codigo.startsWith('AULA-')) {
+    // Si es reporte de grado específico
+    query += ` AND (u.materia_aula LIKE ?)`;
+    const partesGrado = codigo.replace('AULA-', '').split('-');
+    params.push(`%${partesGrado[0]}%`);
   }
 
   query += ` ORDER BY a.fecha DESC, a.hora DESC`;
@@ -402,5 +370,5 @@ app.get('/api/reportes/historial-detallado', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo sin errores en el puerto ${PORT}`);
+  console.log(`Servidor corriendo en el puerto ${PORT}`);
 });

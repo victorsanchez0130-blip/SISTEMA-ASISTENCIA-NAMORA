@@ -272,9 +272,10 @@ async function abrirModalEditar(codigo, nombre) {
   if (spanCodigo) spanCodigo.innerText = codigo;
 
   const fechaVal = document.getElementById('filtroFecha')?.value || obtenerFechaHoy();
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
 
   try {
-    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(codigo)}&fechaInicio=${fechaVal}&fechaFin=${fechaVal}`);
+    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(codigo)}&tipo=${tipoInput}&fecha=${fechaVal}`);
     if (res.ok) {
       const historial = await res.json();
       if (historial.length > 0 && selectEstado) {
@@ -403,9 +404,9 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     startY: doc.lastAutoTable.finalY + 6,
     head: [["PUNTUALES", "TARDANZAS", "FALTAS", "PUNTAJE"]],
     body: [[
-      `${metricas.puntuales}/${maxDias} (${pctPuntual}%)`,
-      `${metricas.tardanzas}/${maxDias} (${pctTardanza}%)`,
-      `${metricas.faltas}/${maxDias} (${pctFaltas}%)`,
+      `${metricas.puntuales}/${maxDias} (${isNaN(pctPuntual) ? 0 : pctPuntual}%)`,
+      `${metricas.tardanzas}/${maxDias} (${isNaN(pctTardanza) ? 0 : pctTardanza}%)`,
+      `${metricas.faltas}/${maxDias} (${isNaN(pctFaltas) ? 0 : pctFaltas}%)`,
       `${metricas.puntaje} pts`
     ]],
     theme: 'grid',
@@ -475,7 +476,7 @@ async function generarFichaAlumnoPDF() {
 
   let historial = [];
   try {
-    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(alumno.codigo)}`);
+    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(alumno.codigo)}&tipo=${tipo}&fecha=${fecha}`);
     if (res.ok) historial = await res.json();
   } catch (e) {
     console.error("Error recuperando historial del alumno:", e);
@@ -500,17 +501,20 @@ async function generarFichaAlumnoPDF() {
 }
 
 async function generarGradoPDF() {
-  const filtrados = obtenerAlumnosFiltradosBase();
-  if (filtrados.length === 0) {
-    alert("No existen registros con los filtros seleccionados.");
-    return;
-  }
-
   const grado = document.getElementById('filtroGrado')?.value || 'Todos';
   const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
   const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
   const fecha = document.getElementById('filtroFecha')?.value || '';
 
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado?codigo=AULA-${grado}-${seccion}&tipo=${tipo}&fecha=${fecha}`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial de grado:", e);
+  }
+
+  const filtrados = obtenerAlumnosFiltradosBase();
   let totPuntual = 0, totTardanza = 0, totFaltas = 0, totPuntos = 0;
   filtrados.forEach(a => {
     totPuntual += (a.asistencias || 0);
@@ -518,14 +522,6 @@ async function generarGradoPDF() {
     totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
     totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
   });
-
-  let historial = [];
-  try {
-    const res = await fetch(`/api/reportes/historial-detallado`);
-    if (res.ok) historial = await res.json();
-  } catch (e) {
-    console.error("Error recuperando historial general:", e);
-  }
 
   await construirPDFModeloEstandar({
     titulo: `CONSOLIDADO DE ASISTENCIA - GRADO ${grado} ${seccion}`,
@@ -538,7 +534,7 @@ async function generarGradoPDF() {
       tardanzas: totTardanza, 
       faltas: totFaltas, 
       puntaje: totPuntos,
-      totalPeriodo: obtenerTotalDiasPeriodo() * filtrados.length
+      totalPeriodo: Math.max(1, obtenerTotalDiasPeriodo() * Math.max(1, filtrados.length))
     },
     historial,
     nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
@@ -551,11 +547,15 @@ async function generarDocentesPDF() {
 
   let historial = [];
   try {
-    const res = await fetch(`/api/reportes/historial-detallado`);
+    const res = await fetch(`/api/reportes/historial-detallado?codigo=PERSONAL-DOCENTE&tipo=${tipo}&fecha=${fecha}`);
     if (res.ok) historial = await res.json();
   } catch (e) {
     console.error("Error recuperando historial docentes:", e);
   }
+
+  const puntualesDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'PUNTUAL').length;
+  const tardanzasDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'TARDANZA' || (h.estado || '').toUpperCase() === 'TARDE').length;
+  const faltasDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'FALTA' || (h.estado || '').toUpperCase() === 'INJUSTIFICADA').length;
 
   await construirPDFModeloEstandar({
     titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
@@ -563,7 +563,13 @@ async function generarDocentesPDF() {
     nombre: "Plana Docente I.E. Santa Rosa",
     aula: "Dirección Académica",
     periodo: `${tipo} (${fecha || 'General'})`,
-    metricas: { puntuales: 0, tardanzas: 0, faltas: 0, puntaje: 0, totalPeriodo: obtenerTotalDiasPeriodo() },
+    metricas: { 
+      puntuales: puntualesDoc, 
+      tardanzas: tardanzasDoc, 
+      faltas: faltasDoc, 
+      puntaje: 0, 
+      totalPeriodo: Math.max(1, obtenerTotalDiasPeriodo()) 
+    },
     historial,
     nombreArchivo: `Reporte_Docentes_${fecha || 'General'}.pdf`
   });
