@@ -126,9 +126,30 @@ async function cargarConsolidado() {
     if (!res.ok) throw new Error("Error en la respuesta del servidor");
     
     const data = await res.json();
-    // Validar que la respuesta sea un arreglo para evitar fallos de renderizado
-    datosReporteGlobal = Array.isArray(data) ? data : (data.alumnos || data.data || []);
     
+    // Extracción flexible por si el backend envuelve la lista de alumnos
+    let listaCruda = [];
+    if (Array.isArray(data)) {
+      listaCruda = data;
+    } else if (data && Array.isArray(data.data)) {
+      listaCruda = data.data;
+    } else if (data && Array.isArray(data.alumnos)) {
+      listaCruda = data.alumnos;
+    } else if (data && Array.isArray(data.reporte)) {
+      listaCruda = data.reporte;
+    }
+
+    // Normalizar los campos aceptando variaciones de nombres de la BD
+    datosReporteGlobal = listaCruda.map(item => ({
+      codigo: item.codigo || item.dni || item.id_alumno || item.nro_documento || '-',
+      nombre: item.nombre || item.nombres_completos || `${item.nombres || ''} ${item.apellidos || ''}`.trim() || 'Sin Nombre',
+      aula: item.aula || item.materia_aula || item.seccion_nombre || 'Sin Asignación',
+      asistencias: item.asistencias ?? item.puntual ?? item.asist ?? 0,
+      tardanzas: item.tardanzas ?? item.tardanza ?? item.tard ?? 0,
+      faltas: item.faltas ?? item.fInjustificadas ?? item.injustificada ?? 0,
+      puntajeTotal: item.puntajeTotal ?? item.puntuacion ?? item.puntos ?? 0
+    }));
+
     actualizarOpcionesAlumnosSegunAula();
     renderizarTablaReportes();
   } catch (err) {
@@ -147,7 +168,7 @@ function obtenerAlumnosPorAula() {
   if (!Array.isArray(datosReporteGlobal)) return [];
 
   return datosReporteGlobal.filter(item => {
-    const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
+    const aulaStr = (item.aula || '').toUpperCase();
     if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) return false;
     if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
     if (seccion !== 'Todos') {
@@ -243,18 +264,16 @@ function renderizarTablaReportes() {
   filtrados.forEach(d => {
     const asist = d.asistencias || 0;
     const tard = d.tardanzas || 0;
-    const faltasJust = d.fJustificadas || 0;
-    const faltasInjust = d.fInjustificadas || 0;
-    const totalFaltas = faltasJust + faltasInjust;
+    const faltas = d.faltas || 0;
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><strong>${d.codigo || '-'}</strong></td>
       <td>${d.nombre || '-'}</td>
-      <td>${d.aula || d.materia_aula || 'Sin Asignación'}</td>
+      <td>${d.aula || 'Sin Asignación'}</td>
       <td style="text-align: center; color: #16a34a; font-weight: bold;">${asist} / ${totalDiasPeriodo}</td>
       <td style="text-align: center; color: #d97706; font-weight: bold;">${tard} / ${totalDiasPeriodo}</td>
-      <td style="text-align: center; color: #dc2626; font-weight: bold;">${totalFaltas} / ${totalDiasPeriodo}</td>
+      <td style="text-align: center; color: #dc2626; font-weight: bold;">${faltas} / ${totalDiasPeriodo}</td>
       <td style="text-align: center; font-weight: bold; background-color: #f8fafc;">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
       <td style="text-align: center;">
         <button onclick="abrirModalEditar('${d.codigo}', '${d.nombre ? d.nombre.replace(/'/g, "\\'") : ''}')" style="background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
@@ -287,9 +306,9 @@ async function abrirModalEditar(codigo, nombre) {
       if (historial.length > 0 && selectEstado) {
         const estadoActual = (historial[0].estado || '').toUpperCase();
         if (estadoActual.includes('TARDE') || estadoActual.includes('TARDANZA')) {
-          selectEstado.value = 'TARDE';
+          selectEstado.value = 'TARDANZA';
         } else if (estadoActual.includes('FALTA') || estadoActual.includes('INJUSTIFICADA')) {
-          selectEstado.value = 'FALTA';
+          selectEstado.value = 'INJUSTIFICADA';
         } else {
           selectEstado.value = 'PUNTUAL';
         }
@@ -358,10 +377,9 @@ function obtenerNombreDia(fechaStr) {
 
 function obtenerObservacionEstado(estado) {
   const est = (estado || '').toUpperCase();
-  if (est === 'PUNTUAL' || est === 'ASISTENCIA') return 'Ingreso dentro del horario regular';
-  if (est === 'TARDANZA' || est === 'TARDE') return 'Ingreso fuera de horario regular';
-  if (est === 'JUSTIFICADA') return 'Falta justificada con documento';
-  if (est === 'INJUSTIFICADA' || est === 'FALTA') return 'Inasistencia sin justificación';
+  if (est === 'PUNTUAL') return 'Ingreso dentro del horario regular';
+  if (est === 'TARDANZA') return 'Ingreso fuera de horario regular';
+  if (est === 'INJUSTIFICADA') return 'Inasistencia sin justificación registrada';
   return 'Registro de marcación';
 }
 
@@ -492,12 +510,12 @@ async function generarFichaAlumnoPDF() {
     titulo: "FICHA INDIVIDUAL DE ASISTENCIA Y PUNTUALIDAD",
     codigo: alumno.codigo || '-',
     nombre: alumno.nombre || '-',
-    aula: alumno.aula || alumno.materia_aula || 'Sin Asignación',
+    aula: alumno.aula || 'Sin Asignación',
     periodo: `${tipo} (${fecha || 'General'})`,
     metricas: {
       puntuales: alumno.asistencias || 0,
       tardanzas: alumno.tardanzas || 0,
-      faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
+      faltas: alumno.faltas || 0,
       puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
       totalPeriodo: obtenerTotalDiasPeriodo()
     },
@@ -525,7 +543,7 @@ async function generarGradoPDF() {
   filtrados.forEach(a => {
     totPuntual += (a.asistencias || 0);
     totTardanza += (a.tardanzas || 0);
-    totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
+    totFaltas += (a.faltas || 0);
     totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
   });
 
@@ -561,7 +579,7 @@ async function generarDocentesPDF() {
 
   const puntualesDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'PUNTUAL').length;
   const tardanzasDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'TARDANZA' || (h.estado || '').toUpperCase() === 'TARDE').length;
-  const faltasDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'FALTA' || (h.estado || '').toUpperCase() === 'INJUSTIFICADA').length;
+  const faltasDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'INJUSTIFICADA' || (h.estado || '').toUpperCase() === 'FALTA').length;
 
   await construirPDFModeloEstandar({
     titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
