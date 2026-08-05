@@ -129,7 +129,6 @@ app.delete('/api/usuarios/:id', (req, res) => {
   });
 });
 
-// Marcación estándar por QR (Entrada / Salida)
 app.post('/api/asistencia/marcar', (req, res) => {
   const { codigoQR, tipoMarcacion } = req.body;
   const tipoM = (tipoMarcacion || 'ENTRADA').toUpperCase();
@@ -168,7 +167,6 @@ app.post('/api/asistencia/marcar', (req, res) => {
   });
 });
 
-// Finalizar Ingreso (Marca FALTA a todos los alumnos sin registro hoy)
 app.post('/api/asistencia/finalizar-ingreso', (req, res) => {
   const hoy = getFechaPeru();
   const horaActual = getHoraPeru();
@@ -221,7 +219,6 @@ app.get('/api/asistencia/hoy', (req, res) => {
   });
 });
 
-// CORREGIDO: Sintaxis de SELECT arreglada
 app.post('/api/asistencia/editar', (req, res) => {
   const { codigo, estado, fecha } = req.body;
   if (!codigo || !estado || !fecha) {
@@ -286,7 +283,6 @@ function calcularFechasRango(tipo, fecha) {
   return { fechaInicio, fechaFin };
 }
 
-// CORREGIDO: Consolidado de Reportes (soporta cualquier usuario registrado)
 app.get('/api/reportes/consolidado', (req, res) => {
   let { tipo, fecha } = req.query;
   const { fechaInicio, fechaFin } = calcularFechasRango(tipo, fecha);
@@ -328,13 +324,12 @@ app.get('/api/reportes/consolidado', (req, res) => {
   });
 });
 
-// NUEVO: Endpoint para Rankings de Mérito
 app.get('/api/rankings', (req, res) => {
   db.all("SELECT * FROM usuarios", [], (err, usuarios) => {
-    if (err) return res.status(500).json({ docentes: [], alumnos: [] });
+    if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
 
     db.all("SELECT * FROM asistencias WHERE tipo_marcacion = 'ENTRADA'", [], (err, asistencias) => {
-      if (err) return res.status(500).json({ docentes: [], alumnos: [] });
+      if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
 
       const listaCompleta = usuarios.map(u => {
         const marcaciones = asistencias.filter(a => a.usuario_codigo === u.codigo);
@@ -353,25 +348,24 @@ app.get('/api/rankings', (req, res) => {
           codigo: u.codigo,
           nombre: u.nombre,
           rol: u.rol || 'Alumno',
-          aula: u.materia_aula || 'Sin Asignación',
-          puntaje: puntajeTotal
+          materia_aula: u.materia_aula || 'Sin Asignación',
+          puntajeTotal
         };
       });
 
       const docentes = listaCompleta
         .filter(u => (u.rol || '').toLowerCase().includes('docente'))
-        .sort((a, b) => b.puntaje - a.puntaje);
+        .sort((a, b) => b.puntajeTotal - a.puntajeTotal);
 
       const alumnos = listaCompleta
         .filter(u => (u.rol || '').toLowerCase().includes('alumno') || !u.rol || u.rol === '')
-        .sort((a, b) => b.puntaje - a.puntaje);
+        .sort((a, b) => b.puntajeTotal - a.puntajeTotal);
 
-      res.json({ docentes, alumnos });
+      res.json({ success: true, docentes, alumnos });
     });
   });
 });
 
-// HISTORIAL DETALLADO (Fichas y Reportes PDF)
 app.get('/api/reportes/historial-detallado', (req, res) => {
   const { codigo, tipo, fecha } = req.query;
   const { fechaInicio, fechaFin } = calcularFechasRango(tipo, fecha);

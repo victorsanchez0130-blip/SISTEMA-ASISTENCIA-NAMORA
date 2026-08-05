@@ -1,24 +1,8 @@
-// Variable global para almacenar los datos del consolidado recuperados de la API
 let datosReporteGlobal = [];
 
-/**
- * Lista de feriados nacionales estandarizados en Perú (MM-DD)
- */
 const FERIADOS_PERU_MMDD = [
-  '01-01', // Año Nuevo
-  '05-01', // Día del Trabajo
-  '06-07', // Batalla de Arica y Día de la Bandera
-  '06-29', // San Pedro y San Pablo
-  '07-23', // Día de la Fuerza Aérea del Perú
-  '07-28', // Fiestas Patrias
-  '07-29', // Fiestas Patrias
-  '08-06', // Batalla de Junín
-  '08-30', // Santa Rosa de Lima
-  '10-08', // Combate de Angamos
-  '11-01', // Día de Todos los Santos
-  '12-08', // Inmaculada Concepción
-  '12-09', // Batalla de Ayacucho
-  '12-25'  // Navidad
+  '01-01', '05-01', '06-07', '06-29', '07-23', '07-28', '07-29',
+  '08-06', '08-30', '10-08', '11-01', '12-08', '12-09', '12-25'
 ];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -127,27 +111,16 @@ async function cargarConsolidado() {
     
     const data = await res.json();
     
-    // Extracción flexible por si el backend envuelve la lista de alumnos
-    let listaCruda = [];
-    if (Array.isArray(data)) {
-      listaCruda = data;
-    } else if (data && Array.isArray(data.data)) {
-      listaCruda = data.data;
-    } else if (data && Array.isArray(data.alumnos)) {
-      listaCruda = data.alumnos;
-    } else if (data && Array.isArray(data.reporte)) {
-      listaCruda = data.reporte;
-    }
+    let listaCruda = Array.isArray(data) ? data : (data.data || data.alumnos || data.reporte || []);
 
-    // Normalizar los campos aceptando variaciones de nombres de la BD
     datosReporteGlobal = listaCruda.map(item => ({
-      codigo: item.codigo || item.dni || item.id_alumno || item.nro_documento || '-',
-      nombre: item.nombre || item.nombres_completos || `${item.nombres || ''} ${item.apellidos || ''}`.trim() || 'Sin Nombre',
-      aula: item.aula || item.materia_aula || item.seccion_nombre || 'Sin Asignación',
-      asistencias: item.asistencias ?? item.puntual ?? item.asist ?? 0,
-      tardanzas: item.tardanzas ?? item.tardanza ?? item.tard ?? 0,
-      faltas: item.faltas ?? item.fInjustificadas ?? item.injustificada ?? 0,
-      puntajeTotal: item.puntajeTotal ?? item.puntuacion ?? item.puntos ?? 0
+      codigo: item.codigo || '-',
+      nombre: item.nombre || 'Sin Nombre',
+      aula: item.aula || item.materia_aula || 'Sin Asignación',
+      asistencias: item.asistencias || 0,
+      tardanzas: item.tardanzas || 0,
+      faltas: item.faltas || 0,
+      puntajeTotal: item.puntajeTotal !== undefined ? item.puntajeTotal : 0
     }));
 
     actualizarOpcionesAlumnosSegunAula();
@@ -173,9 +146,7 @@ function obtenerAlumnosPorAula() {
     if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
     if (seccion !== 'Todos') {
       const seccionNormalizada = seccion.toUpperCase();
-      const partesAula = aulaStr.split(' ');
-      const ultimaLetra = partesAula[partesAula.length - 1];
-      if (ultimaLetra !== seccionNormalizada && !aulaStr.endsWith(` ${seccionNormalizada}`)) return false;
+      if (!aulaStr.endsWith(seccionNormalizada) && !aulaStr.includes(` ${seccionNormalizada} `)) return false;
     }
     return true;
   });
@@ -306,16 +277,16 @@ async function abrirModalEditar(codigo, nombre) {
       if (historial.length > 0 && selectEstado) {
         const estadoActual = (historial[0].estado || '').toUpperCase();
         if (estadoActual.includes('TARDE') || estadoActual.includes('TARDANZA')) {
-          selectEstado.value = 'TARDANZA';
+          selectEstado.value = 'TARDE';
         } else if (estadoActual.includes('FALTA') || estadoActual.includes('INJUSTIFICADA')) {
-          selectEstado.value = 'INJUSTIFICADA';
+          selectEstado.value = 'FALTA';
         } else {
           selectEstado.value = 'PUNTUAL';
         }
       }
     }
   } catch (e) {
-    console.error("No se pudo obtener el estado actual del alumno:", e);
+    console.error("No se pudo obtener el estado actual:", e);
   }
 
   if (modal) modal.style.display = 'flex';
@@ -355,8 +326,8 @@ async function guardarEdicionAsistencia(event) {
       alert("Error al actualizar: " + (resultado.mensaje || "No se pudo completar la acción."));
     }
   } catch (error) {
-    console.error("Error de red al guardar la edición de asistencia:", error);
-    alert("Error de conexión con el servidor en Railway.");
+    console.error("Error de red al guardar asistencia:", error);
+    alert("Error de conexión con el servidor.");
   }
 }
 
@@ -378,8 +349,8 @@ function obtenerNombreDia(fechaStr) {
 function obtenerObservacionEstado(estado) {
   const est = (estado || '').toUpperCase();
   if (est === 'PUNTUAL') return 'Ingreso dentro del horario regular';
-  if (est === 'TARDANZA') return 'Ingreso fuera de horario regular';
-  if (est === 'INJUSTIFICADA') return 'Inasistencia sin justificación registrada';
+  if (est === 'TARDANZA' || est === 'TARDE') return 'Ingreso fuera de horario regular';
+  if (est === 'INJUSTIFICADA' || est === 'FALTA') return 'Inasistencia sin justificación registrada';
   return 'Registro de marcación';
 }
 
@@ -578,8 +549,8 @@ async function generarDocentesPDF() {
   }
 
   const puntualesDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'PUNTUAL').length;
-  const tardanzasDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'TARDANZA' || (h.estado || '').toUpperCase() === 'TARDE').length;
-  const faltasDoc = historial.filter(h => (h.estado || '').toUpperCase() === 'INJUSTIFICADA' || (h.estado || '').toUpperCase() === 'FALTA').length;
+  const tardanzasDoc = historial.filter(h => ['TARDANZA', 'TARDE'].includes((h.estado || '').toUpperCase())).length;
+  const faltasDoc = historial.filter(h => ['INJUSTIFICADA', 'FALTA'].includes((h.estado || '').toUpperCase())).length;
 
   await construirPDFModeloEstandar({
     titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
