@@ -1,6 +1,26 @@
 // Variable global para almacenar los datos del consolidado recuperados de la API
 let datosReporteGlobal = [];
 
+/**
+ * Lista de feriados nacionales estandarizados en Perú (MM-DD)
+ */
+const FERIADOS_PERU_MMDD = [
+  '01-01', // Año Nuevo
+  '05-01', // Día del Trabajo
+  '06-07', // Batalla de Arica y Día de la Bandera
+  '06-29', // San Pedro y San Pablo
+  '07-23', // Día de la Fuerza Aérea del Perú
+  '07-28', // Fiestas Patrias
+  '07-29', // Fiestas Patrias
+  '08-06', // Batalla de Junín
+  '08-30', // Santa Rosa de Lima
+  '10-08', // Combate de Angamos
+  '11-01', // Día de Todos los Santos
+  '12-08', // Inmaculada Concepción
+  '12-09', // Batalla de Ayacucho
+  '12-25'  // Navidad
+];
+
 document.addEventListener('DOMContentLoaded', () => {
   configurarEventosFiltros();
   actualizarTipoSelectorFecha();
@@ -24,10 +44,7 @@ function actualizarTipoSelectorFecha() {
     contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" value="${obtenerFechaHoy()}">`;
   }
 
-  // Re-vincular el evento change al nuevo input generado
   document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
-  
-  // Cargar datos automáticamente al cambiar el tipo
   cargarConsolidado();
 }
 
@@ -52,36 +69,85 @@ function obtenerMesActual() {
 }
 
 /**
- * Retorna el número de días laborables / totales del periodo según el tipo de reporte seleccionado.
+ * Verifica si una fecha dada en formato Date es un día laborable (Lunes a Viernes y NO feriado)
+ */
+function esDiaLaborable(fecha) {
+  const dayOfWeek = fecha.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false; // Excluir Sábados (6) y Domingos (0)
+
+  const mesStr = String(fecha.getMonth() + 1).padStart(2, '0');
+  const diaStr = String(fecha.getDate()).padStart(2, '0');
+  const claveMMDD = `${mesStr}-${diaStr}`;
+
+  return !FERIADOS_PERU_MMDD.includes(claveMMDD);
+}
+
+/**
+ * Retorna el número exacto de días lectivos del periodo descartando fines de semana y feriados.
  */
 function obtenerTotalDiasPeriodo() {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
   const fechaVal = document.getElementById('filtroFecha')?.value || '';
 
-  if (tipoInput.includes('Semanal')) {
-    return 5; // Semana escolar regular (Lunes a Viernes)
+  // 1. REPORTE DIARIO
+  if (!tipoInput.includes('Semanal') && !tipoInput.includes('Mensual')) {
+    if (!fechaVal) return 1;
+    const [a, m, d] = fechaVal.split('-').map(Number);
+    const fechaObj = new Date(a, m - 1, d);
+    return esDiaLaborable(fechaObj) ? 1 : 0;
   }
 
+  // 2. REPORTE SEMANAL
+  if (tipoInput.includes('Semanal')) {
+    if (!fechaVal) return 5;
+    
+    // Parsear semana ISO (Ej: "2026-W28")
+    const partes = fechaVal.split('-W');
+    if (partes.length !== 2) return 5;
+
+    const anio = Number(partes[0]);
+    const semana = Number(partes[1]);
+
+    // Calcular el Lunes de dicha semana ISO
+    const simple = new Date(anio, 0, 1 + (semana - 1) * 7);
+    const dow = simple.getDay();
+    const ISOweekStart = simple;
+    if (dow <= 4)
+      ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+    else
+      ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+
+    let diasLectivos = 0;
+    for (let i = 0; i < 5; i++) { // De Lunes a Viernes
+      const diaActual = new Date(ISOweekStart);
+      diaActual.setDate(ISOweekStart.getDate() + i);
+      if (esDiaLaborable(diaActual)) {
+        diasLectivos++;
+      }
+    }
+    return diasLectivos;
+  }
+
+  // 3. REPORTE MENSUAL
   if (tipoInput.includes('Mensual')) {
-    if (!fechaVal) return 22; // Valor predeterminado
+    if (!fechaVal) return 22;
     
     const [anio, mes] = fechaVal.split('-').map(Number);
     if (!anio || !mes) return 22;
 
-    // Calcular días de Lunes a Viernes en el mes
-    let diasHabiles = 0;
+    let diasLectivos = 0;
     const totalDiasMes = new Date(anio, mes, 0).getDate();
 
     for (let dia = 1; dia <= totalDiasMes; dia++) {
-      const dayOfWeek = new Date(anio, mes - 1, dia).getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Excluir Sábados (6) y Domingos (0)
-        diasHabiles++;
+      const fechaObj = new Date(anio, mes - 1, dia);
+      if (esDiaLaborable(fechaObj)) {
+        diasLectivos++;
       }
     }
-    return diasHabiles;
+    return diasLectivos;
   }
 
-  return 1; // Reporte Diario
+  return 1;
 }
 
 // ----------------------------------------------------
