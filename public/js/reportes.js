@@ -28,23 +28,83 @@ function cambiarTipoFiltroFecha() {
   cargarReportes();
 }
 
+// Función auxiliar para formatear YYYY-MM-DD localmente (evita desfase UTC de toISOString)
+function formatearFechaLocal(fecha) {
+  const a = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, '0');
+  const d = String(fecha.getDate()).padStart(2, '0');
+  return `${a}-${m}-${d}`;
+}
+
+// Obtener el Lunes de la semana ISO (ej. "2026-W31")
+function obtenerLunesDeSemanaISO(valorWeek) {
+  const partes = valorWeek.split('-W');
+  if (partes.length !== 2) return null;
+  const anio = parseInt(partes[0], 10);
+  const semana = parseInt(partes[1], 10);
+
+  // El 4 de enero siempre está en la semana 1 según ISO-8601
+  const simple = new Date(anio, 0, 4);
+  const day = simple.getDay() || 7; // Si es domingo (0), tratar como 7
+  simple.setDate(simple.getDate() - day + 1); // Lunes de la semana 1
+  simple.setDate(simple.getDate() + (semana - 1) * 7); // Lunes de la semana objetivo
+
+  return simple;
+}
+
 function calcularDiasHabiles(tipo, valorFecha) {
   if (!valorFecha) return 1;
-  if (tipo === 'Diario') return 1;
-  if (tipo === 'Semanal') return 5;
 
+  // 1. REPORTES DIARIOS
+  if (tipo === 'Diario') {
+    const partes = valorFecha.split('-');
+    if (partes.length === 3) {
+      const fechaActual = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+      const diaSemana = fechaActual.getDay();
+      const strFecha = formatearFechaLocal(fechaActual);
+
+      // Si es Sábado (6), Domingo (0) o Feriado, el total de días hábiles es 0
+      if (diaSemana === 0 || diaSemana === 6 || FERIADOS_PERU.includes(strFecha)) {
+        return 0;
+      }
+    }
+    return 1;
+  }
+
+  // 2. REPORTES SEMANALES
+  if (tipo === 'Semanal') {
+    const fechaLunes = obtenerLunesDeSemanaISO(valorFecha);
+    if (!fechaLunes) return 5;
+
+    let diasHabiles = 0;
+    for (let i = 0; i < 5; i++) { // Iterar de Lunes (0) a Viernes (4)
+      const fechaDia = new Date(fechaLunes);
+      fechaDia.setDate(fechaLunes.getDate() + i);
+
+      const strFecha = formatearFechaLocal(fechaDia);
+      if (!FERIADOS_PERU.includes(strFecha)) {
+        diasHabiles++;
+      }
+    }
+    return diasHabiles;
+  }
+
+  // 3. REPORTES MENSUALES
   if (tipo === 'Mensual') {
     const partes = valorFecha.split('-');
-    const anio = parseInt(partes[0]);
-    const mes = parseInt(partes[1]) - 1;
+    if (partes.length < 2) return 20;
+
+    const anio = parseInt(partes[0], 10);
+    const mes = parseInt(partes[1], 10) - 1;
     const totalDiasMes = new Date(anio, mes + 1, 0).getDate();
     
     let diasHabiles = 0;
     for (let d = 1; d <= totalDiasMes; d++) {
       const fechaActual = new Date(anio, mes, d);
       const diaSemana = fechaActual.getDay();
-      if (diaSemana >= 1 && diaSemana <= 5) {
-        const strFecha = fechaActual.toISOString().split('T')[0];
+
+      if (diaSemana >= 1 && diaSemana <= 5) { // Lunes a Viernes
+        const strFecha = formatearFechaLocal(fechaActual);
         if (!FERIADOS_PERU.includes(strFecha)) {
           diasHabiles++;
         }
@@ -181,12 +241,10 @@ function generarGradoPDF() {
   const fecha = document.getElementById('filtroFecha') ? document.getElementById('filtroFecha').value : '';
   const maxDias = calcularDiasHabiles(tipo, fecha);
 
-  // Obtener los valores seleccionados para el subtítulo del PDF y nombre de archivo
   const valNivel = document.getElementById('filtroNivel')?.value || 'TODOS';
   const valGrado = document.getElementById('filtroGrado')?.value || 'TODOS';
   const valSeccion = document.getElementById('filtroSeccion')?.value || 'TODOS';
 
-  // Alumnos filtrados exactamente según la selección de los selectores (Nivel, Grado, Sección)
   const alumnos = obtenerAlumnosFiltrados();
 
   if (alumnos.length === 0) {
@@ -198,7 +256,6 @@ function generarGradoPDF() {
   doc.text('I.E. SANTA ROSA - CAJAMARCA', 105, 12, { align: 'center' });
   doc.setFontSize(11);
   
-  // Encabezado descriptivo con el filtro aplicado
   const textoFiltro = `Filtro: [Nivel: ${valNivel} | Grado: ${valGrado} | Sección: ${valSeccion}]`;
   doc.text(`Reporte de Asistencia (${tipo}) - Alumnos | Período: ${fecha}`, 105, 18, { align: 'center' });
   doc.setFontSize(9);
@@ -212,7 +269,7 @@ function generarGradoPDF() {
     `${a.tardanzas || 0}/${maxDias}`,
     `${a.fJustificadas || a.justificadas || 0}/${maxDias}`,
     `${a.fInjustificadas || a.injustificadas || 0}/${maxDias}`,
-    `${a.puntajeTotal !== undefined ? a.puntajeTotal : (a.puntos || 0)} pts`
+    `${a.puntajeTotal !== undefined ? d.puntajeTotal : (a.puntos || 0)} pts`
   ]);
 
   doc.autoTable({
@@ -223,7 +280,6 @@ function generarGradoPDF() {
     headStyles: { fillColor: [2, 132, 199] }
   });
 
-  // Guardar archivo con nombre indicativo de los filtros
   const nombreArchivo = `Reporte_Alumnos_${valNivel}_${valGrado}_${valSeccion}.pdf`.replace(/\s+/g, '_');
   doc.save(nombreArchivo);
 }
