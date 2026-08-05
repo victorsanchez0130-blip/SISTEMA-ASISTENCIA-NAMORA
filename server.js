@@ -271,20 +271,91 @@ app.post('/api/asistencia/manual', (req, res) => {
 });
 
 // Reporte Consolidado
+// Función auxiliar para obtener el Lunes de una semana ISO (ej. "2026-W31")
+function obtenerLunesISO(valorWeek) {
+  if (!valorWeek || !valorWeek.includes('-W')) return null;
+  const partes = valorWeek.split('-W');
+  const anio = parseInt(partes[0], 10);
+  const semana = parseInt(partes[1], 10);
+
+  const simple = new Date(anio, 0, 4);
+  const day = simple.getDay() || 7;
+  simple.setDate(simple.getDate() - day + 1);
+  simple.setDate(simple.getDate() + (semana - 1) * 7);
+
+  const a = simple.getFullYear();
+  const m = String(simple.getMonth() + 1).padStart(2, '0');
+  const d = String(simple.getDate()).padStart(2, '0');
+  return `${a}-${m}-${d}`;
+}
+
+// Función auxiliar para sumar días a una fecha (YYYY-MM-DD)
+function sumarDiasFecha(fechaStr, dias) {
+  const partes = fechaStr.split('-');
+  const f = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+  f.setDate(f.getDate() + dias);
+  const a = f.getFullYear();
+  const m = String(f.getMonth() + 1).padStart(2, '0');
+  const d = String(f.getDate()).padStart(2, '0');
+  return `${a}-${m}-${d}`;
+}
+
 app.get('/api/reportes/consolidado', (req, res) => {
+  const { tipo, fecha } = req.query;
+
+  // 1. Construir el rango de fechas (fechaInicio y fechaFin)
+  let fechaInicio = null;
+  let fechaFin = null;
+
+  if (tipo && fecha) {
+    if (tipo === 'Diario') {
+      fechaInicio = `${fecha} 00:00:00`;
+      fechaFin = `${fecha} 23:59:59`;
+    } else if (tipo === 'Semanal') {
+      const lunesStr = obtenerLunesISO(fecha);
+      if (lunesStr) {
+        const viernesStr = sumarDiasFecha(lunesStr, 4);
+        fechaInicio = `${lunesStr} 00:00:00`;
+        fechaFin = `${viernesStr} 23:59:59`;
+      }
+    } else if (tipo === 'Mensual') {
+      const partes = fecha.split('-');
+      if (partes.length === 2) {
+        const anio = parseInt(partes[0]);
+        const mes = parseInt(partes[1]);
+        const ultimoDia = new Date(anio, mes, 0).getDate();
+        fechaInicio = `${fecha}-01 00:00:00`;
+        fechaFin = `${fecha}-${String(ultimoDia).padStart(2, '0')} 23:59:59`;
+      }
+    }
+  }
+
+  // 2. Consulta a Usuarios
   db.all("SELECT * FROM usuarios WHERE rol = 'Alumno'", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
 
-    db.all('SELECT * FROM asistencias', [], (err, asistencias) => {
+    // 3. Consulta de Asistencias filtradas por el rango si existe
+    let sqlAsistencias = 'SELECT * FROM asistencias';
+    let params = [];
+
+    if (fechaInicio && fechaFin) {
+      sqlAsistencias += ' WHERE fecha >= ? AND fecha <= ?';
+      params = [fechaInicio, fechaFin];
+    }
+
+    db.all(sqlAsistencias, params, (err, asistencias) => {
+      if (err) return res.status(500).json([]);
+
       const consolidado = usuarios.map(u => {
         const marcaciones = asistencias.filter(a => a.usuario_codigo === u.codigo);
         let asistenciasCount = 0, tardanzas = 0, fJustificadas = 0, fInjustificadas = 0;
 
         marcaciones.forEach(m => {
-          if (m.estado === 'PUNTUAL') asistenciasCount++;
-          else if (m.estado === 'TARDANZA') tardanzas++;
-          else if (m.estado === 'JUSTIFICADA') fJustificadas++;
-          else if (m.estado === 'INJUSTIFICADA') fInjustificadas++;
+          const estado = (m.estado || '').toUpperCase();
+          if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') asistenciasCount++;
+          else if (estado === 'TARDANZA') tardanzas++;
+          else if (estado === 'JUSTIFICADA') fJustificadas++;
+          else if (estado === 'INJUSTIFICADA' || estado === 'FALTA') fInjustificadas++;
         });
 
         const puntajeTotal = (asistenciasCount * 2.0) + (tardanzas * 1.0) + (fJustificadas * 0.5);
@@ -302,6 +373,7 @@ app.get('/api/reportes/consolidado', (req, res) => {
           puntajeTotal
         };
       });
+
       res.json(consolidado);
     });
   });
