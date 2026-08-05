@@ -183,3 +183,68 @@ td {
   cursor: pointer;
   margin-left: 5px;
 }
+
+/* ==========================================
+   ESTILOS RESPONSIVOS PARA CELULARES (< 768px)
+   ========================================== */
+@media screen and (max-width: 768px) {
+  /* El contenedor principal se vuelve columna (sidebar arriba, contenido abajo) */
+  .dashboard-container {
+    flex-direction: column;
+  }
+
+  /* La barra lateral se ajusta al ancho completo */
+  .sidebar {
+    width: 100%;
+    padding: 15px;
+  }
+
+  .menu {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .menu a {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px;
+    margin-bottom: 0;
+    font-size: 13px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .brand {
+    margin-bottom: 15px;
+    text-align: center;
+  }
+
+  /* El contenido principal reduce sus márgenes internos */
+  .main-content {
+    padding: 15px;
+  }
+
+  /* Los formularios de 3 columnas pasan a 1 sola columna vertical */
+  .form-grid-3 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* El botón de envío ocupa todo el ancho y deja de flotar para evitar errores visuales */
+  .btn-submit {
+    float: none;
+    width: 100%;
+    margin-top: 10px;
+  }
+
+  /* Contenedor de tabla con desplazamiento horizontal para evitar romper la pantalla */
+  .table-container {
+    overflow-x: auto;
+    padding: 10px;
+  }
+
+  table {
+    min-width: 500px; /* Asegura que la tabla no se comprima de más */
+  }
+}

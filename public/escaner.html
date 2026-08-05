@@ -53,9 +53,15 @@
     
     <!-- Bloque Escáner -->
     <div class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-      <h2 class="text-xs md:text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-        <span>📷</span> ESCÁNER DE FOTOCHECKS
-      </h2>
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-xs md:text-sm font-bold text-slate-700 flex items-center gap-2">
+          <span>📷</span> ESCÁNER DE FOTOCHECKS
+        </h2>
+        <!-- Botón para cambiar entre cámara frontal y posterior -->
+        <button onclick="cambiarCamara()" type="button" class="bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-[10px] md:text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 transition-colors">
+          <span>🔄</span> Girar Cámara
+        </button>
+      </div>
       
       <!-- Visor de la Cámara -->
       <div id="reader" class="w-full bg-slate-900 rounded-xl overflow-hidden min-h-[260px] max-h-[350px] shadow-inner flex items-center justify-center"></div>

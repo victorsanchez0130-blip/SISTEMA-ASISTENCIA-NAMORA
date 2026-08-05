@@ -1,5 +1,6 @@
 let html5QrCode;
 let escaneoBloqueado = false;
+let usarCamaraFrontal = false; // Estado para alternar entre cámara frontal y posterior
 
 document.addEventListener("DOMContentLoaded", () => {
   if (typeof checkAuth === 'function') checkAuth();
@@ -8,7 +9,9 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function initScanner() {
-  html5QrCode = new Html5Qrcode("reader");
+  if (!html5QrCode) {
+    html5QrCode = new Html5Qrcode("reader");
+  }
 
   // Configuración para el área de escaneo
   const config = { 
@@ -16,32 +19,53 @@ function initScanner() {
     qrbox: { width: 220, height: 220 } 
   };
 
-  // Intentar abrir la cámara trasera (environment) para smartphones
+  const modoCamara = usarCamaraFrontal ? "user" : "environment";
+
   html5QrCode.start(
-    { facingMode: "environment" }, 
+    { facingMode: modoCamara }, 
     config, 
     onScanSuccess, 
     () => {
       // Búsqueda continua de QR (errores silenciosos)
     }
   ).catch(err => {
-    console.warn("No se pudo iniciar cámara trasera, probando cámara genérica/frontal:", err);
+    console.warn(`No se pudo iniciar cámara en modo ${modoCamara}:`, err);
     
-    // Intento secundario si no detecta la trasera o es laptop con webcam
-    html5QrCode.start(
-      { facingMode: "user" }, 
-      config, 
-      onScanSuccess, 
-      null
-    ).catch(err2 => {
-      console.error("Error definitivo al iniciar la cámara:", err2);
-      const feedback = document.getElementById('scan-feedback');
-      if (feedback) {
-        feedback.innerText = "No se pudo acceder a la cámara. Asegúrate de otorgar permisos en tu navegador.";
-        feedback.className = "mt-4 block p-3 rounded-lg text-center font-bold text-xs bg-red-100 text-red-700";
-      }
-    });
+    // Intento secundario si estábamos buscando la trasera y falló (ej. laptop sin cámara trasera)
+    if (!usarCamaraFrontal) {
+      html5QrCode.start(
+        { facingMode: "user" }, 
+        config, 
+        onScanSuccess, 
+        null
+      ).catch(manejarErrorFatal);
+    } else {
+      manejarErrorFatal(err);
+    }
   });
+}
+
+function manejarErrorFatal(err) {
+  console.error("Error definitivo al iniciar la cámara:", err);
+  const feedback = document.getElementById('scan-feedback');
+  if (feedback) {
+    feedback.innerText = "No se pudo acceder a la cámara. Asegúrate de otorgar permisos en tu navegador.";
+    feedback.className = "mt-4 block p-3 rounded-lg text-center font-bold text-xs bg-red-100 text-red-700";
+    feedback.classList.remove('hidden');
+  }
+}
+
+// Función para detener el escáner actual y reiniciar con la cámara opuesta
+function cambiarCamara() {
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => {
+      html5QrCode.clear();
+      usarCamaraFrontal = !usarCamaraFrontal; // Invierte el estado de la cámara
+      initScanner(); // Vuelve a inicializar con la nueva selección
+    }).catch(err => {
+      console.warn("Error al detener el escáner para cambiar de cámara:", err);
+    });
+  }
 }
 
 async function onScanSuccess(decodedText) {
