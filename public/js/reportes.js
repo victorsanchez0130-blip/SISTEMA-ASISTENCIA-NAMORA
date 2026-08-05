@@ -125,12 +125,16 @@ async function cargarConsolidado() {
     const res = await fetch(`/api/reportes/consolidado?tipo=${tipoInput}&fecha=${encodeURIComponent(fechaVal)}`);
     if (!res.ok) throw new Error("Error en la respuesta del servidor");
     
-    datosReporteGlobal = await res.json();
+    const data = await res.json();
+    // Validar que la respuesta sea un arreglo para evitar fallos de renderizado
+    datosReporteGlobal = Array.isArray(data) ? data : (data.alumnos || data.data || []);
+    
     actualizarOpcionesAlumnosSegunAula();
     renderizarTablaReportes();
   } catch (err) {
     console.error("Error al cargar datos del reporte:", err);
     datosReporteGlobal = [];
+    actualizarOpcionesAlumnosSegunAula();
     renderizarTablaReportes();
   }
 }
@@ -139,6 +143,8 @@ function obtenerAlumnosPorAula() {
   const nivel = document.getElementById('filtroNivel')?.value || 'Todos';
   const grado = document.getElementById('filtroGrado')?.value || 'Todos';
   const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+
+  if (!Array.isArray(datosReporteGlobal)) return [];
 
   return datosReporteGlobal.filter(item => {
     const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
@@ -161,7 +167,8 @@ function actualizarOpcionesAlumnosSegunAula() {
   const valorSeleccionadoPrevio = selectAlumno.value;
   selectAlumno.innerHTML = '<option value="todos">-- Seleccionar Alumno --</option>';
 
-  obtenerAlumnosPorAula().forEach(alumno => {
+  const alumnosFiltrados = obtenerAlumnosPorAula();
+  alumnosFiltrados.forEach(alumno => {
     const option = document.createElement('option');
     option.value = alumno.codigo;
     option.textContent = `${alumno.nombre} (${alumno.codigo})`;
@@ -250,7 +257,7 @@ function renderizarTablaReportes() {
       <td style="text-align: center; color: #dc2626; font-weight: bold;">${totalFaltas} / ${totalDiasPeriodo}</td>
       <td style="text-align: center; font-weight: bold; background-color: #f8fafc;">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
       <td style="text-align: center;">
-        <button onclick="abrirModalEditar('${d.codigo}', '${d.nombre.replace(/'/g, "\\'")}')" style="background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
+        <button onclick="abrirModalEditar('${d.codigo}', '${d.nombre ? d.nombre.replace(/'/g, "\\'") : ''}')" style="background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
           ✏️ Editar
         </button>
       </td>
@@ -259,7 +266,6 @@ function renderizarTablaReportes() {
   });
 }
 
-// Corrección para cargar el estado real del alumno en el modal de edición
 async function abrirModalEditar(codigo, nombre) {
   const modal = document.getElementById('modal-editar-asistencia');
   const inputCodigo = document.getElementById('edit-codigo-input');
