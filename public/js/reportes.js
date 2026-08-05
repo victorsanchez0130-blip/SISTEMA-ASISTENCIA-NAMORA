@@ -1,427 +1,420 @@
+// Variable global para almacenar los datos del consolidado recuperados de la API
 let datosReporteGlobal = [];
 
-const FERIADOS_PERU = [
-  "2026-01-01", "2026-04-02", "2026-04-03", "2026-05-01",
-  "2026-06-07", "2026-06-29", "2026-07-28", "2026-07-29",
-  "2026-08-06", "2026-08-30", "2026-10-08", "2026-11-01",
-  "2026-12-08", "2026-12-09", "2026-12-25"
-];
-
 document.addEventListener('DOMContentLoaded', () => {
-  const inputFecha = document.getElementById('filtroFecha');
-  if (inputFecha) {
-    const hoy = new Date();
-    const a = hoy.getFullYear();
-    const m = String(hoy.getMonth() + 1).padStart(2, '0');
-    const d = String(hoy.getDate()).padStart(2, '0');
-    inputFecha.value = `${a}-${m}-${d}`;
-  }
-  cargarReportes();
+  cargarConsolidado();
+  configurarEventosFiltros();
 });
 
-function cambiarTipoFiltroFecha() {
-  const tipo = document.getElementById('filtroTipo').value;
-  const contenedor = document.getElementById('contenedorFecha');
-  const hoy = new Date();
-  const a = hoy.getFullYear();
-  const m = String(hoy.getMonth() + 1).padStart(2, '0');
-  const d = String(hoy.getDate()).padStart(2, '0');
+// ----------------------------------------------------
+// CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR
+// ----------------------------------------------------
 
-  if (tipo === 'Semanal') {
-    contenedor.innerHTML = `<input type="week" id="filtroFecha" class="form-control" style="width: 170px;" onchange="cargarReportes()">`;
-  } else if (tipo === 'Mensual') {
-    contenedor.innerHTML = `<input type="month" id="filtroFecha" class="form-control" style="width: 170px;" onchange="cargarReportes()">`;
-    const input = document.getElementById('filtroFecha');
-    if (input) input.value = `${a}-${m}`;
-  } else {
-    contenedor.innerHTML = `<input type="date" id="filtroFecha" class="form-control" style="width: 170px;" onchange="cargarReportes()">`;
-    const input = document.getElementById('filtroFecha');
-    if (input) input.value = `${a}-${m}-${d}`;
-  }
-  cargarReportes();
-}
+async function cargarConsolidado() {
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
 
-function formatearFechaLocal(fecha) {
-  const a = fecha.getFullYear();
-  const m = String(fecha.getMonth() + 1).padStart(2, '0');
-  const d = String(fecha.getDate()).padStart(2, '0');
-  return `${a}-${m}-${d}`;
-}
-
-function obtenerLunesDeSemanaISO(valorWeek) {
-  if (!valorWeek || !valorWeek.includes('-W')) return null;
-  const partes = valorWeek.split('-W');
-  const anio = parseInt(partes[0], 10);
-  const semana = parseInt(partes[1], 10);
-
-  const simple = new Date(anio, 0, 4);
-  const day = simple.getDay() || 7;
-  simple.setDate(simple.getDate() - day + 1);
-  simple.setDate(simple.getDate() + (semana - 1) * 7);
-
-  return simple;
-}
-
-function calcularDiasHabiles(tipo, valorFecha) {
-  if (!valorFecha) return 1;
-
-  if (tipo === 'Diario') {
-    const partes = valorFecha.split('-');
-    if (partes.length === 3) {
-      const fechaActual = new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10));
-      const diaSemana = fechaActual.getDay();
-      const strFecha = formatearFechaLocal(fechaActual);
-
-      if (diaSemana === 0 || diaSemana === 6 || FERIADOS_PERU.includes(strFecha)) {
-        return 0;
-      }
-    }
-    return 1;
-  }
-
-  if (tipo === 'Semanal') {
-    const fechaLunes = obtenerLunesDeSemanaISO(valorFecha);
-    if (!fechaLunes) return 5;
-
-    let diasHabiles = 0;
-    for (let i = 0; i < 5; i++) {
-      const fechaDia = new Date(fechaLunes);
-      fechaDia.setDate(fechaLunes.getDate() + i);
-      const strFecha = formatearFechaLocal(fechaDia);
-
-      if (!FERIADOS_PERU.includes(strFecha)) {
-        diasHabiles++;
-      }
-    }
-    return diasHabiles;
-  }
-
-  if (tipo === 'Mensual') {
-    const partes = valorFecha.split('-');
-    if (partes.length < 2) return 20;
-
-    const anio = parseInt(partes[0], 10);
-    const mes = parseInt(partes[1], 10) - 1;
-    const totalDiasMes = new Date(anio, mes + 1, 0).getDate();
-    
-    let diasHabiles = 0;
-    for (let d = 1; d <= totalDiasMes; d++) {
-      const fechaActual = new Date(anio, mes, d);
-      const diaSemana = fechaActual.getDay();
-
-      if (diaSemana >= 1 && diaSemana <= 5) {
-        const strFecha = formatearFechaLocal(fechaActual);
-        if (!FERIADOS_PERU.includes(strFecha)) {
-          diasHabiles++;
-        }
-      }
-    }
-    return diasHabiles;
-  }
-
-  return 1;
-}
-
-async function cargarReportes() {
   try {
-    const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
-    let fecha = document.getElementById('filtroFecha')?.value || '';
-
-    if (!fecha && tipo === 'Diario') {
-      const hoy = new Date();
-      const a = hoy.getFullYear();
-      const m = String(hoy.getMonth() + 1).padStart(2, '0');
-      const d = String(hoy.getDate()).padStart(2, '0');
-      fecha = `${a}-${m}-${d}`;
-      const input = document.getElementById('filtroFecha');
-      if (input) input.value = fecha;
-    }
-
-    const url = `/api/reportes/consolidado?tipo=${encodeURIComponent(tipo)}&fecha=${encodeURIComponent(fecha)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Error al obtener el consolidado');
-
+    const res = await fetch(`/api/reportes/consolidado?tipo=${tipo}&fecha=${fecha}`);
+    if (!res.ok) throw new Error("Error en la respuesta del servidor");
+    
     datosReporteGlobal = await res.json();
-    poblarSelectAlumnos();
-    filtrarTablaLocal();
-  } catch (error) {
-    console.error('Error al cargar reportes:', error);
+    poblarSelectAlumnos(datosReporteGlobal);
+    renderizarTablaReportes();
+  } catch (err) {
+    console.error("Error al cargar datos del reporte:", err);
+    datosReporteGlobal = [];
+    renderizarTablaReportes();
   }
 }
 
-function actualizarFiltrosYTabla() {
-  poblarSelectAlumnos();
-  filtrarTablaLocal();
+function poblarSelectAlumnos(datos) {
+  const selectAlumno = document.getElementById('selectAlumnoIndividual');
+  if (!selectAlumno) return;
+
+  const valorPrevio = selectAlumno.value;
+  selectAlumno.innerHTML = '<option value="todos">-- Seleccionar Alumno --</option>';
+
+  datos.forEach(alumno => {
+    const option = document.createElement('option');
+    option.value = alumno.codigo;
+    option.textContent = `${alumno.nombre} (${alumno.codigo})`;
+    selectAlumno.appendChild(option);
+  });
+
+  if (valorPrevio && Array.from(selectAlumno.options).some(o => o.value === valorPrevio)) {
+    selectAlumno.value = valorPrevio;
+  }
 }
+
+function configurarEventosFiltros() {
+  const btnFiltrar = document.getElementById('btnFiltrar');
+  if (btnFiltrar) {
+    btnFiltrar.addEventListener('click', cargarConsolidado);
+  }
+
+  const inputsFiltro = ['filtroTipo', 'filtroFecha', 'filtroGrado', 'filtroSeccion', 'filtroBusqueda'];
+  inputsFiltro.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', () => {
+        if (id === 'filtroTipo' || id === 'filtroFecha') {
+          cargarConsolidado();
+        } else {
+          renderizarTablaReportes();
+        }
+      });
+      if (id === 'filtroBusqueda') {
+        el.addEventListener('input', renderizarTablaReportes);
+      }
+    }
+  });
+
+  // Vincular eventos de generación de PDF
+  document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
+  document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
+  document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
+}
+
+// ----------------------------------------------------
+// FILTRADO Y RENDERIZADO EN TABLA HTML
+// ----------------------------------------------------
 
 function obtenerAlumnosFiltradosBase() {
-  const nivel = (document.getElementById('filtroNivel')?.value || 'Todos').toLowerCase();
-  const grado = (document.getElementById('filtroGrado')?.value || 'Todos').toLowerCase();
-  const seccion = (document.getElementById('filtroSeccion')?.value || 'Todos').toLowerCase();
+  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+  const busqueda = (document.getElementById('filtroBusqueda')?.value || '').toLowerCase().trim();
 
-  const equivalenciasGrado = {
-    '1ro': ['1', '1ro', 'primero'],
-    '2do': ['2', '2do', 'segundo'],
-    '3ro': ['3', '3ro', 'tercero'],
-    '4to': ['4', '4to', 'cuarto'],
-    '5to': ['5', '5to', 'quinto'],
-    '6to': ['6', '6to', 'sexto']
-  };
+  return datosReporteGlobal.filter(item => {
+    const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
+    
+    // Validar Grado y Sección dentro de la cadena del aula (Ej: "3° A")
+    if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
+    if (seccion !== 'Todos' && !aulaStr.includes(seccion.toUpperCase())) return false;
 
-  return datosReporteGlobal.filter(d => {
-    const esAlumno = d.rol === 'Alumno' || !d.rol || d.rol === '';
-    if (!esAlumno) return false;
-
-    const mat = (d.aula || d.materia_aula || '').trim().toLowerCase();
-
-    const cumpleNivel = (nivel === 'todos' || mat.includes(nivel));
-
-    let cumpleGrado = (grado === 'todos');
-    if (!cumpleGrado && equivalenciasGrado[grado]) {
-      cumpleGrado = equivalenciasGrado[grado].some(val => mat.includes(val));
+    // Buscador por nombre o código
+    if (busqueda !== '') {
+      const nom = (item.nombre || '').toLowerCase();
+      const cod = (item.codigo || '').toLowerCase();
+      if (!nom.includes(busqueda) && !cod.includes(busqueda)) return false;
     }
 
-    let cumpleSeccion = (seccion === 'todos');
-    if (!cumpleSeccion) {
-      cumpleSeccion = mat.includes(` ${seccion}`) || mat.includes(`-${seccion}`) || mat.endsWith(seccion);
-    }
-
-    return cumpleNivel && cumpleGrado && cumpleSeccion;
+    return true;
   });
 }
 
-function poblarSelectAlumnos() {
-  const select = document.getElementById('selectAlumnoIndividual');
-  if (!select) return;
-
-  const alumnosBase = obtenerAlumnosFiltradosBase();
-  const valorSeleccionado = select.value;
-
-  select.innerHTML = '<option value="todos">-- Todos los alumnos del aula --</option>';
-
-  alumnosBase.forEach(al => {
-    const opt = document.createElement('option');
-    opt.value = al.codigo || al.id || al.nombre;
-    opt.textContent = `${al.nombre} (${al.codigo || 'Sin código'})`;
-    select.appendChild(opt);
-  });
-
-  if (alumnosBase.some(al => (al.codigo || al.id || al.nombre) === valorSeleccionado)) {
-    select.value = valorSeleccionado;
-  } else {
-    select.value = 'todos';
-  }
-}
-
-function filtrarTablaLocal() {
-  const tipo = document.getElementById('filtroTipo') ? document.getElementById('filtroTipo').value : 'Diario';
-  const inputFecha = document.getElementById('filtroFecha');
-  const fecha = inputFecha ? inputFecha.value : '';
-  const maxDias = calcularDiasHabiles(tipo, fecha);
-
+function renderizarTablaReportes() {
   const tbody = document.getElementById('tbodyReportes');
   if (!tbody) return;
+
+  const filtrados = obtenerAlumnosFiltradosBase();
   tbody.innerHTML = '';
 
-  let filtrados = obtenerAlumnosFiltradosBase();
-
-  const nombreBusqueda = (document.getElementById('filtroNombre')?.value || '').trim().toLowerCase();
-  if (nombreBusqueda) {
-    filtrados = filtrados.filter(d => (d.nombre || '').toLowerCase().includes(nombreBusqueda));
-  }
-
-  const selectAlumno = document.getElementById('selectAlumnoIndividual')?.value || 'todos';
-  if (selectAlumno !== 'todos') {
-    filtrados = filtrados.filter(d => (d.codigo || d.id || d.nombre) === selectAlumno);
-  }
-
   if (filtrados.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 20px; color: #64748b;">No se encontraron registros para la fecha o filtros seleccionados</td></tr>';
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: #64748b; padding: 20px;">
+          No se encontraron registros que coincidan con los filtros aplicados.
+        </td>
+      </tr>`;
     return;
   }
 
   filtrados.forEach(d => {
-    const aulaTexto = d.aula || d.materia_aula || 'Sin Asignación';
-    const puntajeMostrar = d.puntajeTotal !== undefined ? d.puntajeTotal : (d.puntos || 0);
-
-    const totalFaltas = (d.fJustificadas || d.justificadas || 0) + (d.fInjustificadas || d.injustificadas || d.faltas || 0);
-
-    tbody.innerHTML += `
-      <tr>
-        <td><b>${d.codigo || '-'}</b></td>
-        <td>${d.nombre}</td>
-        <td>${aulaTexto}</td>
-        <td style="color: #16a34a; font-weight: bold;">${d.asistencias || 0}/${maxDias}</td>
-        <td style="color: #ca8a04; font-weight: bold;">${d.tardanzas || 0}/${maxDias}</td>
-        <td style="color: #dc2626; font-weight: bold;">${totalFaltas}/${maxDias}</td>
-        <td><b style="color: #0284c7;">${puntajeMostrar} pts</b></td>
-      </tr>
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${d.codigo || '-'}</strong></td>
+      <td>${d.nombre || '-'}</td>
+      <td>${d.aula || d.materia_aula || 'Sin Asignación'}</td>
+      <td style="text-align: center; color: #16a34a; font-weight: bold;">${d.asistencias || 0}</td>
+      <td style="text-align: center; color: #d97706; font-weight: bold;">${d.tardanzas || 0}</td>
+      <td style="text-align: center; color: #0284c7;">${d.fJustificadas || 0}</td>
+      <td style="text-align: center; color: #dc2626; font-weight: bold;">${d.fInjustificadas || 0}</td>
+      <td style="text-align: center; font-weight: bold; background-color: #f8fafc;">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
     `;
+    tbody.appendChild(tr);
   });
 }
 
 // ==========================================
-// GENERACIÓN DE REPORTES EN PDF (jsPDF + autoTable)
+// GENERACIÓN DE REPORTES EN PDF (MODELO ESTÁNDAR)
 // ==========================================
 
 function obtenerInstanciaPDF() {
-  if (window.jspdf && window.jspdf.jsPDF) {
-    return window.jspdf.jsPDF;
-  }
-  if (window.jsPDF) {
-    return window.jsPDF;
-  }
+  if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  if (window.jsPDF) return window.jsPDF;
   return null;
 }
 
-function generarDocentesPDF() {
-  const jsPDFClass = obtenerInstanciaPDF();
-  if (!jsPDFClass) {
-    alert("La librería jsPDF no está cargada correctamente.");
-    return;
-  }
-
-  const doc = new jsPDFClass();
-  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
-  const fecha = document.getElementById('filtroFecha')?.value || '';
-
-  doc.setFontSize(16);
-  doc.setTextColor(15, 23, 42);
-  doc.text("I.E. SANTA ROSA - REPORTE DE DOCENTES", 14, 15);
-  doc.setFontSize(10);
-  doc.setTextColor(100);
-  doc.text(`Tipo: ${tipo} | Fecha/Periodo: ${fecha}`, 14, 22);
-
-  // Filtrar solo docentes si existen en datosReporteGlobal o generar vacante estructurada
-  const docentes = datosReporteGlobal.filter(d => d.rol === 'Docente');
-
-  const headers = [["CÓDIGO", "NOMBRE", "ASIGNACIÓN", "ASIST.", "TARD.", "FALTAS", "PUNTAJE"]];
-  const rows = docentes.map(d => [
-    d.codigo || '-',
-    d.nombre || '-',
-    d.materia_aula || d.aula || 'Docente',
-    `${d.asistencias || 0}`,
-    `${d.tardanzas || 0}`,
-    `${(d.fJustificadas || 0) + (d.fInjustificadas || 0)}`,
-    `${d.puntajeTotal || 0} pts`
-  ]);
-
-  if (rows.length === 0) {
-    doc.text("No hay datos de docentes registrados para este periodo.", 14, 32);
-  } else {
-    doc.autoTable({
-      startY: 28,
-      head: headers,
-      body: rows,
-      theme: 'grid',
-      headStyles: { fillColor: [15, 23, 42] }
-    });
-  }
-
-  doc.save(`Reporte_Docentes_${fecha}.pdf`);
+function obtenerNombreDia(fechaStr) {
+  if (!fechaStr) return '-';
+  const partes = fechaStr.split('-');
+  if (partes.length !== 3) return '-';
+  const fecha = new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10));
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  return dias[fecha.getDay()] || '-';
 }
 
-function generarGradoPDF() {
+function obtenerObservacionEstado(estado) {
+  const est = (estado || '').toUpperCase();
+  if (est === 'PUNTUAL' || est === 'ASISTENCIA') return 'Ingreso dentro del horario regular';
+  if (est === 'TARDANZA' || est === 'TARDE') return 'Ingreso fuera de horario regular';
+  if (est === 'JUSTIFICADA') return 'Falta justificada con documento';
+  if (est === 'INJUSTIFICADA' || est === 'FALTA') return 'Inasistencia sin justificación';
+  return 'Registro de marcación';
+}
+
+async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, periodo, metricas, historial, nombreArchivo }) {
   const jsPDFClass = obtenerInstanciaPDF();
   if (!jsPDFClass) {
-    alert("La librería jsPDF no está cargada correctamente.");
+    alert("La librería jsPDF no está disponible.");
     return;
   }
 
   const doc = new jsPDFClass();
-  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
-  const fecha = document.getElementById('filtroFecha')?.value || '';
-  const nivel = document.getElementById('filtroNivel')?.value || 'Todos';
-  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
-  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
 
-  doc.setFontSize(16);
-  doc.setTextColor(2, 132, 199);
-  doc.text("I.E. SANTA ROSA - REPORTE POR AULA / GRADO", 14, 15);
-  doc.setFontSize(10);
-  doc.setTextColor(100);
-  doc.text(`Filtros: Nivel ${nivel} | Grado ${grado} | Sección ${seccion} | Periodo: ${fecha}`, 14, 22);
+  // Encabezado institucional
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(30, 41, 59);
+  doc.text("I.E. SANTA ROSA - NAMORA", 105, 15, { align: "center" });
 
-  const filtrados = obtenerAlumnosFiltradosBase();
+  doc.setFontSize(11);
+  doc.text(titulo.toUpperCase(), 105, 22, { align: "center" });
 
-  const headers = [["CÓDIGO", "NOMBRE", "AULA", "ASIST.", "TARD.", "FALTAS", "PUNTAJE"]];
-  const rows = filtrados.map(d => [
-    d.codigo || '-',
-    d.nombre || '-',
-    d.aula || d.materia_aula || '-',
-    `${d.asistencias || 0}`,
-    `${d.tardanzas || 0}`,
-    `${(d.fJustificadas || 0) + (d.fInjustificadas || 0)}`,
-    `${d.puntajeTotal || 0} pts`
-  ]);
+  // Ficha de Datos Principales
+  const tablaDatos = [
+    [
+      { content: `CÓDIGO ALUMNO / REGISTRO:\n${codigo}`, styles: { fontStyle: 'bold' } },
+      { content: `APELLIDOS Y NOMBRES:\n${nombre}`, styles: { fontStyle: 'bold' } }
+    ],
+    [
+      { content: `AULA / SECCIÓN / CARGO:\n${aula}` },
+      { content: `PERÍODO EVALUADO:\n${periodo}` }
+    ]
+  ];
 
   doc.autoTable({
     startY: 28,
-    head: headers,
-    body: rows,
-    theme: 'striped',
-    headStyles: { fillColor: [2, 132, 199] }
+    body: tablaDatos,
+    theme: 'plain',
+    styles: {
+      fontSize: 9,
+      cellPadding: 4,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.5,
+      textColor: [51, 65, 85]
+    },
+    columnStyles: {
+      0: { cellWidth: 85 },
+      1: { cellWidth: 95 }
+    }
   });
 
-  doc.save(`Reporte_Grado_${grado}_${seccion}_${fecha}.pdf`);
+  // Métricas y Porcentajes
+  const totalEvaluado = (metricas.puntuales + metricas.tardanzas + metricas.faltas) || 1;
+  const pctPuntual = Math.round((metricas.puntuales / totalEvaluado) * 100);
+  const pctTardanza = Math.round((metricas.tardanzas / totalEvaluado) * 100);
+  const pctFaltas = Math.round((metricas.faltas / totalEvaluado) * 100);
+
+  const tablaMetricasHead = [["PUNTUALES", "TARDANZAS", "FALTAS", "PUNTAJE"]];
+  const tablaMetricasBody = [[
+    `${metricas.puntuales} (${pctPuntual}%)`,
+    `${metricas.tardanzas} (${pctTardanza}%)`,
+    `${metricas.faltas} (${pctFaltas}%)`,
+    `${metricas.puntaje} pts`
+  ]];
+
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 6,
+    head: tablaMetricasHead,
+    body: tablaMetricasBody,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [30, 41, 59],
+      fontStyle: 'bold',
+      halign: 'center',
+      fontSize: 9
+    },
+    bodyStyles: {
+      halign: 'center',
+      fontSize: 10,
+      fontStyle: 'bold',
+      textColor: [15, 23, 42]
+    }
+  });
+
+  // Tabla del Historial Detallado
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
+
+  const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN"]];
+  const rowsHistorial = historial.map(h => [
+    h.fecha || '-',
+    obtenerNombreDia(h.fecha),
+    h.hora || '-',
+    (h.estado || '-').toUpperCase(),
+    obtenerObservacionEstado(h.estado)
+  ]);
+
+  if (rowsHistorial.length === 0) {
+    rowsHistorial.push(["-", "-", "-", "SIN REGISTROS", "No existen registros de marcación en el periodo"]);
+  }
+
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 14,
+    head: headersHistorial,
+    body: rowsHistorial,
+    theme: 'striped',
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'center'
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [51, 65, 85]
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 28 },
+      1: { halign: 'center', cellWidth: 24 },
+      2: { halign: 'center', cellWidth: 28 },
+      3: { halign: 'center', cellWidth: 28 },
+      4: { cellWidth: 72 }
+    }
+  });
+
+  // Sección de Firmas Institucionales
+  const finalY = doc.lastAutoTable.finalY + 30;
+  const posY = finalY > 260 ? 260 : finalY;
+
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(148, 163, 184);
+
+  doc.line(30, posY, 85, posY);
+  doc.line(125, posY, 180, posY);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Auxiliar / Auxiliar de Disciplina", 57, posY + 5, { align: "center" });
+  doc.text("Dirección / Dirección Académica", 152, posY + 5, { align: "center" });
+
+  doc.save(nombreArchivo);
 }
 
-function generarFichaAlumnoPDF() {
-  const jsPDFClass = obtenerInstanciaPDF();
-  if (!jsPDFClass) {
-    alert("La librería jsPDF no está cargada correctamente.");
-    return;
-  }
+// ----------------------------------------------------
+// ACCIONES DE BOTONES PDF
+// ----------------------------------------------------
 
+async function generarFichaAlumnoPDF() {
   const selectAlumno = document.getElementById('selectAlumnoIndividual')?.value;
   if (!selectAlumno || selectAlumno === 'todos') {
-    alert("Por favor, selecciona un alumno específico en el menú desplegable 'Filtrar Alumno' para generar su ficha individual.");
+    alert("Por favor, selecciona un alumno específico en el menú desplegable.");
     return;
   }
 
-  const alumno = datosReporteGlobal.find(d => (d.codigo || d.id || d.nombre) === selectAlumno);
+  const alumno = datosReporteGlobal.find(d => d.codigo === selectAlumno);
   if (!alumno) {
     alert("No se encontraron los datos del alumno seleccionado.");
     return;
   }
 
-  const doc = new jsPDFClass();
-  const fecha = document.getElementById('filtroFecha')?.value || '';
   const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
-  const maxDias = calcularDiasHabiles(tipo, fecha);
+  const fecha = document.getElementById('filtroFecha')?.value || '';
 
-  doc.setFontSize(18);
-  doc.setTextColor(22, 163, 74);
-  doc.text("I.E. SANTA ROSA - FICHA INDIVIDUAL DEL ALUMNO", 14, 20);
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(alumno.codigo)}`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial del alumno:", e);
+  }
 
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(200);
-  doc.line(14, 24, 196, 24);
+  const metricas = {
+    puntuales: alumno.asistencias || 0,
+    tardanzas: alumno.tardanzas || 0,
+    faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
+    puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0
+  };
 
-  doc.setFontSize(11);
-  doc.setTextColor(30);
-  doc.text(`Nombre del Alumno: ${alumno.nombre}`, 14, 34);
-  doc.text(`Código: ${alumno.codigo || '-'}`, 14, 42);
-  doc.text(`Aula / Asignación: ${alumno.aula || alumno.materia_aula || 'Sin asignación'}`, 14, 50);
-  doc.text(`Reporte: ${tipo} (${fecha})`, 14, 58);
+  await construirPDFModeloEstandar({
+    titulo: "FICHA INDIVIDUAL DE ASISTENCIA Y PUNTUALIDAD",
+    codigo: alumno.codigo || '-',
+    nombre: alumno.nombre || '-',
+    aula: alumno.aula || alumno.materia_aula || 'Sin Asignación',
+    periodo: `${tipo} (${fecha || 'General'})`,
+    metricas,
+    historial,
+    nombreArchivo: `Ficha_Asistencia_${alumno.codigo}.pdf`
+  });
+}
 
-  const totalFaltas = (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0);
+async function generarGradoPDF() {
+  const filtrados = obtenerAlumnosFiltradosBase();
+  if (filtrados.length === 0) {
+    alert("No existen registros con los filtros seleccionados.");
+    return;
+  }
 
-  const headers = [["METRICA", "CANTIDAD / EVALUACIÓN"]];
-  const rows = [
-    ["Asistencias", `${alumno.asistencias || 0} / ${maxDias} días`],
-    ["Tardanzas", `${alumno.tardanzas || 0} / ${maxDias} días`],
-    ["Faltas Totales", `${totalFaltas} / ${maxDias} días`],
-    ["Puntaje Acumulado", `${alumno.puntajeTotal || 0} puntos`]
-  ];
+  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
 
-  doc.autoTable({
-    startY: 66,
-    head: headers,
-    body: rows,
-    theme: 'grid',
-    headStyles: { fillColor: [22, 163, 74] }
+  let totPuntual = 0, totTardanza = 0, totFaltas = 0, totPuntos = 0;
+  filtrados.forEach(a => {
+    totPuntual += (a.asistencias || 0);
+    totTardanza += (a.tardanzas || 0);
+    totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
+    totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
   });
 
-  doc.save(`Ficha_${alumno.codigo || alumno.nombre}_${fecha}.pdf`);
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial general:", e);
+  }
+
+  await construirPDFModeloEstandar({
+    titulo: `CONSOLIDADO DE ASISTENCIA - GRADO ${grado} ${seccion}`,
+    codigo: `AULA-${grado}-${seccion}`,
+    nombre: `Consolidado Aula (${filtrados.length} Alumnos)`,
+    aula: `Grado: ${grado} | Sección: ${seccion}`,
+    periodo: `${tipo} (${fecha || 'General'})`,
+    metricas: { puntuales: totPuntual, tardanzas: totTardanza, faltas: totFaltas, puntaje: totPuntos },
+    historial,
+    nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
+  });
+}
+
+async function generarDocentesPDF() {
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial docentes:", e);
+  }
+
+  await construirPDFModeloEstandar({
+    titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
+    codigo: "PERSONAL-DOCENTE",
+    nombre: "Plana Docente I.E. Santa Rosa",
+    aula: "Dirección Académica",
+    periodo: `${tipo} (${fecha || 'General'})`,
+    metricas: { puntuales: 0, tardanzas: 0, faltas: 0, puntaje: 0 },
+    historial,
+    nombreArchivo: `Reporte_Docentes_${fecha || 'General'}.pdf`
+  });
 }
