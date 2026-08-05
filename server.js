@@ -1,5 +1,5 @@
 const express = require('express');
-const path = require('path');
+const path = path = require('path');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 
@@ -352,6 +352,42 @@ app.get('/api/reportes/consolidado', (req, res) => {
 
       res.json(consolidado);
     });
+  });
+});
+
+// Endpoint para obtener el historial detallado de asistencias día a día para los PDF
+app.get('/api/reportes/historial-detallado', (req, res) => {
+  const { codigo, fechaInicio, fechaFin } = req.query;
+
+  let query = `
+    SELECT 
+      a.fecha,
+      a.hora,
+      a.estado,
+      u.codigo,
+      u.nombre,
+      u.materia_aula AS aula
+    FROM asistencias a
+    JOIN usuarios u ON a.usuario_codigo = u.codigo
+    WHERE 1=1
+  `;
+  let params = [];
+
+  if (codigo && codigo !== 'todos') {
+    query += ` AND a.usuario_codigo = ?`;
+    params.push(codigo);
+  }
+
+  if (fechaInicio && fechaFin) {
+    query += ` AND a.fecha >= ? AND a.fecha <= ?`;
+    params.push(fechaInicio, fechaFin);
+  }
+
+  query += ` ORDER BY a.fecha DESC, a.hora DESC`;
+
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json([]);
+    res.json(rows || []);
   });
 });
 

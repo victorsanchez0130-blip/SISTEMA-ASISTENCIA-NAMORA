@@ -1,234 +1,420 @@
-let html5QrCode;
-let escaneoBloqueado = false;
+// Variable global para almacenar los datos del consolidado recuperados de la API
+let datosReporteGlobal = [];
 
-document.addEventListener("DOMContentLoaded", () => {
-  if (typeof checkAuth === 'function') checkAuth();
-  initScanner();
-  if (typeof loadMarcaciones === 'function') loadMarcaciones();
+document.addEventListener('DOMContentLoaded', () => {
+  cargarConsolidado();
+  configurarEventosFiltros();
 });
 
-function initScanner() {
-  html5QrCode = new Html5Qrcode("reader");
+// ----------------------------------------------------
+// CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR
+// ----------------------------------------------------
 
-  // Configuración para el área de escaneo
-  const config = { 
-    fps: 10, 
-    qrbox: { width: 220, height: 220 } 
-  };
+async function cargarConsolidado() {
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
 
-  // Intentar abrir la cámara trasera (environment) para smartphones
-  html5QrCode.start(
-    { facingMode: "environment" }, 
-    config, 
-    onScanSuccess, 
-    () => {
-      // Búsqueda continua de QR (errores silenciosos)
-    }
-  ).catch(err => {
-    console.warn("No se pudo iniciar cámara trasera, probando cámara genérica/frontal:", err);
+  try {
+    const res = await fetch(`/api/reportes/consolidado?tipo=${tipo}&fecha=${fecha}`);
+    if (!res.ok) throw new Error("Error en la respuesta del servidor");
     
-    // Intento secundario si no detecta la trasera o es laptop con webcam
-    html5QrCode.start(
-      { facingMode: "user" }, 
-      config, 
-      onScanSuccess, 
-      null
-    ).catch(err2 => {
-      console.error("Error definitivo al iniciar la cámara:", err2);
-      const feedback = document.getElementById('scan-feedback');
-      if (feedback) {
-        feedback.innerText = "No se pudo acceder a la cámara. Asegúrate de otorgar permisos en tu navegador.";
-        feedback.className = "mt-4 block p-3 rounded-lg text-center font-bold text-xs bg-red-100 text-red-700";
+    datosReporteGlobal = await res.json();
+    poblarSelectAlumnos(datosReporteGlobal);
+    renderizarTablaReportes();
+  } catch (err) {
+    console.error("Error al cargar datos del reporte:", err);
+    datosReporteGlobal = [];
+    renderizarTablaReportes();
+  }
+}
+
+function poblarSelectAlumnos(datos) {
+  const selectAlumno = document.getElementById('selectAlumnoIndividual');
+  if (!selectAlumno) return;
+
+  const valorPrevio = selectAlumno.value;
+  selectAlumno.innerHTML = '<option value="todos">-- Seleccionar Alumno --</option>';
+
+  datos.forEach(alumno => {
+    const option = document.createElement('option');
+    option.value = alumno.codigo;
+    option.textContent = `${alumno.nombre} (${alumno.codigo})`;
+    selectAlumno.appendChild(option);
+  });
+
+  if (valorPrevio && Array.from(selectAlumno.options).some(o => o.value === valorPrevio)) {
+    selectAlumno.value = valorPrevio;
+  }
+}
+
+function configurarEventosFiltros() {
+  const btnFiltrar = document.getElementById('btnFiltrar');
+  if (btnFiltrar) {
+    btnFiltrar.addEventListener('click', cargarConsolidado);
+  }
+
+  const inputsFiltro = ['filtroTipo', 'filtroFecha', 'filtroGrado', 'filtroSeccion', 'filtroBusqueda'];
+  inputsFiltro.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', () => {
+        if (id === 'filtroTipo' || id === 'filtroFecha') {
+          cargarConsolidado();
+        } else {
+          renderizarTablaReportes();
+        }
+      });
+      if (id === 'filtroBusqueda') {
+        el.addEventListener('input', renderizarTablaReportes);
       }
-    });
+    }
+  });
+
+  // Vincular eventos de generación de PDF
+  document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
+  document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
+  document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
+}
+
+// ----------------------------------------------------
+// FILTRADO Y RENDERIZADO EN TABLA HTML
+// ----------------------------------------------------
+
+function obtenerAlumnosFiltradosBase() {
+  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+  const busqueda = (document.getElementById('filtroBusqueda')?.value || '').toLowerCase().trim();
+
+  return datosReporteGlobal.filter(item => {
+    const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
+    
+    // Validar Grado y Sección dentro de la cadena del aula (Ej: "3° A")
+    if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
+    if (seccion !== 'Todos' && !aulaStr.includes(seccion.toUpperCase())) return false;
+
+    // Buscador por nombre o código
+    if (busqueda !== '') {
+      const nom = (item.nombre || '').toLowerCase();
+      const cod = (item.codigo || '').toLowerCase();
+      if (!nom.includes(busqueda) && !cod.includes(busqueda)) return false;
+    }
+
+    return true;
   });
 }
 
-async function onScanSuccess(decodedText) {
-  if (escaneoBloqueado) return;
-
-  // Extraer el código exacto (ALU-SRN-XXXX, DOC-SRN-XXXX, etc.)
-  const match = decodedText.match(/(ALU|DOC|DIR|AUX)-SRN-\d+/i);
-  const codigoLimpio = match ? match[0].toUpperCase() : decodedText.trim();
-
-  // Bloquear escaneos y pausar la cámara mientras se muestra la ventana emergente
-  escaneoBloqueado = true;
-  if (html5QrCode) {
-    try {
-      html5QrCode.pause(true);
-    } catch (e) {
-      console.warn("No se pudo pausar el escáner:", e);
-    }
-  }
-
-  const horaActual = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-  try {
-    const res = await fetch('/api/asistencia/marcar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codigoQR: codigoLimpio, codigo: codigoLimpio })
-    });
-
-    const data = await res.json();
-
-    // 1. CASO DUPLICADO: Si el servidor responde que ya registró asistencia hoy
-    if (data.duplicado || (!res.ok && data.horaAnterior)) {
-      const usuario = data.usuario || {};
-      mostrarPopUpDuplicado({
-        nombre: usuario.nombre || data.nombre || 'Usuario Registrado',
-        codigo: codigoLimpio,
-        aula: usuario.materia_aula || usuario.aula || 'Sin Asignación',
-        horaAnterior: data.horaAnterior || horaActual
-      });
-      return;
-    }
-
-    // 2. CASO ÉXITO: Marcación registrada correctamente
-    if (data.success) {
-      const usuario = data.usuario || data.alumno || {};
-      const nombreRegistrado = usuario.nombre || data.nombre || 'Usuario Registrado';
-      const horaRegistrada = data.hora || horaActual;
-      const estadoTexto = data.estado || (data.tardanza ? 'TARDE' : 'PUNTUAL');
-
-      mostrarPopUp({
-        exito: true,
-        nombre: nombreRegistrado,
-        codigo: codigoLimpio,
-        aula: usuario.materia_aula || usuario.aula || 'Sin Asignación',
-        hora: horaRegistrada,
-        estado: estadoTexto
-      });
-
-      // Insertar instantáneamente en la tabla lateral
-      agregarFilaEnTabla({
-        codigo: codigoLimpio,
-        nombre: nombreRegistrado,
-        hora: horaRegistrada,
-        estado: estadoTexto
-      });
-
-    } else {
-      // 3. OTROS ERRORES (Código no encontrado, etc.)
-      mostrarPopUp({
-        exito: false,
-        nombre: 'No Registrado',
-        codigo: codigoLimpio,
-        aula: '-',
-        hora: horaActual,
-        estado: data.mensaje || data.message || 'Error al procesar'
-      });
-    }
-  } catch (err) {
-    console.error("Error en petición de marcación:", err);
-    mostrarPopUp({
-      exito: false,
-      nombre: 'Error de Servidor',
-      codigo: codigoLimpio,
-      aula: '-',
-      hora: horaActual,
-      estado: 'Sin respuesta de red'
-    });
-  }
-}
-
-// Función para insertar la nueva marcación al inicio de la tabla en tiempo real
-function agregarFilaEnTabla(registro) {
-  const tbody = document.getElementById('today-records-body');
+function renderizarTablaReportes() {
+  const tbody = document.getElementById('tbodyReportes');
   if (!tbody) return;
 
-  // Si estaba el mensaje de "Sin marcaciones", limpiamos la tabla
-  if (tbody.innerText.includes('Sin marcaciones')) {
-    tbody.innerHTML = '';
+  const filtrados = obtenerAlumnosFiltradosBase();
+  tbody.innerHTML = '';
+
+  if (filtrados.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: #64748b; padding: 20px;">
+          No se encontraron registros que coincidan con los filtros aplicados.
+        </td>
+      </tr>`;
+    return;
   }
 
-  // Evitar agregar duplicados inmediatos en la vista
-  const filasExistentes = tbody.querySelectorAll('tr');
-  for (let fila of filasExistentes) {
-    if (fila.innerText.includes(registro.codigo)) {
-      return; 
-    }
+  filtrados.forEach(d => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${d.codigo || '-'}</strong></td>
+      <td>${d.nombre || '-'}</td>
+      <td>${d.aula || d.materia_aula || 'Sin Asignación'}</td>
+      <td style="text-align: center; color: #16a34a; font-weight: bold;">${d.asistencias || 0}</td>
+      <td style="text-align: center; color: #d97706; font-weight: bold;">${d.tardanzas || 0}</td>
+      <td style="text-align: center; color: #0284c7;">${d.fJustificadas || 0}</td>
+      <td style="text-align: center; color: #dc2626; font-weight: bold;">${d.fInjustificadas || 0}</td>
+      <td style="text-align: center; font-weight: bold; background-color: #f8fafc;">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ==========================================
+// GENERACIÓN DE REPORTES EN PDF (MODELO ESTÁNDAR)
+// ==========================================
+
+function obtenerInstanciaPDF() {
+  if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  if (window.jsPDF) return window.jsPDF;
+  return null;
+}
+
+function obtenerNombreDia(fechaStr) {
+  if (!fechaStr) return '-';
+  const partes = fechaStr.split('-');
+  if (partes.length !== 3) return '-';
+  const fecha = new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10));
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  return dias[fecha.getDay()] || '-';
+}
+
+function obtenerObservacionEstado(estado) {
+  const est = (estado || '').toUpperCase();
+  if (est === 'PUNTUAL' || est === 'ASISTENCIA') return 'Ingreso dentro del horario regular';
+  if (est === 'TARDANZA' || est === 'TARDE') return 'Ingreso fuera de horario regular';
+  if (est === 'JUSTIFICADA') return 'Falta justificada con documento';
+  if (est === 'INJUSTIFICADA' || est === 'FALTA') return 'Inasistencia sin justificación';
+  return 'Registro de marcación';
+}
+
+async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, periodo, metricas, historial, nombreArchivo }) {
+  const jsPDFClass = obtenerInstanciaPDF();
+  if (!jsPDFClass) {
+    alert("La librería jsPDF no está disponible.");
+    return;
   }
 
-  const esTarde = registro.estado === 'TARDE' || registro.estado === 'TARDANZA';
-  const badgeClass = esTarde 
-    ? 'bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded' 
-    : 'bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded';
+  const doc = new jsPDFClass();
 
-  const nuevaFila = document.createElement('tr');
-  nuevaFila.className = 'border-b border-slate-100 text-xs bg-blue-50/50 hover:bg-slate-50 transition-colors';
-  nuevaFila.innerHTML = `
-    <td class="p-2 font-mono font-bold text-slate-700">${registro.codigo}</td>
-    <td class="p-2 font-medium text-slate-800">${registro.nombre}</td>
-    <td class="p-2 text-center text-slate-500 font-mono">${registro.hora}</td>
-    <td class="p-2 text-center"><span class="${badgeClass}">${registro.estado}</span></td>
-  `;
+  // Encabezado institucional
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(30, 41, 59);
+  doc.text("I.E. SANTA ROSA - NAMORA", 105, 15, { align: "center" });
 
-  // Insertar al principio de la lista
-  tbody.insertBefore(nuevaFila, tbody.firstChild);
-}
+  doc.setFontSize(11);
+  doc.text(titulo.toUpperCase(), 105, 22, { align: "center" });
 
-// Mostrar Modal de Éxito / Error General
-function mostrarPopUp(info) {
-  const iconEl = document.getElementById('modal-icon');
-  const titleEl = document.getElementById('modal-title');
-  const nombreEl = document.getElementById('modal-nombre');
-  const codigoEl = document.getElementById('modal-codigo');
-  const aulaEl = document.getElementById('modal-aula');
-  const horaEl = document.getElementById('modal-hora');
-  const estadoEl = document.getElementById('modal-estado');
+  // Ficha de Datos Principales
+  const tablaDatos = [
+    [
+      { content: `CÓDIGO ALUMNO / REGISTRO:\n${codigo}`, styles: { fontStyle: 'bold' } },
+      { content: `APELLIDOS Y NOMBRES:\n${nombre}`, styles: { fontStyle: 'bold' } }
+    ],
+    [
+      { content: `AULA / SECCIÓN / CARGO:\n${aula}` },
+      { content: `PERÍODO EVALUADO:\n${periodo}` }
+    ]
+  ];
 
-  if (iconEl) iconEl.innerText = info.exito ? '✅' : '❌';
-  if (titleEl) titleEl.innerText = info.exito ? 'Marcación Registrada' : 'Error en Marcación';
-  if (nombreEl) nombreEl.innerText = info.nombre;
-  if (codigoEl) codigoEl.innerText = info.codigo;
-  if (aulaEl) aulaEl.innerText = info.aula;
-  if (horaEl) horaEl.innerText = info.hora;
-
-  if (estadoEl) {
-    estadoEl.innerText = info.estado;
-    if (info.exito) {
-      estadoEl.className = (info.estado === 'TARDE' || info.estado === 'TARDANZA') 
-        ? 'font-bold text-amber-600' 
-        : 'font-bold text-green-600';
-    } else {
-      estadoEl.className = 'font-bold text-red-600';
+  doc.autoTable({
+    startY: 28,
+    body: tablaDatos,
+    theme: 'plain',
+    styles: {
+      fontSize: 9,
+      cellPadding: 4,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.5,
+      textColor: [51, 65, 85]
+    },
+    columnStyles: {
+      0: { cellWidth: 85 },
+      1: { cellWidth: 95 }
     }
+  });
+
+  // Métricas y Porcentajes
+  const totalEvaluado = (metricas.puntuales + metricas.tardanzas + metricas.faltas) || 1;
+  const pctPuntual = Math.round((metricas.puntuales / totalEvaluado) * 100);
+  const pctTardanza = Math.round((metricas.tardanzas / totalEvaluado) * 100);
+  const pctFaltas = Math.round((metricas.faltas / totalEvaluado) * 100);
+
+  const tablaMetricasHead = [["PUNTUALES", "TARDANZAS", "FALTAS", "PUNTAJE"]];
+  const tablaMetricasBody = [[
+    `${metricas.puntuales} (${pctPuntual}%)`,
+    `${metricas.tardanzas} (${pctTardanza}%)`,
+    `${metricas.faltas} (${pctFaltas}%)`,
+    `${metricas.puntaje} pts`
+  ]];
+
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 6,
+    head: tablaMetricasHead,
+    body: tablaMetricasBody,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [30, 41, 59],
+      fontStyle: 'bold',
+      halign: 'center',
+      fontSize: 9
+    },
+    bodyStyles: {
+      halign: 'center',
+      fontSize: 10,
+      fontStyle: 'bold',
+      textColor: [15, 23, 42]
+    }
+  });
+
+  // Tabla del Historial Detallado
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
+
+  const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN"]];
+  const rowsHistorial = historial.map(h => [
+    h.fecha || '-',
+    obtenerNombreDia(h.fecha),
+    h.hora || '-',
+    (h.estado || '-').toUpperCase(),
+    obtenerObservacionEstado(h.estado)
+  ]);
+
+  if (rowsHistorial.length === 0) {
+    rowsHistorial.push(["-", "-", "-", "SIN REGISTROS", "No existen registros de marcación en el periodo"]);
   }
 
-  const modal = document.getElementById('modal-asistencia');
-  if (modal) modal.classList.remove('hidden');
-}
-
-// Mostrar Modal de Registro Duplicado
-function mostrarPopUpDuplicado(info) {
-  const nombreEl = document.getElementById('modal-dup-nombre');
-  const codigoEl = document.getElementById('modal-dup-codigo');
-  const aulaEl = document.getElementById('modal-dup-aula');
-  const horaEl = document.getElementById('modal-dup-hora');
-
-  if (nombreEl) nombreEl.innerText = info.nombre;
-  if (codigoEl) codigoEl.innerText = info.codigo;
-  if (aulaEl) aulaEl.innerText = info.aula;
-  if (horaEl) horaEl.innerText = info.horaAnterior;
-
-  const modalDup = document.getElementById('modal-duplicado');
-  if (modalDup) modalDup.classList.remove('hidden');
-}
-
-// Función general para cerrar cualquier modal y reanudar el escáner
-function cerrarModalYContinuar(idModal = 'modal-asistencia') {
-  const modal = document.getElementById(idModal);
-  if (modal) modal.classList.add('hidden');
-  
-  setTimeout(() => {
-    escaneoBloqueado = false;
-    if (html5QrCode) {
-      try {
-        html5QrCode.resume();
-      } catch (e) {
-        console.warn("No se pudo reanudar el escáner:", e);
-      }
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 14,
+    head: headersHistorial,
+    body: rowsHistorial,
+    theme: 'striped',
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'center'
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [51, 65, 85]
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 28 },
+      1: { halign: 'center', cellWidth: 24 },
+      2: { halign: 'center', cellWidth: 28 },
+      3: { halign: 'center', cellWidth: 28 },
+      4: { cellWidth: 72 }
     }
-  }, 300);
+  });
+
+  // Sección de Firmas Institucionales
+  const finalY = doc.lastAutoTable.finalY + 30;
+  const posY = finalY > 260 ? 260 : finalY;
+
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(148, 163, 184);
+
+  doc.line(30, posY, 85, posY);
+  doc.line(125, posY, 180, posY);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Auxiliar / Auxiliar de Disciplina", 57, posY + 5, { align: "center" });
+  doc.text("Dirección / Dirección Académica", 152, posY + 5, { align: "center" });
+
+  doc.save(nombreArchivo);
+}
+
+// ----------------------------------------------------
+// ACCIONES DE BOTONES PDF
+// ----------------------------------------------------
+
+async function generarFichaAlumnoPDF() {
+  const selectAlumno = document.getElementById('selectAlumnoIndividual')?.value;
+  if (!selectAlumno || selectAlumno === 'todos') {
+    alert("Por favor, selecciona un alumno específico en el menú desplegable.");
+    return;
+  }
+
+  const alumno = datosReporteGlobal.find(d => d.codigo === selectAlumno);
+  if (!alumno) {
+    alert("No se encontraron los datos del alumno seleccionado.");
+    return;
+  }
+
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(alumno.codigo)}`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial del alumno:", e);
+  }
+
+  const metricas = {
+    puntuales: alumno.asistencias || 0,
+    tardanzas: alumno.tardanzas || 0,
+    faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
+    puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0
+  };
+
+  await construirPDFModeloEstandar({
+    titulo: "FICHA INDIVIDUAL DE ASISTENCIA Y PUNTUALIDAD",
+    codigo: alumno.codigo || '-',
+    nombre: alumno.nombre || '-',
+    aula: alumno.aula || alumno.materia_aula || 'Sin Asignación',
+    periodo: `${tipo} (${fecha || 'General'})`,
+    metricas,
+    historial,
+    nombreArchivo: `Ficha_Asistencia_${alumno.codigo}.pdf`
+  });
+}
+
+async function generarGradoPDF() {
+  const filtrados = obtenerAlumnosFiltradosBase();
+  if (filtrados.length === 0) {
+    alert("No existen registros con los filtros seleccionados.");
+    return;
+  }
+
+  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+
+  let totPuntual = 0, totTardanza = 0, totFaltas = 0, totPuntos = 0;
+  filtrados.forEach(a => {
+    totPuntual += (a.asistencias || 0);
+    totTardanza += (a.tardanzas || 0);
+    totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
+    totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
+  });
+
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial general:", e);
+  }
+
+  await construirPDFModeloEstandar({
+    titulo: `CONSOLIDADO DE ASISTENCIA - GRADO ${grado} ${seccion}`,
+    codigo: `AULA-${grado}-${seccion}`,
+    nombre: `Consolidado Aula (${filtrados.length} Alumnos)`,
+    aula: `Grado: ${grado} | Sección: ${seccion}`,
+    periodo: `${tipo} (${fecha || 'General'})`,
+    metricas: { puntuales: totPuntual, tardanzas: totTardanza, faltas: totFaltas, puntaje: totPuntos },
+    historial,
+    nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
+  });
+}
+
+async function generarDocentesPDF() {
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial docentes:", e);
+  }
+
+  await construirPDFModeloEstandar({
+    titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
+    codigo: "PERSONAL-DOCENTE",
+    nombre: "Plana Docente I.E. Santa Rosa",
+    aula: "Dirección Académica",
+    periodo: `${tipo} (${fecha || 'General'})`,
+    metricas: { puntuales: 0, tardanzas: 0, faltas: 0, puntaje: 0 },
+    historial,
+    nombreArchivo: `Reporte_Docentes_${fecha || 'General'}.pdf`
+  });
 }
