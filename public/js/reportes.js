@@ -26,22 +26,18 @@ document.addEventListener('DOMContentLoaded', () => {
   actualizarTipoSelectorFecha();
 });
 
-// ----------------------------------------------------
-// CAMBIO DINÁMICO DEL INPUT DE FECHA Y CÁLCULO DE DÍAS
-// ----------------------------------------------------
-
 function actualizarTipoSelectorFecha() {
-  const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
-  const contenedorFecha = document.getElementById('filtroFecha')?.parentElement;
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
+  const contenedorFecha = document.getElementById('contenedorFecha');
   
   if (!contenedorFecha) return;
 
-  if (tipoInput.includes('Semanal')) {
-    contenedorFecha.innerHTML = `<input type="week" id="filtroFecha" class="form-control" value="${obtenerSemanaActual()}">`;
-  } else if (tipoInput.includes('Mensual')) {
-    contenedorFecha.innerHTML = `<input type="month" id="filtroFecha" class="form-control" value="${obtenerMesActual()}">`;
+  if (tipoInput === 'Semanal') {
+    contenedorFecha.innerHTML = `<input type="week" id="filtroFecha" class="form-control" style="width: 170px;" value="${obtenerSemanaActual()}">`;
+  } else if (tipoInput === 'Mensual') {
+    contenedorFecha.innerHTML = `<input type="month" id="filtroFecha" class="form-control" style="width: 170px;" value="${obtenerMesActual()}">`;
   } else {
-    contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" value="${obtenerFechaHoy()}">`;
+    contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" style="width: 170px;" value="${obtenerFechaHoy()}">`;
   }
 
   document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
@@ -68,106 +64,68 @@ function obtenerMesActual() {
   return `${hoy.getFullYear()}-${mes < 10 ? '0' + mes : mes}`;
 }
 
-/**
- * Verifica si una fecha dada en formato Date es un día laborable (Lunes a Viernes y NO feriado)
- */
 function esDiaLaborable(fecha) {
   const dayOfWeek = fecha.getDay();
-  if (dayOfWeek === 0 || dayOfWeek === 6) return false; // Excluir Sábados (6) y Domingos (0)
-
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false;
   const mesStr = String(fecha.getMonth() + 1).padStart(2, '0');
   const diaStr = String(fecha.getDate()).padStart(2, '0');
-  const claveMMDD = `${mesStr}-${diaStr}`;
-
-  return !FERIADOS_PERU_MMDD.includes(claveMMDD);
+  return !FERIADOS_PERU_MMDD.includes(`${mesStr}-${diaStr}`);
 }
 
-/**
- * Retorna el número exacto de días lectivos del periodo descartando fines de semana y feriados.
- */
 function obtenerTotalDiasPeriodo() {
-  const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
   const fechaVal = document.getElementById('filtroFecha')?.value || '';
 
-  // 1. REPORTE DIARIO
-  if (!tipoInput.includes('Semanal') && !tipoInput.includes('Mensual')) {
+  if (tipoInput === 'Diario') {
     if (!fechaVal) return 1;
     const [a, m, d] = fechaVal.split('-').map(Number);
-    const fechaObj = new Date(a, m - 1, d);
-    return esDiaLaborable(fechaObj) ? 1 : 0;
+    return esDiaLaborable(new Date(a, m - 1, d)) ? 1 : 0;
   }
 
-  // 2. REPORTE SEMANAL
-  if (tipoInput.includes('Semanal')) {
+  if (tipoInput === 'Semanal') {
     if (!fechaVal) return 5;
-    
-    // Parsear semana ISO (Ej: "2026-W28")
     const partes = fechaVal.split('-W');
     if (partes.length !== 2) return 5;
-
     const anio = Number(partes[0]);
     const semana = Number(partes[1]);
-
-    // Calcular el Lunes de dicha semana ISO
     const simple = new Date(anio, 0, 1 + (semana - 1) * 7);
     const dow = simple.getDay();
     const ISOweekStart = simple;
-    if (dow <= 4)
-      ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-    else
-      ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+    if (dow <= 4) ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+    else ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
 
     let diasLectivos = 0;
-    for (let i = 0; i < 5; i++) { // De Lunes a Viernes
+    for (let i = 0; i < 5; i++) {
       const diaActual = new Date(ISOweekStart);
       diaActual.setDate(ISOweekStart.getDate() + i);
-      if (esDiaLaborable(diaActual)) {
-        diasLectivos++;
-      }
+      if (esDiaLaborable(diaActual)) diasLectivos++;
     }
     return diasLectivos;
   }
 
-  // 3. REPORTE MENSUAL
-  if (tipoInput.includes('Mensual')) {
+  if (tipoInput === 'Mensual') {
     if (!fechaVal) return 22;
-    
     const [anio, mes] = fechaVal.split('-').map(Number);
     if (!anio || !mes) return 22;
-
     let diasLectivos = 0;
     const totalDiasMes = new Date(anio, mes, 0).getDate();
-
     for (let dia = 1; dia <= totalDiasMes; dia++) {
-      const fechaObj = new Date(anio, mes - 1, dia);
-      if (esDiaLaborable(fechaObj)) {
-        diasLectivos++;
-      }
+      if (esDiaLaborable(new Date(anio, mes - 1, dia))) diasLectivos++;
     }
     return diasLectivos;
   }
-
   return 1;
 }
-
-// ----------------------------------------------------
-// CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR
-// ----------------------------------------------------
 
 async function cargarConsolidado() {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
   const fechaVal = document.getElementById('filtroFecha')?.value || '';
 
-  let tipo = 'Diario';
-  if (tipoInput.includes('Semanal')) tipo = 'Semanal';
-  if (tipoInput.includes('Mensual')) tipo = 'Mensual';
-
   try {
-    const res = await fetch(`/api/reportes/consolidado?tipo=${tipo}&fecha=${encodeURIComponent(fechaVal)}`);
+    const res = await fetch(`/api/reportes/consolidado?tipo=${tipoInput}&fecha=${encodeURIComponent(fechaVal)}`);
     if (!res.ok) throw new Error("Error en la respuesta del servidor");
     
     datosReporteGlobal = await res.json();
-    
     actualizarOpcionesAlumnosSegunAula();
     renderizarTablaReportes();
   } catch (err) {
@@ -184,20 +142,14 @@ function obtenerAlumnosPorAula() {
 
   return datosReporteGlobal.filter(item => {
     const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
-
     if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) return false;
     if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
-
     if (seccion !== 'Todos') {
       const seccionNormalizada = seccion.toUpperCase();
       const partesAula = aulaStr.split(' ');
       const ultimaLetra = partesAula[partesAula.length - 1];
-
-      if (ultimaLetra !== seccionNormalizada && !aulaStr.endsWith(` ${seccionNormalizada}`)) {
-        return false;
-      }
+      if (ultimaLetra !== seccionNormalizada && !aulaStr.endsWith(` ${seccionNormalizada}`)) return false;
     }
-
     return true;
   });
 }
@@ -209,9 +161,7 @@ function actualizarOpcionesAlumnosSegunAula() {
   const valorSeleccionadoPrevio = selectAlumno.value;
   selectAlumno.innerHTML = '<option value="todos">-- Seleccionar Alumno --</option>';
 
-  const alumnosDelAula = obtenerAlumnosPorAula();
-
-  alumnosDelAula.forEach(alumno => {
+  obtenerAlumnosPorAula().forEach(alumno => {
     const option = document.createElement('option');
     option.value = alumno.codigo;
     option.textContent = `${alumno.nombre} (${alumno.codigo})`;
@@ -226,39 +176,22 @@ function actualizarOpcionesAlumnosSegunAula() {
 }
 
 function configurarEventosFiltros() {
-  const selectTipo = document.getElementById('filtroTipo');
-  if (selectTipo) {
-    selectTipo.addEventListener('change', actualizarTipoSelectorFecha);
-  }
+  document.getElementById('filtroTipo')?.addEventListener('change', actualizarTipoSelectorFecha);
 
   ['filtroNivel', 'filtroGrado', 'filtroSeccion'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.addEventListener('change', () => {
-        actualizarOpcionesAlumnosSegunAula();
-        renderizarTablaReportes();
-      });
-    }
+    document.getElementById(id)?.addEventListener('change', () => {
+      actualizarOpcionesAlumnosSegunAula();
+      renderizarTablaReportes();
+    });
   });
 
-  const selectAlumno = document.getElementById('selectAlumnoIndividual');
-  if (selectAlumno) {
-    selectAlumno.addEventListener('change', renderizarTablaReportes);
-  }
-
-  const busqueda = document.getElementById('filtroBusqueda');
-  if (busqueda) {
-    busqueda.addEventListener('input', renderizarTablaReportes);
-  }
+  document.getElementById('selectAlumnoIndividual')?.addEventListener('change', renderizarTablaReportes);
+  document.getElementById('filtroBusqueda')?.addEventListener('input', renderizarTablaReportes);
 
   document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
   document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
 }
-
-// ----------------------------------------------------
-// FILTRADO Y RENDERIZADO EN TABLA HTML
-// ----------------------------------------------------
 
 function obtenerAlumnosFiltradosBase() {
   const alumnoSeleccionado = document.getElementById('selectAlumnoIndividual')?.value || 'todos';
@@ -326,30 +259,45 @@ function renderizarTablaReportes() {
   });
 }
 
-// ----------------------------------------------------
-// CONTROLADOR DE EDICIÓN DIRECTIVA (MODAL)
-// ----------------------------------------------------
-
-function abrirModalEditar(codigo, nombre) {
+// Corrección para cargar el estado real del alumno en el modal de edición
+async function abrirModalEditar(codigo, nombre) {
   const modal = document.getElementById('modal-editar-asistencia');
   const inputCodigo = document.getElementById('edit-codigo-input');
   const spanNombre = document.getElementById('edit-nombre-alumno');
   const spanCodigo = document.getElementById('edit-codigo-alumno');
+  const selectEstado = document.getElementById('edit-estado-select');
 
   if (inputCodigo) inputCodigo.value = codigo;
   if (spanNombre) spanNombre.innerText = nombre;
   if (spanCodigo) spanCodigo.innerText = codigo;
 
-  if (modal) {
-    modal.style.display = 'flex';
+  const fechaVal = document.getElementById('filtroFecha')?.value || obtenerFechaHoy();
+
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(codigo)}&fechaInicio=${fechaVal}&fechaFin=${fechaVal}`);
+    if (res.ok) {
+      const historial = await res.json();
+      if (historial.length > 0 && selectEstado) {
+        const estadoActual = (historial[0].estado || '').toUpperCase();
+        if (estadoActual.includes('TARDE') || estadoActual.includes('TARDANZA')) {
+          selectEstado.value = 'TARDE';
+        } else if (estadoActual.includes('FALTA') || estadoActual.includes('INJUSTIFICADA')) {
+          selectEstado.value = 'FALTA';
+        } else {
+          selectEstado.value = 'PUNTUAL';
+        }
+      }
+    }
+  } catch (e) {
+    console.error("No se pudo obtener el estado actual del alumno:", e);
   }
+
+  if (modal) modal.style.display = 'flex';
 }
 
 function cerrarModalEditar() {
   const modal = document.getElementById('modal-editar-asistencia');
-  if (modal) {
-    modal.style.display = 'none';
-  }
+  if (modal) modal.style.display = 'none';
 }
 
 async function guardarEdicionAsistencia(event) {
@@ -368,31 +316,23 @@ async function guardarEdicionAsistencia(event) {
     const response = await fetch('/api/asistencia/editar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        codigo: codigo, 
-        estado: nuevoEstado, 
-        fecha: fechaVal 
-      })
+      body: JSON.stringify({ codigo, estado: nuevoEstado, fecha: fechaVal })
     });
 
     const resultado = await response.json();
 
-    if (response.ok && (resultado.success || resultado.ok)) {
+    if (response.ok && resultado.success) {
       alert("¡Asistencia actualizada correctamente!");
       cerrarModalEditar();
-      cargarConsolidado(); // Recarga los datos y actualiza la tabla automáticamente
+      cargarConsolidado();
     } else {
-      alert("Error al actualizar: " + (resultado.mensaje || resultado.error || "No se pudo completar la acción."));
+      alert("Error al actualizar: " + (resultado.mensaje || "No se pudo completar la acción."));
     }
   } catch (error) {
     console.error("Error de red al guardar la edición de asistencia:", error);
     alert("Error de conexión con el servidor en Railway.");
   }
 }
-
-// ----------------------------------------------------
-// GENERACIÓN DE REPORTES EN PDF
-// ----------------------------------------------------
 
 function obtenerInstanciaPDF() {
   if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
@@ -450,17 +390,8 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     startY: 28,
     body: tablaDatos,
     theme: 'plain',
-    styles: {
-      fontSize: 9,
-      cellPadding: 4,
-      lineColor: [203, 213, 225],
-      lineWidth: 0.5,
-      textColor: [51, 65, 85]
-    },
-    columnStyles: {
-      0: { cellWidth: 85 },
-      1: { cellWidth: 95 }
-    }
+    styles: { fontSize: 9, cellPadding: 4, lineColor: [203, 213, 225], lineWidth: 0.5, textColor: [51, 65, 85] },
+    columnStyles: { 0: { cellWidth: 85 }, 1: { cellWidth: 95 } }
   });
 
   const maxDias = metricas.totalPeriodo || 1;
@@ -468,32 +399,18 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   const pctTardanza = Math.round((metricas.tardanzas / maxDias) * 100);
   const pctFaltas = Math.round((metricas.faltas / maxDias) * 100);
 
-  const tablaMetricasHead = [["PUNTUALES", "TARDANZAS", "FALTAS", "PUNTAJE"]];
-  const tablaMetricasBody = [[
-    `${metricas.puntuales}/${maxDias} (${pctPuntual}%)`,
-    `${metricas.tardanzas}/${maxDias} (${pctTardanza}%)`,
-    `${metricas.faltas}/${maxDias} (${pctFaltas}%)`,
-    `${metricas.puntaje} pts`
-  ]];
-
   doc.autoTable({
     startY: doc.lastAutoTable.finalY + 6,
-    head: tablaMetricasHead,
-    body: tablaMetricasBody,
+    head: [["PUNTUALES", "TARDANZAS", "FALTAS", "PUNTAJE"]],
+    body: [[
+      `${metricas.puntuales}/${maxDias} (${pctPuntual}%)`,
+      `${metricas.tardanzas}/${maxDias} (${pctTardanza}%)`,
+      `${metricas.faltas}/${maxDias} (${pctFaltas}%)`,
+      `${metricas.puntaje} pts`
+    ]],
     theme: 'grid',
-    headStyles: {
-      fillColor: [241, 245, 249],
-      textColor: [30, 41, 59],
-      fontStyle: 'bold',
-      halign: 'center',
-      fontSize: 9
-    },
-    bodyStyles: {
-      halign: 'center',
-      fontSize: 10,
-      fontStyle: 'bold',
-      textColor: [15, 23, 42]
-    }
+    headStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold', halign: 'center', fontSize: 9 },
+    bodyStyles: { halign: 'center', fontSize: 10, fontStyle: 'bold', textColor: [15, 23, 42] }
   });
 
   doc.setFont("helvetica", "bold");
@@ -501,7 +418,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setTextColor(30, 41, 59);
   doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
 
-  const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN"]];
   const rowsHistorial = historial.map(h => [
     h.fecha || '-',
     obtenerNombreDia(h.fecha),
@@ -516,27 +432,12 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   doc.autoTable({
     startY: doc.lastAutoTable.finalY + 14,
-    head: headersHistorial,
+    head: [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN"]],
     body: rowsHistorial,
     theme: 'striped',
-    headStyles: {
-      fillColor: [30, 41, 59],
-      textColor: [255, 255, 255],
-      fontStyle: 'bold',
-      fontSize: 8,
-      halign: 'center'
-    },
-    bodyStyles: {
-      fontSize: 8,
-      textColor: [51, 65, 85]
-    },
-    columnStyles: {
-      0: { halign: 'center', cellWidth: 28 },
-      1: { halign: 'center', cellWidth: 24 },
-      2: { halign: 'center', cellWidth: 28 },
-      3: { halign: 'center', cellWidth: 28 },
-      4: { cellWidth: 72 }
-    }
+    headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+    bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
+    columnStyles: { 0: { halign: 'center', cellWidth: 28 }, 1: { halign: 'center', cellWidth: 24 }, 2: { halign: 'center', cellWidth: 28 }, 3: { halign: 'center', cellWidth: 28 }, 4: { cellWidth: 72 } }
   });
 
   const finalY = doc.lastAutoTable.finalY + 30;
@@ -544,7 +445,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   doc.setLineWidth(0.5);
   doc.setDrawColor(148, 163, 184);
-
   doc.line(30, posY, 85, posY);
   doc.line(125, posY, 180, posY);
 
@@ -581,21 +481,19 @@ async function generarFichaAlumnoPDF() {
     console.error("Error recuperando historial del alumno:", e);
   }
 
-  const metricas = {
-    puntuales: alumno.asistencias || 0,
-    tardanzas: alumno.tardanzas || 0,
-    faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
-    puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
-    totalPeriodo: obtenerTotalDiasPeriodo()
-  };
-
   await construirPDFModeloEstandar({
     titulo: "FICHA INDIVIDUAL DE ASISTENCIA Y PUNTUALIDAD",
     codigo: alumno.codigo || '-',
     nombre: alumno.nombre || '-',
     aula: alumno.aula || alumno.materia_aula || 'Sin Asignación',
     periodo: `${tipo} (${fecha || 'General'})`,
-    metricas,
+    metricas: {
+      puntuales: alumno.asistencias || 0,
+      tardanzas: alumno.tardanzas || 0,
+      faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
+      puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
+      totalPeriodo: obtenerTotalDiasPeriodo()
+    },
     historial,
     nombreArchivo: `Ficha_Asistencia_${alumno.codigo}.pdf`
   });

@@ -241,15 +241,27 @@ app.get('/api/rankings', (req, res) => {
   });
 });
 
-app.post('/api/asistencia/manual', (req, res) => {
-  const { usuario_codigo, fecha, estado } = req.body;
-  db.get('SELECT id FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [usuario_codigo, fecha], (err, row) => {
+// Endpoint Corregido y Requerido para Editar Asistencia
+app.post('/api/asistencia/editar', (req, res) => {
+  const { codigo, estado, fecha } = req.body;
+  if (!codigo || !estado || !fecha) {
+    return res.status(400).json({ success: false, mensaje: 'Faltan datos obligatorios (código, estado o fecha).' });
+  }
+
+  db.get('SELECT id FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [codigo, fecha], (err, row) => {
+    if (err) return res.status(500).json({ success: false, mensaje: 'Error en la base de datos.' });
+
     if (row) {
-      db.run('UPDATE asistencias SET estado = ? WHERE id = ?', [estado, row.id]);
+      db.run('UPDATE asistencias SET estado = ? WHERE id = ?', [estado, row.id], (err2) => {
+        if (err2) return res.status(500).json({ success: false, mensaje: 'Error al actualizar.' });
+        res.json({ success: true, mensaje: 'Asistencia actualizada correctamente.' });
+      });
     } else {
-      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [usuario_codigo, fecha, '07:30:00', estado]);
+      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [codigo, fecha, '07:30:00', estado], (err2) => {
+        if (err2) return res.status(500).json({ success: false, mensaje: 'Error al registrar.' });
+        res.json({ success: true, mensaje: 'Asistencia registrada correctamente.' });
+      });
     }
-    res.json({ success: true });
   });
 });
 
@@ -280,7 +292,6 @@ function sumarDiasFecha(fechaStr, dias) {
   return `${a}-${m}-${d}`;
 }
 
-// Endpoint Consolidado Optimizado
 app.get('/api/reportes/consolidado', (req, res) => {
   let { tipo, fecha } = req.query;
 
@@ -355,7 +366,6 @@ app.get('/api/reportes/consolidado', (req, res) => {
   });
 });
 
-// Endpoint para obtener el historial detallado de asistencias día a día para los PDF
 app.get('/api/reportes/historial-detallado', (req, res) => {
   const { codigo, fechaInicio, fechaFin } = req.query;
 
