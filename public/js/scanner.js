@@ -1,6 +1,6 @@
 /**
- * Control de Asistencia QR y Consolidados - I.E. SANTA ROSA (NAMORA - CAJAMARCA)
- * Archivo: js/escaner.js
+ * Control de Asistencia QR - I.E. SANTA ROSA - NAMORA
+ * Lógica modular para scanner.js
  */
 
 // ====================================================
@@ -309,6 +309,12 @@ async function procesarMarcacion(codigo) {
     iniciarRegistro();
   }
 
+  // Pausar hardware inmediatamente para evitar capturas repetidas o en bucle
+  if (html5QrcodeScanner && camaraEncendida) {
+    await html5QrcodeScanner.stop();
+    camaraEncendida = false;
+  }
+
   const payload = {
     codigo: codigo.trim(),
     tipo: modoActual,
@@ -325,45 +331,108 @@ async function procesarMarcacion(codigo) {
     const res = await response.json();
 
     if (response.ok && (res.success || res.ok)) {
-      const datosPersona = res.persona || res.alumno || res.docente || res.auxiliar || res.usuario || { 
-        codigo: codigo, 
-        nombre: res.nombre || 'Usuario Registrado', 
-        aula: res.asignacion || res.aula || res.grado_seccion || 'Asignación Regular',
-        modo: modoActual 
-      };
-
-      mostrarTarjetaResultado(datosPersona);
+      abrirModalAsistencia(res);
+      mostrarTarjetaResultado(res);
       mostrarNotificacion(`✅ ${modoActual} registrada para el código ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
       cargarAsistenciasHoy();
       cargarConsolidado();
     } else {
       mostrarNotificacion(`❌ Error: ${res.mensaje || 'No se pudo guardar la marcación.'}`, "bg-rose-100 text-rose-800 border-rose-300");
+      iniciarCamara(); // Reactivar cámara de inmediato si el servidor rechazó el proceso
     }
   } catch (error) {
     console.error("Error al procesar la marcación con el backend:", error);
-    mostrarTarjetaResultado({ 
+    
+    const fallbackData = { 
       codigo: codigo, 
       nombre: "Registro Local / Sincronizando", 
       aula: "Pendiente de red", 
       modo: modoActual 
-    });
+    };
+
+    abrirModalAsistencia(fallbackData);
+    mostrarTarjetaResultado(fallbackData);
     mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
   } finally {
-    // Mantiene el bloqueo de red y cámara por 3 segundos para asegurar un único registro limpio
+    // Liberación del bloqueo de concurrencia
     setTimeout(() => {
       procesandoEscaneoQR = false;
     }, 3000);
   }
 }
 
+// ====================================================
+// MODALES Y VENTANAS EMERGENTES (NUEVO & ACTUALIZADO)
+// ====================================================
+
+function abrirModalAsistencia(data) {
+  const modal = document.getElementById('modal-asistencia');
+  if (!modal) return;
+
+  // Extracción robusta de datos según el esquema de respuesta
+  const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data;
+
+  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || 'Usuario Desconocido';
+  const codigo = entidad.codigo || data.codigo || '-';
+  const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || 'Asignación Regular';
+  
+  const horaFormateada = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  
+  // Inyección de textos limpios
+  document.getElementById('modal-nombre').innerText = nombre;
+  document.getElementById('modal-codigo').innerText = codigo;
+  document.getElementById('modal-aula').innerText = aula;
+  document.getElementById('modal-hora').innerText = horaFormateada;
+
+  const iconContainer = document.getElementById('modal-icon-container');
+  const icon = document.getElementById('modal-icon');
+  const badgeEstado = document.getElementById('modal-estado');
+
+  // Aplicación estética basada en el Modo de Registro
+  if (modoActual === 'SALIDA') {
+    if (iconContainer) iconContainer.className = "w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-indigo-500/20 mb-4";
+    if (icon) icon.className = "fa-solid fa-right-from-bracket";
+    if (badgeEstado) {
+      badgeEstado.innerText = "SALIDA REGISTRADA";
+      badgeEstado.className = "font-black px-2 py-0.5 rounded-md text-[10px] bg-indigo-100 text-indigo-800";
+    }
+  } else {
+    if (iconContainer) iconContainer.className = "w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/20 mb-4";
+    if (icon) icon.className = "fa-solid fa-check";
+    if (badgeEstado) {
+      badgeEstado.innerText = "PUNTUAL";
+      badgeEstado.className = "font-black px-2 py-0.5 rounded-md text-[10px] bg-emerald-100 text-emerald-800";
+    }
+  }
+
+  // Quitar clases de ocultamiento y activar transiciones fluidas de CSS/Tailwind
+  modal.classList.remove('hidden');
+  setTimeout(() => {
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    modal.firstElementChild?.classList.remove('scale-95');
+  }, 10);
+}
+
+function cerrarModalAsistencia() {
+  const modal = document.getElementById('modal-asistencia');
+  if (!modal) return;
+
+  // Añadir animaciones de salida visual
+  modal.classList.add('opacity-0', 'pointer-events-none');
+  modal.firstElementChild?.classList.add('scale-95');
+
+  setTimeout(() => {
+    modal.classList.add('hidden');
+    iniciarCamara(); // Reactivación segura y automática del flujo de video
+  }, 300);
+}
+
 function mostrarTarjetaResultado(data) {
   const card = document.getElementById('resultado-card');
   if (!card) return;
 
-  // Extraer la entidad interna o usar el objeto principal si viene plano
   const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data;
 
-  // Obtener nombre, código y aula/asignación de forma segura y robusta
   const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || data.nombre_completo || 'Usuario Desconocido';
   const codigo = entidad.codigo || data.codigo || '-';
   const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || 'Asignación Regular';
@@ -452,7 +521,7 @@ function configurarEventosTeclado() {
 }
 
 // ====================================================
-// CONSOLIDADOS Y REPORTES EN PDF (COMPLETO)
+// CONSOLIDADOS Y REPORTES EN PDF
 // ====================================================
 
 function actualizarTipoSelectorFecha(ejecutarCarga = true) {
@@ -481,6 +550,7 @@ function obtenerFechaHoy() {
   return hoy.toISOString().split('T')[0];
 }
 
+/* Nota histórica: Cálculo basado en el año corriente 2026 */
 function obtenerSemanaActual() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -1031,6 +1101,7 @@ async function generarFichaAlumnoPDF() {
     puntuales: alumno.asistencias || 0,
     tardanzas: alumno.tardanzas || 0,
     faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
+    text: "",
     puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
     totalPeriodo: obtenerTotalDiasPeriodo()
   };
