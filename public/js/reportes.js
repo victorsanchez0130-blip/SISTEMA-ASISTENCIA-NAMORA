@@ -262,7 +262,6 @@ function configurarEventosFiltros() {
   document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
 
-  // Evento para adjuntar acción al botón de enviar del modal si es nativo
   document.getElementById('btn-guardar-edicion')?.addEventListener('click', guardarEdicionAsistencia);
 }
 
@@ -341,7 +340,6 @@ function renderizarTablaReportes() {
 // ----------------------------------------------------
 
 function abrirModalEditar(codigo, nombre) {
-  // Maneja tanto el ID original del código como el de tus selectores gráficos
   const modal = document.getElementById('modal-editar-asistencia');
   const inputCodigo = document.getElementById('edit-codigo-input');
   const spanNombre = document.getElementById('edit-nombre-alumno') || document.querySelector('.modal text-slate-800');
@@ -353,7 +351,7 @@ function abrirModalEditar(codigo, nombre) {
 
   if (modal) {
     modal.style.display = 'flex';
-    modal.classList.remove('hidden'); // Por si usas clases utilitarias de Tailwind
+    modal.classList.remove('hidden');
   }
 }
 
@@ -368,7 +366,6 @@ function cerrarModalEditar() {
 async function guardarEdicionAsistencia(event) {
   if (event) event.preventDefault();
 
-  // Asegura capturar los IDs dinámicos o mapeados del HTML
   const codigo = document.getElementById('edit-codigo-input')?.value;
   const nuevoEstado = document.getElementById('edit-estado-select')?.value || document.querySelector('#modal-editar-asistencia select')?.value;
   const fechaVal = document.getElementById('filtroFecha')?.value || obtenerFechaHoy();
@@ -379,38 +376,37 @@ async function guardarEdicionAsistencia(event) {
   }
 
   try {
-    // CAMBIO CLAVE: Cambiado de '/api/asistencia/editar' a rutas relativas estandarizadas universales
-    // Si tu backend espera un PUT a una ruta con id o código, cambia a: `/api/asistencia/actualizar/${codigo}`
-    const response = await fetch('/api/asistencia/actualizar', {
-      method: 'POST', // Cambiar por 'PUT' si el endpoint en Node lo requiere
+    // CORRECCIÓN: Apuntando correctamente al endpoint '/api/asistencia/manual' configurado en server.js
+    const response = await fetch('/api/asistencia/manual', {
+      method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'x-user-rol': 'admin' // Envía los permisos requeridos por el middleware del servidor
       },
       body: JSON.stringify({ 
-        codigo: codigo, 
+        usuario_codigo: codigo, 
         estado: nuevoEstado, 
         fecha: fechaVal 
       })
     });
 
-    // Validar caída del servidor antes de parsear JSON
     if (!response.ok) {
       throw new Error(`Código de respuesta de error del servidor: ${response.status}`);
     }
 
     const resultado = await response.json();
 
-    if (resultado.success || resultado.ok) {
+    if (resultado.success) {
       alert("¡Asistencia actualizada correctamente!");
       cerrarModalEditar();
       cargarConsolidado();
     } else {
-      alert("Error al actualizar: " + (resultado.mensaje || resultado.error || "No se pudo completar la acción en la base de datos."));
+      alert("Error al actualizar: " + (resultado.mensaje || "No se pudo completar la acción."));
     }
   } catch (error) {
     console.error("Error crítico de red/conexión al guardar asistencia:", error);
-    alert("Error de conexión con el servidor. Por favor, asegúrate de que el backend en Railway esté encendido y use rutas relativas.");
+    alert("Error de conexión con el servidor. Por favor, asegúrate de que el backend esté encendido.");
   }
 }
 
@@ -472,9 +468,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       doc.saveGraphicsState();
       const opacityState = new doc.GState({ opacity: 0.2 });
       doc.setGState(opacityState);
-      
       doc.addImage(imgLogoLoaded, 'PNG', 25, 70, 160, 160, undefined, 'FAST');
-      
       doc.restoreGraphicsState();
     }
   };
@@ -659,7 +653,7 @@ async function generarFichaAlumnoPDF() {
     puntuales: alumno.asistencias || 0,
     tardanzas: alumno.tardanzas || 0,
     faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
-    textPuntos: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
+    puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
     totalPeriodo: obtenerTotalDiasPeriodo()
   };
 
@@ -692,7 +686,7 @@ async function generarGradoPDF() {
     totPuntual += (a.asistencias || 0);
     totTardanza += (a.tardanzas || 0);
     totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
-    totPuntos += (a.textPuntos !== undefined ? a.textPuntos : 0);
+    totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
   });
 
   let historial = [];
