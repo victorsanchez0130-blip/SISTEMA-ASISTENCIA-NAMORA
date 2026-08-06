@@ -128,7 +128,21 @@ function imprimirRankingAlumnosPDF() {
     body: bodyData,
     theme: 'grid',
     headStyles: { fillColor: [0, 102, 51], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 8 }
+    styles: { fontSize: 8 },
+    
+    // ===================================================
+    // GANCHO PARA DIBUJAR LA MARCA DE AGUA EN CADA PÁGINA
+    // ===================================================
+    didDrawPage: function (data) {
+      try {
+        const rutaLogoBajoFondo = 'img/logo-marca-agua.png';
+        // Centrado en la página A4 (Ancho: 210mm, Alto: 297mm)
+        doc.addImage(rutaLogoBajoFondo, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+      } catch (imgErr) {
+        console.warn("No se pudo cargar la marca de agua en esta página del ranking:", imgErr);
+      }
+    }
+    // ===================================================
   });
 
   doc.save('Ranking_Alumnos_Santa_Rosa.pdf');

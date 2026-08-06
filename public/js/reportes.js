@@ -430,6 +430,20 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   const doc = new jsPDFClass();
 
+  // ===================================================
+  // AGREGAR LOGO COMO MARCA DE AGUA (FONDO)
+  // ===================================================
+  try {
+    // Ruta de tu logo (se recomienda que el archivo 'logo-marca-agua.png' ya tenga opacidad baja)
+    const rutaLogoBajoFondo = 'img/logo.png'; 
+    
+    // Posicionamiento centrado en la página A4 (Ancho: 210mm, Alto: 297mm)
+    // Parámetros: image, x, y, ancho, alto, alias, ración, rotación
+    doc.addImage(rutaLogoBajoFondo, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+  } catch (imgErr) {
+    console.warn("No se pudo cargar la marca de agua, continuando sin ella:", imgErr);
+  }
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(30, 41, 59);
