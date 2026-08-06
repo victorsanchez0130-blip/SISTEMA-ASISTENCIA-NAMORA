@@ -45,30 +45,39 @@ function checkAuth(requiredRol = null) {
     return;
   }
 
-  // --- MATRIZ DE PERMISOS ESTRICTA POR ROL ---
+// --- MATRIZ DE PERMISOS ESTRICTA POR ROL ---
 
   // DIRECTOR / ADMIN / DIRECTIVO: Acceso total
   if (['director', 'admin', 'directivo'].includes(userRol)) {
     return; // Pasa sin restricciones por cualquier archivo .html
   }
 
-  // DOCENTE: ÚNICA Y EXCLUSIVAMENTE dashboard.html, reportes.html y rankings.html (Modo lectura/descargas)
-if (userRol === 'docente') {
-  const paginasPermitidas = ['dashboard.html', 'reportes.html', 'rankings.html'];
+  // DOCENTE: ÚNICA Y EXCLUSIVAMENTE dashboard.html, reportes.html y rankings.html
+  if (userRol === 'docente') {
+    const paginasPermitidas = ['dashboard.html', 'reportes.html', 'rankings.html'];
 
-  // Si la página actual NO está en la lista de permitidas, restringe el acceso
-  if (!paginasPermitidas.includes(currentPage)) {
-    alert('Acceso restringido: Los docentes solo tienen acceso de lectura y descargas en el Dashboard, Reportes y Rankings.');
-    window.location.href = 'dashboard.html';
+    if (!paginasPermitidas.includes(currentPage)) {
+      alert('Acceso restringido: Los docentes solo tienen acceso al Dashboard, Reportes y Rankings.');
+      window.location.href = 'dashboard.html';
+      return;
+    }
     return;
   }
-}
 
   // AUXILIAR: ÚNICA Y EXCLUSIVAMENTE escaner.html
   if (userRol === 'auxiliar') {
     if (currentPage !== 'escaner.html') {
       alert('Acceso restringido: Los auxiliares solo tienen acceso al módulo Escáner.');
       window.location.href = 'escaner.html';
+    }
+    return;
+  }
+
+  // ALUMNO: ÚNICA Y EXCLUSIVAMENTE rankings.html
+  if (userRol === 'alumno') {
+    if (currentPage !== 'rankings.html') {
+      alert('Acceso restringido: Los alumnos solo tienen acceso a Rankings.');
+      window.location.href = 'rankings.html';
     }
     return;
   }
