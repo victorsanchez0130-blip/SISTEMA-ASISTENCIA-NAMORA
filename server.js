@@ -10,6 +10,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Estado global para controlar si la toma de asistencia está habilitada
+let registroActivo = false;
+
 const dbPath = process.env.RAILWAY_VOLUME_MOUNT_PATH 
   ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'asistencia.db') 
   : 'asistencia.db';
@@ -67,6 +70,68 @@ db.serialize(() => {
     else console.log("Rol de Director verificado y actualizado correctamente.");
   });
 });
+
+// ----------------------------------------------------
+// CONTROL DE PROCESO DE ASISTENCIA (INICIAR Y CERRAR)
+// ----------------------------------------------------
+
+// Endpoint para iniciar la toma de asistencia
+app.post('/api/asistencia/iniciar', (req, res) => {
+  registroActivo = true;
+  res.json({ success: true, mensaje: 'Registro de asistencia iniciado con éxito.' });
+});
+
+// Endpoint para cerrar asistencia y registrar FALTAS automáticas
+app.post('/api/asistencia/cerrar', (req, res) => {
+  if (!registroActivo) {
+    return res.status(400).json({ success: false, mensaje: 'El proceso de registro no se encuentra activo.' });
+  }
+
+  registroActivo = false;
+  const hoy = getFechaPeru();
+
+  // 1. Obtener a todos los alumnos y docentes registrados
+  db.all("SELECT codigo, nombre FROM usuarios WHERE LOWER(rol) IN ('alumno', 'docente')", [], (err, usuarios) => {
+    if (err) {
+      return res.status(500).json({ success: false, mensaje: 'Error al consultar la lista de usuarios.' });
+    }
+
+    // 2. Consultar las marcaciones realizadas el día de hoy
+    db.all("SELECT usuario_codigo FROM asistencias WHERE fecha = ?", [hoy], (err, marcaciones) => {
+      if (err) {
+        return res.status(500).json({ success: false, mensaje: 'Error al validar las marcaciones de hoy.' });
+      }
+
+      const marcadosSet = new Set(marcaciones.map(m => m.usuario_codigo));
+      // Filtrar a quienes NO han escaneado su QR
+      const ausentes = usuarios.filter(u => !marcadosSet.has(u.codigo));
+
+      if (ausentes.length === 0) {
+        return res.json({ 
+          success: true, 
+          mensaje: 'Registro cerrado correctamente. Todo el personal y alumnado registró su marcación.' 
+        });
+      }
+
+      // 3. Registrar como FALTA a todos los ausentes de forma automática
+      const stmt = db.prepare("INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, '00:00:00', 'FALTA')");
+      ausentes.forEach(u => stmt.run(u.codigo, hoy));
+      stmt.finalize((errStmt) => {
+        if (errStmt) {
+          return res.status(500).json({ success: false, mensaje: 'Error al registrar las faltas automáticas.' });
+        }
+        res.json({
+          success: true,
+          mensaje: `Asistencia cerrada. Se han asignado ${ausentes.length} faltas automáticas a quienes no escanearon.`
+        });
+      });
+    });
+  });
+});
+
+// ----------------------------------------------------
+// AUTENTICACIÓN Y GESTIÓN DE USUARIOS
+// ----------------------------------------------------
 
 app.post('/api/auth/login', (req, res) => {
   const { codigo } = req.body;
@@ -151,7 +216,18 @@ app.delete('/api/usuarios/:id', (req, res) => {
   });
 });
 
+// ----------------------------------------------------
+// MARCACIÓN Y REPORTES DE ASISTENCIA
+// ----------------------------------------------------
+
 app.post('/api/asistencia/marcar', (req, res) => {
+  if (!registroActivo) {
+    return res.status(400).json({ 
+      success: false, 
+      mensaje: 'El registro de asistencia está cerrado. Debes presionar "Iniciar Registro" para permitir marcaciones.' 
+    });
+  }
+
   const { codigoQR } = req.body;
   
   db.get('SELECT * FROM usuarios WHERE UPPER(codigo) = UPPER(?)', [codigoQR], (err, usuario) => {
@@ -216,7 +292,7 @@ app.get('/api/rankings', (req, res) => {
           WHEN UPPER(a.estado) = 'PUNTUAL' THEN 2.0
           WHEN UPPER(a.estado) = 'TARDE' OR UPPER(a.estado) = 'TARDANZA' THEN 1.0
           WHEN UPPER(a.estado) = 'JUSTIFICADA' THEN 0.5 
-          WHEN UPPER(a.estado) = 'INJUSTIFICADA' THEN 0.0
+          WHEN UPPER(a.estado) = 'INJUSTIFICADA' OR UPPER(a.estado) = 'FALTA' THEN 0.0
           ELSE 0
         END
       ), 0) AS puntaje_acumulado
@@ -241,7 +317,6 @@ app.get('/api/rankings', (req, res) => {
   });
 });
 
-// Endpoint corregido para inserción y actualización manual de asistencia
 app.post('/api/asistencia/manual', (req, res) => {
   const { usuario_codigo, fecha, estado } = req.body;
   if (!usuario_codigo || !fecha || !estado) {
