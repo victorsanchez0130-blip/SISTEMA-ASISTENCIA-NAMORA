@@ -697,6 +697,10 @@ async function generarGradoPDF() {
     console.error("Error recuperando historial general:", e);
   }
 
+  const diasPeriodo = obtenerTotalDiasPeriodo();
+  // Multiplicamos los días lectivos del periodo por la cantidad real de alumnos filtrados
+  const totalMaximoPermitido = diasPeriodo * filtrados.length;
+
   await construirPDFModeloEstandar({
     titulo: `CONSOLIDADO DE ASISTENCIA - GRADO ${grado} ${seccion}`,
     codigo: `AULA-${grado}-${seccion}`,
@@ -708,7 +712,7 @@ async function generarGradoPDF() {
       tardanzas: totTardanza, 
       faltas: totFaltas, 
       puntaje: totPuntos,
-      totalPeriodo: obtenerTotalDiasPeriodo() * filtrados.length
+      totalPeriodo: totalMaximoPermitido // <- Aquí se corrige el denominador totalizador
     },
     historial,
     nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
