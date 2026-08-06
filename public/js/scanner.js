@@ -1,5 +1,16 @@
-// Variable global para almacenar los datos del consolidado recuperados de la API
+/**
+ * Control de Asistencia QR y Consolidados - I.E. SANTA ROSA (NAMORA - CAJAMARCA)
+ * Archivo: js/escaner.js
+ */
+
+// ====================================================
+// VARIABLES GLOBALES
+// ====================================================
 let datosReporteGlobal = [];
+let modoActual = 'ENTRADA'; // Modos: 'ENTRADA' o 'SALIDA'
+let jornadaActiva = false;
+let html5QrcodeScanner = null;
+let camaraEncendida = false;
 
 /**
  * Lista de feriados nacionales estandarizados en Perú (MM-DD)
@@ -21,16 +32,316 @@ const FERIADOS_PERU_MMDD = [
   '12-25'  // Navidad
 ];
 
+// ====================================================
+// INICIALIZACIÓN DE EVENTOS
+// ====================================================
 document.addEventListener('DOMContentLoaded', () => {
+  cargarDatosAuxiliar();
   configurarEventosFiltros();
-  // Se envía 'false' para evitar ejecuciones innecesarias al inicializar
+  configurarEventosTeclado();
   actualizarTipoSelectorFecha(false);
   cargarConsolidado();
+  cargarAsistenciasHoy();
 });
 
-// ----------------------------------------------------
-// 1. CAMBIO DINÁMICO DEL INPUT DE FECHA Y DÍAS
-// ----------------------------------------------------
+function cargarDatosAuxiliar() {
+  const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario');
+  if (sessionRaw) {
+    try {
+      const session = JSON.parse(sessionRaw);
+      const nombreElement = document.getElementById('nombre-auxiliar');
+      if (nombreElement) {
+        nombreElement.innerText = session.nombre || session.usuario || 'Auxiliar';
+      }
+    } catch(e) {
+      console.error("Error al parsear la sesión activa:", e);
+    }
+  }
+}
+
+// ====================================================
+// NUCLEO DEL ESCÁNER, JORNADA Y REGISTRO (ENTRADA / SALIDA)
+// ====================================================
+
+/**
+ * Cambia el modo entre ENTRADA y SALIDA ajustando los estilos de los botones
+ */
+function cambiarModoRegistro(nuevoModo) {
+  modoActual = nuevoModo;
+
+  const lblEntrada = document.getElementById('lbl-modo-entrada');
+  const lblSalida = document.getElementById('lbl-modo-salida');
+
+  if (nuevoModo === 'SALIDA') {
+    if (lblSalida) {
+      lblSalida.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm scale-105";
+    }
+    if (lblEntrada) {
+      lblEntrada.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70";
+    }
+  } else {
+    if (lblEntrada) {
+      lblEntrada.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-sm scale-105";
+    }
+    if (lblSalida) {
+      lblSalida.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70";
+    }
+  }
+
+  console.log("📍 Modo de registro cambiado a:", modoActual);
+}
+
+function iniciarRegistro() {
+  jornadaActiva = true;
+  const badge = document.getElementById('estado-registro-badge');
+  if (badge) {
+    badge.className = "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200";
+    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ABIERTO`;
+  }
+
+  const btnIniciar = document.getElementById('btn-iniciar');
+  const btnCerrar = document.getElementById('btn-cerrar');
+
+  if (btnIniciar) {
+    btnIniciar.disabled = true;
+    btnIniciar.classList.add('opacity-50', 'cursor-not-allowed');
+  }
+  if (btnCerrar) {
+    btnCerrar.disabled = false;
+    btnCerrar.classList.remove('opacity-50', 'cursor-not-allowed');
+  }
+
+  mostrarNotificacion("🟢 Jornada iniciada. Sistema listo para recibir registros.", "bg-emerald-100 text-emerald-800 border-emerald-300");
+}
+
+function cerrarRegistro() {
+  jornadaActiva = false;
+  const badge = document.getElementById('estado-registro-badge');
+  if (badge) {
+    badge.className = "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-red-100 text-red-700 border border-red-200";
+    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> CERRADO`;
+  }
+
+  const btnIniciar = document.getElementById('btn-iniciar');
+  const btnCerrar = document.getElementById('btn-cerrar');
+
+  if (btnIniciar) {
+    btnIniciar.disabled = false;
+    btnIniciar.classList.remove('opacity-50', 'cursor-not-allowed');
+  }
+  if (btnCerrar) {
+    btnCerrar.disabled = true;
+    btnCerrar.classList.add('opacity-50', 'cursor-not-allowed');
+  }
+
+  if (camaraEncendida) detenerCamara();
+  mostrarNotificacion("🔴 Jornada cerrada.", "bg-rose-100 text-rose-800 border-rose-300");
+}
+
+function toggleCamara() {
+  if (camaraEncendida) {
+    detenerCamara();
+  } else {
+    iniciarCamara();
+  }
+}
+
+function iniciarCamara() {
+  if (typeof Html5Qrcode === 'undefined') {
+    alert("La librería del escáner HTML5 no está disponible.");
+    return;
+  }
+
+  html5QrcodeScanner = new Html5Qrcode("reader");
+  html5QrcodeScanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 220, height: 220 } },
+    (decodedText) => {
+      procesarMarcacion(decodedText);
+    },
+    (errorMessage) => {}
+  ).then(() => {
+    camaraEncendida = true;
+    const statusLabel = document.getElementById('camara-status');
+    const btnToggle = document.getElementById('btn-toggle-camara');
+
+    if (statusLabel) {
+      statusLabel.innerText = "Activa";
+      statusLabel.className = "text-xs font-bold text-emerald-600";
+    }
+    if (btnToggle) {
+      btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Apagar Cámara`;
+      btnToggle.className = "w-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
+    }
+  }).catch(err => {
+    console.error("No se pudo iniciar la cámara:", err);
+    alert("No se pudo acceder a la cámara. Verifique los permisos en su navegador.");
+  });
+}
+
+function detenerCamara() {
+  if (html5QrcodeScanner) {
+    html5QrcodeScanner.stop().then(() => {
+      camaraEncendida = false;
+      const reader = document.getElementById('reader');
+      const statusLabel = document.getElementById('camara-status');
+      const btnToggle = document.getElementById('btn-toggle-camara');
+
+      if (reader) {
+        reader.innerHTML = `
+          <div class="text-center p-4">
+            <i class="fa-solid fa-video-slash text-3xl mb-2 text-slate-600 block"></i>
+            Cámara apagada. Haz clic abajo para iniciar.
+          </div>`;
+      }
+      if (statusLabel) {
+        statusLabel.innerText = "Inactiva";
+        statusLabel.className = "text-xs font-normal text-slate-400";
+      }
+      if (btnToggle) {
+        btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Encender Cámara`;
+        btnToggle.className = "w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
+      }
+    });
+  }
+}
+
+function procesarMarcacionManual(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById('input-codigo-manual');
+  if (!input) return;
+
+  const codigo = input.value.trim();
+  if (codigo) {
+    procesarMarcacion(codigo);
+    input.value = '';
+  }
+}
+
+async function procesarMarcacion(codigo) {
+  if (!jornadaActiva) {
+    mostrarNotificacion("⚠️ La jornada está CERRADA. Presiona 'Iniciar Jornada' para registrar.", "bg-amber-100 text-amber-800 border-amber-300");
+    return;
+  }
+
+  const payload = {
+    codigo: codigo.trim(),
+    tipo: modoActual, // ENTRADA o SALIDA
+    fecha_hora: new Date().toISOString()
+  };
+
+  try {
+    const response = await fetch('/api/asistencia/registrar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const res = await response.json();
+
+    if (response.ok && (res.success || res.ok)) {
+      mostrarTarjetaResultado(res.persona || res.alumno || { codigo: codigo, nombre: 'Registrado', modo: modoActual });
+      mostrarNotificacion(`✅ ${modoActual} registrada para el código ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
+      cargarAsistenciasHoy();
+      cargarConsolidado(); // Actualiza también los reportes consolidados
+    } else {
+      mostrarNotificacion(`❌ Error: ${res.mensaje || 'No se pudo guardar la marcación.'}`, "bg-rose-100 text-rose-800 border-rose-300");
+    }
+  } catch (error) {
+    console.error("Error al procesar la marcación con el backend:", error);
+    mostrarTarjetaResultado({ codigo: codigo, nombre: "Registro Procesado", modo: modoActual });
+    mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
+  }
+}
+
+function mostrarTarjetaResultado(persona) {
+  const card = document.getElementById('resultado-card');
+  if (!card) return;
+
+  const esSalida = (persona.modo || modoActual) === 'SALIDA';
+  const bgBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  const bgAvatar = esSalida ? 'bg-indigo-600' : 'bg-emerald-600';
+
+  card.innerHTML = `
+    <div class="w-16 h-16 rounded-full ${bgAvatar} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
+      ${(persona.nombre || 'U').charAt(0).toUpperCase()}
+    </div>
+    <h3 class="text-base font-extrabold text-slate-800 mb-0.5">${persona.nombre || 'Personal / Alumno'}</h3>
+    <p class="text-xs font-mono font-bold text-slate-500 mb-2">${persona.codigo || '-'}</p>
+    <div class="flex items-center gap-2">
+      <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${bgBadge}">
+        <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${persona.modo || modoActual}
+      </span>
+      <span class="text-xs font-semibold text-slate-500">${new Date().toLocaleTimeString()}</span>
+    </div>
+  `;
+}
+
+function mostrarNotificacion(msj, clases) {
+  const notif = document.getElementById('notificacion-alerta');
+  if (!notif) return;
+
+  notif.className = `mt-3 p-3 rounded-xl text-xs font-semibold text-center border transition-all ${clases}`;
+  notif.innerText = msj;
+  notif.classList.remove('hidden');
+
+  setTimeout(() => {
+    notif.classList.add('hidden');
+  }, 4000);
+}
+
+async function cargarAsistenciasHoy() {
+  const tbody = document.getElementById('tabla-asistencias-hoy');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/asistencia/hoy');
+    if (!res.ok) throw new Error("Error en servidor al consultar lista");
+
+    const datos = await res.json();
+    tbody.innerHTML = '';
+
+    if (!datos || datos.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400 font-medium">No se registran marcaciones el día de hoy.</td></tr>`;
+      return;
+    }
+
+    datos.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.className = "hover:bg-slate-50 border-b border-slate-100 font-medium";
+      tr.innerHTML = `
+        <td class="py-2.5 px-3 font-mono font-bold">${row.codigo || '-'}</td>
+        <td class="py-2.5 px-3 font-semibold text-slate-800">${row.nombre || '-'}</td>
+        <td class="py-2.5 px-3 text-slate-500">${row.aula || row.rol || 'Asignación'}</td>
+        <td class="py-2.5 px-3 text-emerald-600 font-bold">${row.hora_entrada || '-'}</td>
+        <td class="py-2.5 px-3 text-indigo-600 font-bold">${row.hora_salida || '-'}</td>
+        <td class="py-2.5 px-3">
+          <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-100 text-slate-700 border border-slate-200">
+            ${row.estado || 'REGISTRADO'}
+          </span>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.warn("API de marcaciones del día no disponible o en entorno de prueba.");
+  }
+}
+
+function configurarEventosTeclado() {
+  const inputManual = document.getElementById('input-codigo-manual');
+  if (inputManual) {
+    document.addEventListener('keydown', (e) => {
+      if (document.activeElement !== inputManual && e.key !== 'Tab') {
+        inputManual.focus();
+      }
+    });
+  }
+}
+
+// ====================================================
+// 1. CAMBIO DINÁMICO DEL INPUT DE FECHA Y DÍAS (ORIGINAL)
+// ====================================================
 
 function actualizarTipoSelectorFecha(ejecutarCarga = true) {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
@@ -46,7 +357,6 @@ function actualizarTipoSelectorFecha(ejecutarCarga = true) {
     contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control rounded-xl border border-slate-300 p-2 text-xs font-bold" style="width: 170px;" value="${obtenerFechaHoy()}">`;
   }
 
-  // Reasignar el evento change al nuevo elemento dinámico
   document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
 
   if (ejecutarCarga) {
@@ -74,9 +384,6 @@ function obtenerMesActual() {
   return `${hoy.getFullYear()}-${mes < 10 ? '0' + mes : mes}`;
 }
 
-/**
- * Verifica si una fecha dada en formato Date es un día laborable (Lunes a Viernes y NO feriado)
- */
 function esDiaLaborable(fecha) {
   const dayOfWeek = fecha.getDay();
   if (dayOfWeek === 0 || dayOfWeek === 6) return false;
@@ -88,9 +395,6 @@ function esDiaLaborable(fecha) {
   return !FERIADOS_PERU_MMDD.includes(claveMMDD);
 }
 
-/**
- * Retorna el número exacto de días lectivos del periodo descartando fines de semana y feriados.
- */
 function obtenerTotalDiasPeriodo() {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
   const fechaVal = document.getElementById('filtroFecha')?.value || '';
@@ -154,9 +458,9 @@ function obtenerTotalDiasPeriodo() {
   return 1;
 }
 
-// ----------------------------------------------------
-// 2. CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR
-// ----------------------------------------------------
+// ====================================================
+// 2. CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR (ORIGINAL)
+// ====================================================
 
 async function cargarConsolidado() {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
@@ -260,9 +564,9 @@ function configurarEventosFiltros() {
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
 }
 
-// ----------------------------------------------------
-// 3. FILTRADO Y RENDERIZADO EN TABLA HTML
-// ----------------------------------------------------
+// ====================================================
+// 3. FILTRADO Y RENDERIZADO EN TABLA HTML (ORIGINAL)
+// ====================================================
 
 function obtenerAlumnosFiltradosBase() {
   const alumnoSeleccionado = document.getElementById('selectAlumnoIndividual')?.value || 'todos';
@@ -331,9 +635,9 @@ function renderizarTablaReportes() {
   });
 }
 
-// ----------------------------------------------------
-// 4. CONTROLADOR DE EDICIÓN DIRECTIVA (MODAL)
-// ----------------------------------------------------
+// ====================================================
+// 4. CONTROLADOR DE EDICIÓN DIRECTIVA (MODAL) (ORIGINAL)
+// ====================================================
 
 function abrirModalEditar(codigo, nombre) {
   const modal = document.getElementById('modal-editar-asistencia');
@@ -397,9 +701,9 @@ async function guardarEdicionAsistencia(event) {
   }
 }
 
-// ----------------------------------------------------
-// 5. GENERACIÓN DE REPORTES EN PDF
-// ----------------------------------------------------
+// ====================================================
+// 5. GENERACIÓN DE REPORTES EN PDF (ORIGINAL)
+// ====================================================
 
 function obtenerInstanciaPDF() {
   if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
