@@ -23,8 +23,9 @@ const FERIADOS_PERU_MMDD = [
 
 document.addEventListener('DOMContentLoaded', () => {
   configurarEventosFiltros();
-  // Se envía 'false' para evitar autodescargas o ejecuciones involuntarias al cargar
+  // Se envía 'false' para evitar ejecuciones innecesarias al inicializar
   actualizarTipoSelectorFecha(false);
+  cargarConsolidado();
 });
 
 // ----------------------------------------------------
@@ -32,22 +33,22 @@ document.addEventListener('DOMContentLoaded', () => {
 // ----------------------------------------------------
 
 function actualizarTipoSelectorFecha(ejecutarCarga = true) {
-  const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
-  const contenedorFecha = document.getElementById('filtroFecha')?.parentElement;
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
+  const contenedorFecha = document.getElementById('contenedorFecha');
   
   if (!contenedorFecha) return;
 
   if (tipoInput.includes('Semanal')) {
-    contenedorFecha.innerHTML = `<input type="week" id="filtroFecha" class="form-control" value="${obtenerSemanaActual()}">`;
+    contenedorFecha.innerHTML = `<input type="week" id="filtroFecha" class="form-control" style="width: 170px;" value="${obtenerSemanaActual()}">`;
   } else if (tipoInput.includes('Mensual')) {
-    contenedorFecha.innerHTML = `<input type="month" id="filtroFecha" class="form-control" value="${obtenerMesActual()}">`;
+    contenedorFecha.innerHTML = `<input type="month" id="filtroFecha" class="form-control" style="width: 170px;" value="${obtenerMesActual()}">`;
   } else {
-    contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" value="${obtenerFechaHoy()}">`;
+    contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control" style="width: 170px;" value="${obtenerFechaHoy()}">`;
   }
 
+  // Reasignar el evento change al nuevo elemento dinámico
   document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
 
-  // Solo ejecuta la carga si la acción vino de una interacción explícita
   if (ejecutarCarga) {
     cargarConsolidado();
   }
@@ -91,7 +92,7 @@ function esDiaLaborable(fecha) {
  * Retorna el número exacto de días lectivos del periodo descartando fines de semana y feriados.
  */
 function obtenerTotalDiasPeriodo() {
-  const tipoInput = document.getElementById('filtroTipo')?.value || 'Reporte Diario';
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
   const fechaVal = document.getElementById('filtroFecha')?.value || '';
 
   // 1. REPORTE DIARIO
@@ -320,7 +321,7 @@ function renderizarTablaReportes() {
       <td style="text-align: center; color: #dc2626; font-weight: bold;">${totalFaltas} / ${totalDiasPeriodo}</td>
       <td style="text-align: center; font-weight: bold; background-color: #f8fafc;">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
       <td style="text-align: center;">
-        <button onclick="abrirModalEditar('${d.codigo}', '${d.nombre.replace(/'/g, "\\'")}')" style="background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
+        <button onclick="abrirModalEditar('${d.codigo}', '${(d.nombre || '').replace(/'/g, "\\'")}')" style="background: #f59e0b; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">
           ✏️ Editar
         </button>
       </td>
@@ -389,7 +390,7 @@ async function guardarEdicionAsistencia(event) {
     }
   } catch (error) {
     console.error("Error de red al guardar la edición de asistencia:", error);
-    alert("Error de conexión con el servidor en Railway.");
+    alert("Error de conexión con el servidor.");
   }
 }
 
@@ -504,11 +505,9 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setTextColor(30, 41, 59);
   doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
 
-  // ENCABEZADOS Y MAPEO MEJORADO PARA CAPTURAR DOCENTES
   const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN", "DOCENTE"]];
   
   const rowsHistorial = historial.map(h => {
-    // Escanea múltiples propiedades posibles entregadas por la BD/API
     const nombreDocente = h.docente_nombre 
       || h.nombre_docente 
       || h.docente 
@@ -678,9 +677,6 @@ async function generarDocentesPDF() {
     console.error("Error recuperando historial docentes:", e);
   }
 
-  // -----------------------------------------------------------------
-  // CÁLCULO DINÁMICO DE MÉTRICAS SEGÚN HISTORIAL REAL
-  // -----------------------------------------------------------------
   let puntuales = 0;
   let tardanzas = 0;
   let faltas = 0;
@@ -697,7 +693,6 @@ async function generarDocentesPDF() {
     }
   });
 
-  // Ajusta la regla de asignación de puntos si requiere una ponderación distinta
   const puntajeTotal = (puntuales * 10) + (tardanzas * 5);
 
   await construirPDFModeloEstandar({

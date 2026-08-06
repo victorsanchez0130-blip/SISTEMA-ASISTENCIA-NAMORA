@@ -3,38 +3,51 @@ let html5QrCode = null;
 let camaraEncendida = false;
 let procesandoEscaneo = false;
 
-// Inicialización cuando carga el documento
+// Inicialización cuando carga el DOM
 document.addEventListener('DOMContentLoaded', () => {
   verificarSesion();
   cargarAsistenciasHoy();
+  enfocarInputManual();
 });
 
 // ----------------------------------------------------
-// VERIFICACIÓN DE SESIÓN Y NOMBRE DE AUXILIAR
+// VERIFICACIÓN DE SESIÓN Y ROL DE AUXILIAR
 // ----------------------------------------------------
 function verificarSesion() {
-  const usuarioGuardado = localStorage.getItem('usuario');
+  const sessionData = localStorage.getItem('user_session') || localStorage.getItem('usuario');
   
-  if (usuarioGuardado) {
-    try {
-      const user = JSON.parse(usuarioGuardado);
-      const elNombreAuxiliar = document.getElementById('nombre-auxiliar');
-      
-      if (elNombreAuxiliar) {
-        // Asigna el nombre almacenado en el login o un valor por defecto
-        elNombreAuxiliar.innerText = user.nombre || 'Auxiliar General';
-      }
-    } catch (e) {
-      console.error('Error al leer los datos del usuario en sesión:', e);
+  if (!sessionData) {
+    window.location.href = 'index.html';
+    return;
+  }
+
+  try {
+    const user = JSON.parse(sessionData);
+    const userRol = (user.rol || '').trim().toLowerCase();
+
+    // Permitir acceso solo a Auxiliar, Director y Directivo
+    const rolesPermitidos = ['auxiliar', 'director', 'directivo', 'admin'];
+    if (!rolesPermitidos.includes(userRol)) {
+      alert('Acceso restringido: No cuenta con permisos de Auxiliar.');
+      window.location.href = 'index.html';
+      return;
     }
-  } else {
-    // Si no hay sesión activa, redirige al login
+
+    const elNombreAuxiliar = document.getElementById('nombre-auxiliar');
+    if (elNombreAuxiliar) {
+      elNombreAuxiliar.innerText = user.nombre || user.usuario || 'Auxiliar General';
+    }
+  } catch (e) {
+    console.error('Error al leer datos de sesión:', e);
+    localStorage.removeItem('usuario');
+    localStorage.removeItem('user_session');
     window.location.href = 'index.html';
   }
 }
 
 function cerrarSesion() {
   localStorage.removeItem('usuario');
+  localStorage.removeItem('user_session');
   window.location.href = 'index.html';
 }
 
@@ -43,10 +56,10 @@ function cerrarSesion() {
 // ----------------------------------------------------
 async function iniciarRegistro() {
   try {
-    const res = await fetch('/api/asistencia/iniciar', { method: 'POST' });
+    const res = await fetch('api/asistencia/iniciar', { method: 'POST' });
     const data = await res.json();
 
-    if (data.success) {
+    if (res.ok && data.success) {
       actualizarUIEstadoRegistro(true);
       mostrarNotificacion('Registro de asistencia iniciado con éxito.', 'exito');
       reproducirSonido('exito');
@@ -55,7 +68,7 @@ async function iniciarRegistro() {
       reproducirSonido('error');
     }
   } catch (err) {
-    console.error(err);
+    console.error('Error al iniciar registro:', err);
     mostrarNotificacion('Error de conexión con el servidor.', 'error');
   }
 }
@@ -65,18 +78,18 @@ async function cerrarRegistro() {
   if (!confirmar) return;
 
   try {
-    const res = await fetch('/api/asistencia/cerrar', { method: 'POST' });
+    const res = await fetch('api/asistencia/cerrar', { method: 'POST' });
     const data = await res.json();
 
-    if (data.success) {
+    if (res.ok && data.success) {
       actualizarUIEstadoRegistro(false);
-      mostrarNotificacion(data.mensaje, 'alerta');
+      mostrarNotificacion(data.mensaje || 'Asistencia cerrada correctamente.', 'alerta');
       cargarAsistenciasHoy(); // Refrescar la tabla para mostrar las faltas
     } else {
       mostrarNotificacion(data.mensaje || 'Error al cerrar el registro.', 'error');
     }
   } catch (err) {
-    console.error(err);
+    console.error('Error al cerrar registro:', err);
     mostrarNotificacion('Error al procesar el cierre de asistencia.', 'error');
   }
 }
@@ -171,27 +184,44 @@ function detenerCamara() {
 }
 
 // ----------------------------------------------------
-// PROCESAMIENTO DE ESCANEO QR
+// PROCESAMIENTO DE ESCANEO QR Y BARRAS
 // ----------------------------------------------------
-function onScanSuccess(decodedText, decodedResult) {
-  if (procesandoEscaneo) return; // Bloquear procesamiento mientras se atiende un escaneo anterior
+function onScanSuccess(decodedText) {
+  if (procesandoEscaneo) return;
   procesandoEscaneo = true;
 
   enviarMarcacionQR(decodedText.trim());
 
-  // Pausa de 2.5 segundos para evitar lecturas continuas del mismo QR
+  // Pausa de 2.5 segundos para evitar lecturas continuas
   setTimeout(() => {
     procesandoEscaneo = false;
   }, 2500);
 }
 
 function onScanFailure(error) {
-  // Búsqueda continua de marcos sin QR (silencioso)
+  // Búsqueda continua silenciosa
+}
+
+function procesarEscaneoManual(e) {
+  e.preventDefault();
+  const input = document.getElementById('input-codigo-manual');
+  if (!input) return;
+
+  const codigo = input.value.trim();
+  if (codigo) {
+    enviarMarcacionQR(codigo);
+    input.value = '';
+  }
+}
+
+function enfocarInputManual() {
+  const input = document.getElementById('input-codigo-manual');
+  if (input) input.focus();
 }
 
 async function enviarMarcacionQR(codigoQR) {
   try {
-    const res = await fetch('/api/asistencia/marcar', {
+    const res = await fetch('api/asistencia/marcar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ codigoQR })
@@ -200,21 +230,23 @@ async function enviarMarcacionQR(codigoQR) {
     const data = await res.json();
 
     if (res.ok && data.success) {
-      renderizarTarjetaResultado(data.usuario, data.estado, data.hora, false);
-      mostrarNotificacion(data.mensaje, 'exito');
+      renderizarTarjetaResultado(data.usuario || { nombre: data.nombre || 'Usuario' }, data.estado || 'REGISTRADO', data.hora || '--:--', false);
+      mostrarNotificacion(data.mensaje || 'Asistencia registrada correctamente.', 'exito');
       reproducirSonido('exito');
       cargarAsistenciasHoy();
     } else if (data.duplicado) {
-      renderizarTarjetaResultado(data.usuario, 'DUPLICADO', data.horaAnterior, true);
-      mostrarNotificacion(data.mensaje, 'alerta');
+      renderizarTarjetaResultado(data.usuario || { nombre: data.nombre || 'Usuario' }, 'DUPLICADO', data.horaAnterior || '--:--', true);
+      mostrarNotificacion(data.mensaje || 'El usuario ya registró su asistencia.', 'alerta');
       reproducirSonido('alerta');
     } else {
-      mostrarNotificacion(data.mensaje || 'Código QR no registrado o invalido.', 'error');
+      mostrarNotificacion(data.mensaje || 'Código QR no registrado o inválido.', 'error');
       reproducirSonido('error');
     }
   } catch (err) {
-    console.error(err);
+    console.error('Error de red:', err);
     mostrarNotificacion('Error de comunicación con el servidor.', 'error');
+  } finally {
+    enfocarInputManual();
   }
 }
 
@@ -226,16 +258,21 @@ function renderizarTarjetaResultado(usuario, estado, hora, esDuplicado) {
   if (!card) return;
 
   let badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-  if (estado === 'TARDANZA') badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
+  if (estado === 'TARDANZA' || estado === 'TARDE') badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
   if (esDuplicado) badgeColor = 'bg-blue-100 text-blue-800 border-blue-300';
+  if (estado === 'FALTA') badgeColor = 'bg-red-100 text-red-800 border-red-300';
+
+  const inicial = usuario && usuario.nombre ? usuario.nombre.charAt(0).toUpperCase() : 'U';
+  const nombre = usuario && usuario.nombre ? usuario.nombre : 'Usuario General';
+  const rolMateria = usuario ? `${usuario.rol || 'Estudiante'} — ${usuario.materia_aula || 'Sin asignación'}` : 'Sin datos';
 
   card.className = "bg-white border border-slate-200 rounded-xl p-5 shadow-sm text-center flex flex-col items-center justify-center w-full min-h-[220px]";
   card.innerHTML = `
     <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold mb-3 border border-indigo-100 shadow-inner">
-      ${usuario.nombre ? usuario.nombre.charAt(0) : 'U'}
+      ${inicial}
     </div>
-    <h3 class="text-base font-bold text-slate-800">${usuario.nombre}</h3>
-    <p class="text-xs text-slate-500 font-medium mb-3">${usuario.rol} — ${usuario.materia_aula || 'Sin asignación'}</p>
+    <h3 class="text-base font-bold text-slate-800">${nombre}</h3>
+    <p class="text-xs text-slate-500 font-medium mb-3">${rolMateria}</p>
     
     <div class="flex items-center gap-2">
       <span class="text-xs font-bold px-3 py-1 rounded-full border ${badgeColor}">
@@ -253,7 +290,10 @@ async function cargarAsistenciasHoy() {
   if (!tbody) return;
 
   try {
-    const res = await fetch('/api/asistencia/hoy');
+    const res = await fetch('api/asistencia/hoy');
+    
+    if (!res.ok) throw new Error('Error en HTTP ' + res.status);
+    
     const marcaciones = await res.json();
 
     if (!Array.isArray(marcaciones) || marcaciones.length === 0) {
@@ -273,10 +313,10 @@ async function cargarAsistenciasHoy() {
 
       return `
         <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
-          <td class="py-3 px-3 font-mono text-slate-600 font-bold">${m.codigo}</td>
-          <td class="py-3 px-3 font-semibold text-slate-800">${m.nombre}</td>
-          <td class="py-3 px-3 text-slate-500">${m.rol}</td>
-          <td class="py-3 px-3 font-medium text-slate-600">${m.hora}</td>
+          <td class="py-3 px-3 font-mono text-slate-600 font-bold">${m.codigo || m.codigoQR || '-'}</td>
+          <td class="py-3 px-3 font-semibold text-slate-800">${m.nombre || 'Desconocido'}</td>
+          <td class="py-3 px-3 text-slate-500">${m.rol || 'Estudiante'}</td>
+          <td class="py-3 px-3 font-medium text-slate-600">${m.hora || '--:--'}</td>
           <td class="py-3 px-3">
             <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClase}">
               ${m.estado}
@@ -296,32 +336,35 @@ async function cargarAsistenciasHoy() {
 }
 
 // ----------------------------------------------------
-// NOTIFICACIONES Y SONIDOS DE FEEDBACK
+// NOTIFICACIONES Y FEEDBACK SONORO
 // ----------------------------------------------------
 function mostrarNotificacion(mensaje, tipo) {
   const notif = document.getElementById('notificacion-alerta');
   if (!notif) return;
 
-  notif.classList.remove('hidden', 'bg-emerald-100', 'text-emerald-800', 'bg-amber-100', 'text-amber-800', 'bg-red-100', 'text-red-800');
+  notif.className = 'mt-3 p-3 rounded-xl text-xs font-semibold text-center transition-all block';
 
   if (tipo === 'exito') {
-    notif.classList.add('bg-emerald-100', 'text-emerald-800');
+    notif.classList.add('bg-emerald-100', 'text-emerald-800', 'border', 'border-emerald-200');
   } else if (tipo === 'alerta') {
-    notif.classList.add('bg-amber-100', 'text-amber-800');
+    notif.classList.add('bg-amber-100', 'text-amber-800', 'border', 'border-amber-200');
   } else {
-    notif.classList.add('bg-red-100', 'text-red-800');
+    notif.classList.add('bg-red-100', 'text-red-800', 'border', 'border-red-200');
   }
 
   notif.innerText = mensaje;
 
   setTimeout(() => {
-    notif.classList.add('hidden');
+    notif.className = 'hidden';
   }, 4000);
 }
 
 function reproducirSonido(tipo) {
   try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+
+    const audioCtx = new AudioContext();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
 
@@ -345,6 +388,6 @@ function reproducirSonido(tipo) {
       osc.stop(audioCtx.currentTime + 0.3);
     }
   } catch (e) {
-    // Si el navegador bloquea AudioContext por interacción previa, ignorar silenciosamente
+    // Silenciar fallos de reproducción por falta de interacción inicial del usuario
   }
 }
