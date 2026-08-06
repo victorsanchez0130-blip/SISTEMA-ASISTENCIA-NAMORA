@@ -22,40 +22,49 @@ function checkAuth(requiredRol = null) {
     return;
   }
 
-  // Si está en el login pero YA tiene sesión, redirigir a su vista principal
-  if (isLoginPage) {
-    window.location.href = 'escaner.html';
-    return;
-  }
-
-  // 3. Normalizar el rol para evitar fallos de capitalización o espacios
+  // 3. Normalizar el rol
   const userRol = (user.rol || '').trim().toLowerCase();
-  
-  // Normalizar el rol requerido (si se proporcionó)
-  let rolesPermitidos = [];
-  if (requiredRol) {
-    if (Array.isArray(requiredRol)) {
-      rolesPermitidos = requiredRol.map(r => r.trim().toLowerCase());
-    } else {
-      rolesPermitidos = [requiredRol.trim().toLowerCase()];
-    }
-  }
 
-  // Roles con superacceso (siempre en minúsculas para comparar)
-  const superRoles = ['director', 'directivo'];
-
-  // 4. Validar permisos
-  if (requiredRol && !rolesPermitidos.includes(userRol) && !superRoles.includes(userRol)) {
-    alert('Acceso restringido: No tiene permisos suficientes para acceder a esta sección.');
-    
-    // CORRECCIÓN CLAVE: Si ya está en escaner.html y falla, enviarlo al index.html
-    // Si falla en otra página, enviarlo a escaner.html (solo si es su panel por defecto)
-    if (currentPage === 'escaner.html') {
-      window.location.href = 'index.html';
+  // Si está en el login pero YA tiene sesión activa, redirigir a su vista autorizada
+  if (isLoginPage) {
+    if (['admin', 'director', 'directivo'].includes(userRol)) {
+      window.location.href = 'dashboard.html';
+    } else if (userRol === 'docente') {
+      window.location.href = 'dashboard.html';
     } else {
       window.location.href = 'escaner.html';
     }
+    return;
   }
+
+  // --- MATRIZ DE PERMISOS POR ROL ---
+  // ADMIN: Acceso total a todas las páginas.
+  if (['admin', 'director', 'directivo'].includes(userRol)) {
+    return; // Pasa sin restricciones
+  }
+
+  // DOCENTE: Solo Dashboard, Reportes y Rankings
+  const paginasDocente = ['dashboard.html', 'reportes.html', 'rankings.html'];
+  if (userRol === 'docente') {
+    if (!paginasDocente.includes(currentPage)) {
+      alert('Acceso restringido: Los docentes solo tienen acceso a Dashboard, Reportes y Rankings.');
+      window.location.href = 'dashboard.html';
+    }
+    return;
+  }
+
+  // AUXILIAR: Solo Escáner
+  if (userRol === 'auxiliar') {
+    if (currentPage !== 'escaner.html') {
+      alert('Acceso restringido: Los auxiliares solo tienen acceso al Escáner.');
+      window.location.href = 'escaner.html';
+    }
+    return;
+  }
+
+  // OTROS ROLES/ALUMNOS: Redirigir por defecto al inicio
+  alert('Acceso denegado: Su rol no tiene permisos asignados.');
+  window.location.href = 'index.html';
 }
 
 function logout() {

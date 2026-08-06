@@ -4,142 +4,242 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Control y Reportes - I.E. Santa Rosa</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
 </head>
-<body>
-  <div class="dashboard-container">
-    <aside class="sidebar">
-      <div class="brand">🏫 I.E. Santa Rosa</div>
-      <nav class="menu">
-        <a href="dashboard.html">🏠 Inicio</a>
-        <a href="reportes.html" class="active">📁 Control y Reportes</a>
-        <a href="rankings.html">🏆 Rankings y Puntos</a>
-        <a href="inscripciones.html">📝 Inscribir / CRUD</a>
+<body class="bg-slate-100 text-slate-800 flex flex-col md:flex-row h-screen overflow-hidden">
+
+  <!-- HEADER PARA MÓVILES -->
+  <header class="md:hidden bg-slate-900 text-slate-300 p-4 flex justify-between items-center z-30 border-b border-slate-800">
+    <div class="flex items-center gap-3">
+      <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-8 h-8 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'">
+      <h2 class="text-white font-bold text-sm tracking-wider">I.E. SANTA ROSA</h2>
+    </div>
+    <button id="mobileMenuBtn" class="text-white text-xl focus:outline-none p-1">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+  </header>
+
+  <!-- SIDEBAR NAVEGACIÓN DINÁMICO -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen transition-transform duration-200 ease-in-out">
+    <div>
+      <div class="flex items-center gap-3 p-4 border-b border-slate-800">
+        <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-12 h-12 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'">
+        <div>
+          <h2 class="text-white font-bold text-sm leading-tight tracking-wider">I.E. SANTA ROSA</h2>
+          <span class="text-[11px] text-slate-400 font-medium">Control Asistencial</span>
+        </div>
+      </div>
+
+      <nav class="p-3 space-y-2 text-sm font-semibold" id="nav-menu">
+        <a href="dashboard.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <i class="fa-solid fa-chart-pie w-5 text-center text-base text-cyan-300"></i>
+          <span>Inicio</span>
+        </a>
+
+        <!-- Control y Reportes (Activo) -->
+        <a href="reportes.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-blue-600 text-white shadow-md">
+          <i class="fa-solid fa-folder-open w-5 text-center text-base text-emerald-400"></i>
+          <span>Control y Reportes</span>
+        </a>
+
+        <a href="rankings.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <i class="fa-solid fa-trophy w-5 text-center text-base text-amber-400"></i>
+          <span>Rankings y Puntos</span>
+        </a>
+
+        <!-- Inscribir / CRUD (Solo Visible para Admin/Director) -->
+        <a href="inscripciones.html" id="nav-crud" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+          <i class="fa-solid fa-user-pen w-5 text-center text-base text-purple-400"></i>
+          <span>Inscribir / CRUD</span>
+        </a>
+
+        <button onclick="logout()" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors font-bold text-sm text-left mt-6">
+          <i class="fa-solid fa-right-from-bracket w-5 text-center text-base text-rose-500"></i>
+          <span>Cerrar Sesión</span>
+        </button>
       </nav>
-    </aside>
+    </div>
 
-    <main class="main-content">
-      <div class="card-box">
-        <div class="card-title">📂 CONTROL Y REPORTES</div>
-        
-        <!-- Fila de Tipo de Reporte, Fecha y Exportaciones -->
-        <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <select id="filtroTipo" class="form-control" style="width: 170px;">
-              <option value="Diario">Reporte Diario</option>
-              <option value="Semanal">Reporte Semanal</option>
-              <option value="Mensual">Reporte Mensual</option>
-            </select>
-          </div>
+    <!-- Perfil Dinámico al pie del Sidebar -->
+    <div class="p-4 border-t border-slate-800 bg-slate-950/40">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/30" id="user-avatar">
+          U
+        </div>
+        <div class="overflow-hidden">
+          <p class="text-xs font-bold text-white truncate" id="user-name">Usuario</p>
+          <span class="inline-block px-2 py-0.5 text-[10px] font-extrabold rounded bg-slate-800 text-cyan-400 tracking-wide uppercase" id="user-role-badge">ROL</span>
+        </div>
+      </div>
+    </div>
+  </aside>
 
-          <div id="contenedorFecha">
-            <input type="date" id="filtroFecha" class="form-control" style="width: 170px;">
-          </div>
+  <!-- OVERLAY PARA CERRAR SIDEBAR EN MÓVIL -->
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-10 hidden md:hidden"></div>
 
-          <div style="margin-left: auto; display:flex; gap:10px;">
-            <button id="btnReporteDocentes" class="btn-submit" style="background:#0f172a;">📄 Docentes PDF</button>
-            <button id="btnReporteGrado" class="btn-submit" style="background:#0284c7;">📊 Grado PDF</button>
-            <button id="btnFichaAlumno" class="btn-submit" style="background:#16a34a;">📄 Ficha Alumno PDF</button>
-          </div>
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
+    <div class="card-box bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
+      <div class="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
+        <i class="fa-solid fa-folder-open text-blue-600"></i> CONTROL Y REPORTES CONSOLIDADOS
+      </div>
+      
+      <!-- Fila de Tipo de Reporte, Fecha y Exportaciones -->
+      <div class="flex flex-wrap items-center gap-3 mb-6">
+        <select id="filtroTipo" class="form-control rounded-xl border border-slate-300 p-2 text-xs font-bold">
+          <option value="Diario">Reporte Diario</option>
+          <option value="Semanal">Reporte Semanal</option>
+          <option value="Mensual">Reporte Mensual</option>
+        </select>
+
+        <div id="contenedorFecha">
+          <input type="date" id="filtroFecha" class="form-control rounded-xl border border-slate-300 p-2 text-xs font-bold">
         </div>
 
-        <!-- Filtro por Aula y Buscador -->
-        <div style="display:flex; gap:15px; margin-bottom:12px; background:#f8fafc; padding:12px; border-radius:8px; flex-wrap:wrap; align-items:center;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="font-size:13px; font-weight:bold; color:#475569;">Filtro por Aula:</label>
-            <select id="filtroNivel" class="form-control" style="width:130px;">
-              <option value="Todos">Todos</option>
-              <option value="Secundaria">Secundaria</option>
-              <option value="Primaria">Primaria</option>
-            </select>
-            <select id="filtroGrado" class="form-control" style="width:90px;">
-              <option value="Todos">Todos</option>
-              <option value="1ro">1ro</option>
-              <option value="2do">2do</option>
-              <option value="3ro">3ro</option>
-              <option value="4to">4to</option>
-              <option value="5to">5to</option>
-              <option value="6to">6to</option>
-            </select>
-            <select id="filtroSeccion" class="form-control" style="width:70px;">
-              <option value="Todos">Todos</option>
-              <option value="A">A</option>
-              <option value="B">B</option>
-              <option value="C">C</option>
-              <option value="D">D</option>
-            </select>
-          </div>
-
-          <div style="flex-grow:1; display:flex; align-items:center;">
-            <input type="text" id="filtroBusqueda" class="form-control" placeholder="🔍 Buscar por nombre o código...">
-          </div>
+        <div class="ml-auto flex gap-2">
+          <button id="btnReporteDocentes" class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all">📄 Docentes PDF</button>
+          <button id="btnReporteGrado" class="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all">📊 Grado PDF</button>
+          <button id="btnFichaAlumno" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all">📄 Ficha Alumno PDF</button>
         </div>
+      </div>
 
-        <!-- Menú Desplegable: Filtrar Alumno Específico -->
-        <div style="display:flex; gap:10px; margin-bottom:20px; background:#f1f5f9; padding:10px 12px; border-radius:8px; align-items:center;">
-          <label style="font-size:13px; font-weight:bold; color:#334155; min-width:110px;">Filtrar Alumno:</label>
-          <select id="selectAlumnoIndividual" class="form-control" style="flex-grow:1;">
-            <option value="todos">-- Seleccionar Alumno --</option>
+      <!-- Filtro por Aula y Buscador -->
+      <div class="flex flex-wrap gap-3 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200 items-center">
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-bold text-slate-600">Filtro por Aula:</label>
+          <select id="filtroNivel" class="form-control rounded-lg border border-slate-300 text-xs p-1.5 font-semibold">
+            <option value="Todos">Todos</option>
+            <option value="Secundaria">Secundaria</option>
+            <option value="Primaria">Primaria</option>
+          </select>
+          <select id="filtroGrado" class="form-control rounded-lg border border-slate-300 text-xs p-1.5 font-semibold">
+            <option value="Todos">Todos</option>
+            <option value="1ro">1ro</option>
+            <option value="2do">2do</option>
+            <option value="3ro">3ro</option>
+            <option value="4to">4to</option>
+            <option value="5to">5to</option>
+            <option value="6to">6to</option>
+          </select>
+          <select id="filtroSeccion" class="form-control rounded-lg border border-slate-300 text-xs p-1.5 font-semibold">
+            <option value="Todos">Todos</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
           </select>
         </div>
 
-        <!-- Tabla de Resultados -->
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>CÓDIGO</th>
-                <th>NOMBRE</th>
-                <th>AULA / ASIGNACIÓN</th>
-                <th style="color: #16a34a;">ASIST.</th>
-                <th style="color: #ca8a04;">TARD.</th>
-                <th style="color: #dc2626;">FALTAS</th>
-                <th>PUNTAJE</th>
-                <th style="text-align: center;">ACCIONES</th>
-              </tr>
-            </thead>
-            <tbody id="tbodyReportes"></tbody>
-          </table>
+        <div class="flex-1">
+          <input type="text" id="filtroBusqueda" class="w-full form-control rounded-lg border border-slate-300 text-xs p-1.5" placeholder="🔍 Buscar por nombre o código...">
         </div>
       </div>
-    </main>
-  </div>
+
+      <!-- Menú Desplegable: Filtrar Alumno Específico -->
+      <div class="flex items-center gap-3 mb-6 bg-slate-100 p-2.5 rounded-xl">
+        <label class="text-xs font-bold text-slate-700 min-w-[110px]">Filtrar Alumno:</label>
+        <select id="selectAlumnoIndividual" class="w-full form-control rounded-lg border border-slate-300 text-xs p-1.5 font-medium">
+          <option value="todos">-- Seleccionar Alumno --</option>
+        </select>
+      </div>
+
+      <!-- Tabla de Resultados -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-[600px]">
+          <thead>
+            <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50">
+              <th class="py-3 px-3">CÓDIGO</th>
+              <th class="py-3 px-3">NOMBRE</th>
+              <th class="py-3 px-3">AULA / ASIGNACIÓN</th>
+              <th class="py-3 px-3 text-emerald-600">ASIST.</th>
+              <th class="py-3 px-3 text-amber-600">TARD.</th>
+              <th class="py-3 px-3 text-rose-600">FALTAS</th>
+              <th class="py-3 px-3">PUNTAJE</th>
+              <th class="py-3 px-3 text-center">ACCIONES</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyReportes" class="text-xs divide-y divide-slate-100 font-medium"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
 
   <!-- Modal para Editar Asistencia Directiva -->
-  <div id="modal-editar-asistencia" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 16px; z-index: 9999;">
-    <div style="background: white; width: 100%; max-width: 420px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3 style="font-size: 16px; font-weight: 800; color: #0f172a;">✏️ Editar Asistencia del Alumno</h3>
-        <button onclick="cerrarModalEditar()" style="background: none; border: none; color: #94a3b8; font-size: 20px; font-weight: bold; cursor: pointer;">✕</button>
+  <div id="modal-editar-asistencia" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm items-center justify-center p-4 z-50">
+    <div class="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl border border-slate-100">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-base font-extrabold text-slate-900">✏️ Editar Asistencia del Alumno</h3>
+        <button onclick="cerrarModalEditar()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
       </div>
       
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 16px; font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
-        <p><strong style="color: #64748b;">Alumno:</strong> <span id="edit-nombre-alumno" style="font-weight: 700; color: #0f172a;">-</span></p>
-        <p><strong style="color: #64748b;">Código:</strong> <span id="edit-codigo-alumno" style="font-family: monospace; color: #334155;">-</span></p>
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4 text-xs space-y-1">
+        <p><strong class="text-slate-500">Alumno:</strong> <span id="edit-nombre-alumno" class="font-bold text-slate-900">-</span></p>
+        <p><strong class="text-slate-500">Código:</strong> <span id="edit-codigo-alumno" class="font-mono text-slate-700">-</span></p>
       </div>
 
-      <form id="form-editar-asistencia" onsubmit="guardarEdicionAsistencia(event)" style="display: flex; flex-direction: column; gap: 16px;">
+      <form id="form-editar-asistencia" onsubmit="guardarEdicionAsistencia(event)" class="space-y-4">
         <input type="hidden" id="edit-codigo-input">
         
-        <div class="form-group">
-          <label for="edit-estado-select" style="font-size: 12px; font-weight: bold; color: #475569; margin-bottom: 4px; display: block;">Nuevo Estado de Asistencia:</label>
-          <select id="edit-estado-select" class="form-control" style="font-weight: 700;">
+        <div>
+          <label for="edit-estado-select" class="block text-xs font-bold text-slate-700 mb-1">Nuevo Estado de Asistencia:</label>
+          <select id="edit-estado-select" class="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold">
             <option value="PUNTUAL">🟢 PUNTUAL (Asistencia normal)</option>
             <option value="TARDE">🟡 TARDANZA (Llegó a destiempo)</option>
             <option value="FALTA">🔴 FALTA (Inasistencia registrada)</option>
           </select>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 10px;">
-          <button type="button" onclick="cerrarModalEditar()" class="btn-submit" style="background: #94a3b8; width: 50%; float: none;">Cancelar</button>
-          <button type="submit" class="btn-submit" style="background: #0284c7; width: 50%; float: none;">Guardar Cambios</button>
+        <div class="flex gap-2 pt-2">
+          <button type="button" onclick="cerrarModalEditar()" class="w-1/2 bg-slate-400 hover:bg-slate-500 text-white font-bold text-xs py-2.5 rounded-xl transition-all">Cancelar</button>
+          <button type="submit" class="w-1/2 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs py-2.5 rounded-xl transition-all">Guardar Cambios</button>
         </div>
       </form>
     </div>
   </div>
 
   <script src="js/reportes.js"></script>
+  <script>
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    function toggleMenu() {
+      sidebar.classList.toggle('-translate-x-full');
+      sidebarOverlay.classList.toggle('hidden');
+    }
+
+    if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
+    if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMenu);
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const sessionData = JSON.parse(localStorage.getItem('user_session') || localStorage.getItem('usuario') || '{}');
+      const rol = (sessionData.rol || '').toLowerCase();
+
+      if (sessionData.nombre) {
+        document.getElementById('user-name').innerText = sessionData.nombre;
+        document.getElementById('user-role-badge').innerText = (sessionData.rol || 'USUARIO').toUpperCase();
+        document.getElementById('user-avatar').innerText = sessionData.nombre.charAt(0).toUpperCase();
+      }
+
+      const esAdminDirectivo = ['admin', 'director', 'directivo'].includes(rol);
+      if (!esAdminDirectivo) {
+        const navCrud = document.getElementById('nav-crud');
+        if (navCrud) navCrud.style.display = 'none';
+      }
+    });
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'index.html';
+    }
+  </script>
 </body>
 </html>

@@ -36,6 +36,19 @@ function getHoraPeru() {
   return new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour12: false });
 }
 
+// Middleware de verificación de permisos para Modificaciones (CRUD y Ajustes Manuales)
+function verificarPermisoAdmin(req, res, next) {
+  const userRol = (req.headers['x-user-rol'] || '').trim().toLowerCase();
+  if (['admin', 'director', 'directivo'].includes(userRol)) {
+    next();
+  } else {
+    return res.status(403).json({ 
+      success: false, 
+      mensaje: 'Acceso denegado: Solo el Administrador/Director tiene permisos para realizar modificaciones.' 
+    });
+  }
+}
+
 // Inicialización de esquema y datos base
 db.serialize(() => {
   db.run(`
@@ -82,7 +95,7 @@ app.post('/api/asistencia/iniciar', (req, res) => {
   res.json({ success: true, mensaje: 'Registro de asistencia iniciado con éxito.' });
 });
 
-// Endpoint para cerrar asistencia y registrar FALTAS automáticas optimizado
+// Endpoint para cerrar asistencia y registrar FALTAS automáticas
 app.post('/api/asistencia/cerrar', (req, res) => {
   if (!registroActivo) {
     return res.status(400).json({ success: false, mensaje: 'El proceso de registro no se encuentra activo.' });
@@ -113,7 +126,7 @@ app.post('/api/asistencia/cerrar', (req, res) => {
         });
       }
 
-      // 3. Inserción masiva optimizada mediante Transacción
+      // 3. Inserción masiva mediante Transacción
       db.serialize(() => {
         db.run('BEGIN TRANSACTION');
         const stmt = db.prepare("INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, '00:00:00', 'FALTA')");
@@ -136,7 +149,7 @@ app.post('/api/asistencia/cerrar', (req, res) => {
 });
 
 // ----------------------------------------------------
-// AUTENTICACIÓN Y GESTIÓN DE USUARIOS
+// AUTENTICACIÓN Y GESTIÓN DE USUARIOS (CRUD Y PERMISOS)
 // ----------------------------------------------------
 
 app.post('/api/auth/login', (req, res) => {
@@ -153,13 +166,13 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(401).json({ success: false, mensaje: 'Código no encontrado en el sistema.' });
     }
     
-    const rolNormalizado = (usuario.rol || '').trim();
+    const rolNormalizado = (usuario.rol || '').trim().toLowerCase();
 
-    // Redirección según matriz de roles
+    // Redirección según matriz de acceso por roles
     let redirectUrl = 'escaner.html';
-    if (rolNormalizado === 'Director' || rolNormalizado === 'Docente') {
+    if (['admin', 'director', 'directivo', 'docente'].includes(rolNormalizado)) {
       redirectUrl = 'dashboard.html';
-    } else if (rolNormalizado === 'Auxiliar') {
+    } else if (rolNormalizado === 'auxiliar') {
       redirectUrl = 'escaner.html';
     }
 
@@ -171,7 +184,7 @@ app.post('/api/auth/login', (req, res) => {
         id: usuario.id,
         codigo: usuario.codigo,
         nombre: usuario.nombre,
-        rol: rolNormalizado,
+        rol: usuario.rol,
         materia_aula: usuario.materia_aula
       }
     });
@@ -185,13 +198,15 @@ app.get('/api/usuarios', (req, res) => {
   });
 });
 
-app.post('/api/usuarios', (req, res) => {
+// CREAR USUARIO (Solo Admin / Director)
+app.post('/api/usuarios', verificarPermisoAdmin, (req, res) => {
   const { nombre, rol, materia_aula } = req.body;
 
   let prefijo = 'ALU';
-  if (rol === 'Docente') prefijo = 'DOC';
-  if (rol === 'Auxiliar') prefijo = 'AUX';
-  if (rol === 'Director') prefijo = 'DIR';
+  const rolUpper = (rol || '').toUpperCase();
+  if (rolUpper === 'DOCENTE') prefijo = 'DOC';
+  if (rolUpper === 'AUXILIAR') prefijo = 'AUX';
+  if (rolUpper === 'DIRECTOR' || rolUpper === 'ADMIN') prefijo = 'DIR';
 
   const aleatorio = Math.floor(1000 + Math.random() * 9000);
   const codigoGenerado = `${prefijo}-SRN-${aleatorio}`;
@@ -210,23 +225,25 @@ app.post('/api/usuarios', (req, res) => {
   });
 });
 
-app.put('/api/usuarios/:id', (req, res) => {
+// ACTUALIZAR USUARIO (Solo Admin / Director)
+app.put('/api/usuarios/:id', verificarPermisoAdmin, (req, res) => {
   const { id } = req.params;
   const { nombre, rol, materia_aula } = req.body;
   db.run('UPDATE usuarios SET nombre = ?, rol = ?, materia_aula = ? WHERE id = ?', [nombre, rol, materia_aula, id], (err) => {
-    if (err) return res.status(500).json({ success: false, mensaje: 'Error al actualizar.' });
-    res.json({ success: true });
+    if (err) return res.status(500).json({ success: false, mensaje: 'Error al actualizar usuario.' });
+    res.json({ success: true, mensaje: 'Usuario actualizado correctamente.' });
   });
 });
 
-app.delete('/api/usuarios/:id', (req, res) => {
+// ELIMINAR USUARIO (Solo Admin / Director)
+app.delete('/api/usuarios/:id', verificarPermisoAdmin, (req, res) => {
   const { id } = req.params;
   db.get('SELECT codigo FROM usuarios WHERE id = ?', [id], (err, row) => {
     if (row) {
       db.run('DELETE FROM asistencias WHERE usuario_codigo = ?', [row.codigo]);
       db.run('DELETE FROM usuarios WHERE id = ?', [id]);
     }
-    res.json({ success: true });
+    res.json({ success: true, mensaje: 'Usuario y registros eliminados correctamente.' });
   });
 });
 
@@ -312,7 +329,7 @@ app.get('/api/rankings', (req, res) => {
       ), 0) AS puntaje_acumulado
     FROM usuarios u
     LEFT JOIN asistencias a ON u.codigo = a.usuario_codigo
-    WHERE u.rol IN ('Docente', 'Alumno')
+    WHERE LOWER(u.rol) IN ('docente', 'alumno')
     GROUP BY u.id
     ORDER BY puntaje_acumulado DESC
   `;
@@ -320,8 +337,8 @@ app.get('/api/rankings', (req, res) => {
   db.all(query, [], (err, rows) => {
     if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
 
-    const docentes = rows.filter(r => r.rol === 'Docente');
-    const alumnos = rows.filter(r => r.rol === 'Alumno');
+    const docentes = rows.filter(r => (r.rol || '').toLowerCase() === 'docente');
+    const alumnos = rows.filter(r => (r.rol || '').toLowerCase() === 'alumno');
 
     res.json({
       success: true,
@@ -331,7 +348,8 @@ app.get('/api/rankings', (req, res) => {
   });
 });
 
-app.post('/api/asistencia/manual', (req, res) => {
+// MODIFICACIÓN MANUAL DE ASISTENCIA (Solo Admin / Director)
+app.post('/api/asistencia/manual', verificarPermisoAdmin, (req, res) => {
   const { usuario_codigo, fecha, estado } = req.body;
   if (!usuario_codigo || !fecha || !estado) {
     return res.status(400).json({ success: false, mensaje: 'Faltan datos obligatorios.' });
@@ -354,7 +372,7 @@ app.post('/api/asistencia/manual', (req, res) => {
   });
 });
 
-// Auxiliares de fechas
+// Auxiliares de fechas para consolidado
 function obtenerLunesISO(valorWeek) {
   if (!valorWeek || !valorWeek.includes('-W')) return null;
   const partes = valorWeek.split('-W');

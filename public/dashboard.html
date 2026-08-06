@@ -14,7 +14,7 @@
 </head>
 <body class="bg-slate-100 text-slate-800 flex flex-col md:flex-row h-screen overflow-hidden">
 
-  <!-- BOTÓN HAMBURGUESA Y HEADER PARA MÓVILES -->
+  <!-- HEADER PARA MÓVILES -->
   <header class="md:hidden bg-slate-900 text-slate-300 p-4 flex justify-between items-center z-30 border-b border-slate-800">
     <div class="flex items-center gap-3">
       <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-8 h-8 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'">
@@ -25,10 +25,9 @@
     </button>
   </header>
 
-  <!-- SIDEBAR NAVEGACIÓN -->
+  <!-- SIDEBAR NAVEGACIÓN DINÁMICO -->
   <aside id="sidebar" class="fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen transition-transform duration-200 ease-in-out">
     <div>
-      <!-- Header Sidebar con Logo Local -->
       <div class="flex items-center gap-3 p-4 border-b border-slate-800">
         <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-12 h-12 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'">
         <div>
@@ -37,28 +36,27 @@
         </div>
       </div>
 
-      <!-- Links de Navegación con Íconos Coloridos -->
-      <nav class="p-3 space-y-2 text-sm font-semibold">
+      <nav class="p-3 space-y-2 text-sm font-semibold" id="nav-menu">
         <!-- Inicio (Activo) -->
-        <a href="dashboard.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-blue-600 text-white shadow-md">
+        <a href="dashboard.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-blue-600 text-white shadow-md">
           <i class="fa-solid fa-chart-pie w-5 text-center text-base text-cyan-300"></i>
           <span>Inicio</span>
         </a>
 
         <!-- Control y Reportes -->
-        <a href="reportes.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+        <a href="reportes.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
           <i class="fa-solid fa-folder-open w-5 text-center text-base text-emerald-400"></i>
           <span>Control y Reportes</span>
         </a>
 
         <!-- Rankings y Puntos -->
-        <a href="rankings.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+        <a href="rankings.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
           <i class="fa-solid fa-trophy w-5 text-center text-base text-amber-400"></i>
           <span>Rankings y Puntos</span>
         </a>
 
-        <!-- Inscribir / CRUD -->
-        <a href="inscripciones.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+        <!-- Inscribir / CRUD (Solo Visible para Admin/Director) -->
+        <a href="inscripciones.html" id="nav-crud" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
           <i class="fa-solid fa-user-pen w-5 text-center text-base text-purple-400"></i>
           <span>Inscribir / CRUD</span>
         </a>
@@ -70,6 +68,19 @@
         </button>
       </nav>
     </div>
+
+    <!-- Perfil Dinámico al pie del Sidebar -->
+    <div class="p-4 border-t border-slate-800 bg-slate-950/40">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/30" id="user-avatar">
+          U
+        </div>
+        <div class="overflow-hidden">
+          <p class="text-xs font-bold text-white truncate" id="user-name">Usuario</p>
+          <span class="inline-block px-2 py-0.5 text-[10px] font-extrabold rounded bg-slate-800 text-cyan-400 tracking-wide uppercase" id="user-role-badge">ROL</span>
+        </div>
+      </div>
+    </div>
   </aside>
 
   <!-- OVERLAY PARA CERRAR SIDEBAR EN MÓVIL -->
@@ -78,10 +89,9 @@
   <!-- CONTENIDO PRINCIPAL -->
   <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
     
-    <!-- Header Superior con Fecha Actual Dinámica -->
     <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
       <div>
-        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">PANEL DIRECTIVO</h1>
+        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">PANEL PRINCIPAL</h1>
         <p class="text-xs font-medium text-slate-500" id="director-saludo">Gestión total y métricas de asistencia en tiempo real</p>
       </div>
 
@@ -96,10 +106,8 @@
       </div>
     </header>
 
-    <!-- 1. TARJETAS DE MÉTRICAS -->
+    <!-- TARJETAS DE MÉTRICAS -->
     <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-      
-      <!-- Card Estudiantes -->
       <div class="bg-gradient-to-r from-red-500 to-rose-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
         <div>
           <span class="text-xs font-extrabold uppercase tracking-wider text-rose-100">Estudiantes</span>
@@ -111,7 +119,6 @@
         </div>
       </div>
 
-      <!-- Card Docentes -->
       <div class="bg-gradient-to-r from-lime-500 to-emerald-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
         <div>
           <span class="text-xs font-extrabold uppercase tracking-wider text-emerald-100">Docentes</span>
@@ -123,7 +130,6 @@
         </div>
       </div>
 
-      <!-- Card Marcaciones Puntuales -->
       <div class="bg-gradient-to-r from-teal-400 to-cyan-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
         <div>
           <span class="text-xs font-extrabold uppercase tracking-wider text-teal-100">Puntuales Hoy</span>
@@ -135,7 +141,6 @@
         </div>
       </div>
 
-      <!-- Card Tardanzas -->
       <div class="bg-gradient-to-r from-sky-400 to-blue-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
         <div>
           <span class="text-xs font-extrabold uppercase tracking-wider text-sky-100">Tardanzas Hoy</span>
@@ -146,13 +151,10 @@
           <i class="fa-solid fa-clock"></i>
         </div>
       </div>
-
     </section>
 
-    <!-- 2. CRONOGRAMA Y ACCESOS DIRECTIVOS -->
+    <!-- TABLA Y PANEL LATERAL -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      
-      <!-- Cronograma de Asistencia Diaria -->
       <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-5 gap-2">
           <div>
@@ -184,19 +186,17 @@
         </div>
       </div>
 
-      <!-- Panel Lateral de Acceso Directivo -->
       <div class="space-y-6">
-        
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
-          <h2 class="text-base font-bold text-slate-800 mb-1">Acceso Directivo</h2>
-          <p class="text-xs text-slate-500 font-medium mb-4">CRUD & Control de Asistencia Habilitado.</p>
+          <h2 class="text-base font-bold text-slate-800 mb-1">Accesos Directos</h2>
+          <p class="text-xs text-slate-500 font-medium mb-4">Herramientas del sistema según permisos.</p>
           
           <div class="space-y-2.5">
             <a href="escaner.html" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
               <span class="flex items-center gap-2.5"><i class="fa-solid fa-qrcode text-slate-400 group-hover:text-blue-600"></i> Módulo Escáner</span>
               <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-600"></i>
             </a>
-            <a href="inscripciones.html" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
+            <a href="inscripciones.html" id="link-crud-panel" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
               <span class="flex items-center gap-2.5"><i class="fa-solid fa-user-plus text-slate-400 group-hover:text-blue-600"></i> Inscribir / CRUD</span>
               <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-600"></i>
             </a>
@@ -206,25 +206,8 @@
             </a>
           </div>
         </div>
-
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
-          <h2 class="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <i class="fa-solid fa-server text-blue-600"></i> Estado del Sistema
-          </h2>
-          <div class="border-l-4 border-emerald-500 pl-3 py-1 mb-3">
-            <p class="text-xs font-bold text-slate-800">Sincronizado globalmente</p>
-            <p class="text-[11px] font-medium text-slate-500">Base de datos de asistencia operativa.</p>
-          </div>
-          <div class="border-l-4 border-blue-500 pl-3 py-1">
-            <p class="text-xs font-bold text-slate-800">Control de Puntajes</p>
-            <p class="text-[11px] font-medium text-slate-500">Sistema evaluativo por puntualidad activo.</p>
-          </div>
-        </div>
-
       </div>
-
     </div>
-
   </main>
 
   <script src="js/auth.js"></script>
@@ -242,158 +225,100 @@
     if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
     if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMenu);
 
+    // AJUSTE DINÁMICO DE MENÚ NAVEGACIONAL POR ROLES
     document.addEventListener('DOMContentLoaded', () => {
-      // Verificar sesión activa
-      if (typeof checkAuth === 'function') {
-        checkAuth('Director');
-      }
-
-      // Nombre del usuario activo si existe en localStorage
       const sessionData = JSON.parse(localStorage.getItem('user_session') || localStorage.getItem('usuario') || '{}');
+      const rol = (sessionData.rol || '').toLowerCase();
+
+      // Actualizar datos del usuario en la interfaz
       if (sessionData.nombre) {
         const saludo = document.getElementById('director-saludo');
         if (saludo) saludo.innerText = `Bienvenido(a), ${sessionData.nombre}`;
+
+        const elemNombre = document.getElementById('user-name');
+        if (elemNombre) elemNombre.innerText = sessionData.nombre;
+
+        const elemBadge = document.getElementById('user-role-badge');
+        if (elemBadge) elemBadge.innerText = (sessionData.rol || 'USUARIO').toUpperCase();
+
+        const elemAvatar = document.getElementById('user-avatar');
+        if (elemAvatar) elemAvatar.innerText = sessionData.nombre.charAt(0).toUpperCase();
       }
 
-      // Imprimir fecha actual dinámica
+      // Restricción de Menú según el Rol
+      const esAdminDirectivo = ['admin', 'director', 'directivo'].includes(rol);
+      if (!esAdminDirectivo) {
+        const navCrud = document.getElementById('nav-crud');
+        if (navCrud) navCrud.style.display = 'none';
+
+        const linkCrudPanel = document.getElementById('link-crud-panel');
+        if (linkCrudPanel) linkCrudPanel.style.display = 'none';
+      }
+
+      // Fecha actual
       const elemFecha = document.getElementById('fecha-actual');
       if (elemFecha) {
         elemFecha.innerText = new Date().toLocaleDateString('es-PE', { 
-          weekday: 'long', 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
         });
       }
 
-      // Ejecutar la lectura de métricas y marcaciones
       cargarMetricasDashboard();
     });
 
-    async function cargarMetricasDashboard() {
-      // 1. OBTENER TOTAL DE ESTUDIANTES Y DOCENTES
-      try {
-        let resUsuarios = await fetch('/api/estudiantes');
-        if (!resUsuarios.ok) resUsuarios = await fetch('/api/usuarios');
-        
-        if (resUsuarios.ok) {
-          const listaUsuarios = await resUsuarios.json();
-          
-          const totalAlumnos = listaUsuarios.filter(u => 
-            (u.rol && u.rol.toLowerCase() === 'alumno') || 
-            (u.tipo && u.tipo.toLowerCase() === 'alumno') ||
-            (!u.rol && !u.tipo)
-          ).length;
-
-          const totalDocentes = listaUsuarios.filter(u => 
-            (u.rol && (u.rol.toLowerCase() === 'docente' || u.rol.toLowerCase() === 'auxiliar')) || 
-            (u.tipo && (u.tipo.toLowerCase() === 'docente' || u.tipo.toLowerCase() === 'auxiliar'))
-          ).length;
-
-          const elemEstudiantes = document.getElementById('total-estudiantes');
-          const elemDocentes = document.getElementById('total-docentes');
-          
-          if (elemEstudiantes) elemEstudiantes.innerText = totalAlumnos;
-          if (elemDocentes) elemDocentes.innerText = totalDocentes;
-        }
-      } catch (errUsuarios) {
-        console.warn("Error al consultar directorio de usuarios:", errUsuarios);
-      }
-
-      // 2. OBTENER MARCACIONES REALES DEL ESCÁNER
-      try {
-        let datosOriginales = [];
-
-        let resMarcaciones = await fetch('/api/asistencias');
-        if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/asistencia/hoy');
-        if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/marcaciones');
-        if (!resMarcaciones.ok) resMarcaciones = await fetch('/api/reportes/consolidado');
-
-        if (resMarcaciones.ok) {
-          datosOriginales = await resMarcaciones.json();
-        }
-
-        const tbody = document.getElementById('tabla-dashboard-recent');
-        if (tbody) tbody.innerHTML = '';
-
-        // Filtrar solo registros válidos
-        const marcacionesEfectivas = datosOriginales.filter(item => {
-          const horaValida = item.hora || item.hora_ingreso || item.hora_registro || item.hora_escaneo || item.fecha_hora || item.created_at || item.createdAt || item.timestamp;
-          
-          return (horaValida && String(horaValida).trim() !== '' && horaValida !== '--:--') || 
-                 (item.tardanzas > 0) || 
-                 (item.asistencias > 0 && item.hora);
-        });
-
-        if (!marcacionesEfectivas || marcacionesEfectivas.length === 0) {
-          if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400 font-semibold">Sin registros de marcación hoy</td></tr>';
-          }
-          actualizarTarjetasContadores(0, 0);
-          return;
-        }
-
-        let puntualesTotal = 0;
-        let tardanzasTotal = 0;
-
-        // Renderizar registros
-        marcacionesEfectivas.forEach((item, index) => {
-          const estadoUpper = String(item.estado || '').toUpperCase();
-          const esTarde = estadoUpper === 'TARDE' || estadoUpper === 'TARDANZA' || (item.tardanzas && item.tardanzas > 0);
-          const esPuntual = estadoUpper === 'PUNTUAL' || estadoUpper === 'PRESENTE' || (!esTarde && item.asistencias > 0);
-
-          if (esTarde) {
-            tardanzasTotal++;
-          } else if (esPuntual) {
-            puntualesTotal++;
-          }
-
-          if (tbody && index < 6) {
-            const estadoBadge = esTarde 
-              ? '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">TARDE</span>'
-              : '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">PUNTUAL</span>';
-
-            let rawHora = item.hora || item.hora_ingreso || item.hora_registro || item.hora_escaneo || item.fecha_hora || item.created_at || item.createdAt || item.timestamp;
-            let horaFormateada = '--:--';
-
-            if (rawHora && typeof rawHora === 'string') {
-              if (rawHora.includes('T') || (rawHora.includes('-') && rawHora.includes(':'))) {
-                const d = new Date(rawHora);
-                if (!isNaN(d.getTime())) {
-                  horaFormateada = d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
-                }
-              } else if (/^\d{1,2}:\d{2}/.test(rawHora)) {
-                horaFormateada = rawHora;
-              } else {
-                horaFormateada = rawHora;
-              }
-            }
-
-            tbody.innerHTML += `
-              <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
-                <td class="py-3 px-3 font-mono font-bold text-slate-700">${item.codigo || item.id || 'N/A'}</td>
-                <td class="py-3 px-3 font-semibold text-slate-800">${item.nombre || item.nombre_completo || 'Usuario'}</td>
-                <td class="py-3 px-3 text-slate-500 font-medium">${item.aula || item.materia_aula || item.grado || item.rol || 'General'}</td>
-                <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">${horaFormateada}</td>
-                <td class="py-3 px-3 text-center">${estadoBadge}</td>
-              </tr>
-            `;
-          }
-        });
-
-        actualizarTarjetasContadores(puntualesTotal, tardanzasTotal);
-
-      } catch (errReportes) {
-        console.error("Error al cargar marcaciones:", errReportes);
-      }
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'index.html';
     }
 
-    function actualizarTarjetasContadores(puntuales, tardanzas) {
-      const elemPuntuales = document.getElementById('total-asistencias') || document.getElementById('total-puntuales');
-      const elemTardanzas = document.getElementById('total-tardanzas');
+    async function cargarMetricasDashboard() {
+      try {
+        let resUsuarios = await fetch('/api/usuarios');
+        if (resUsuarios.ok) {
+          const lista = await resUsuarios.json();
+          const totalAlumnos = lista.filter(u => (u.rol || '').toLowerCase() === 'alumno').length;
+          const totalDocentes = lista.filter(u => ['docente', 'auxiliar'].includes((u.rol || '').toLowerCase())).length;
 
-      if (elemPuntuales) elemPuntuales.innerText = puntuales;
-      if (elemTardanzas) elemTardanzas.innerText = tardanzas;
+          document.getElementById('total-estudiantes').innerText = totalAlumnos;
+          document.getElementById('total-docentes').innerText = totalDocentes;
+        }
+      } catch (err) { console.warn("Error consultando usuarios", err); }
+
+      try {
+        let resHoy = await fetch('/api/asistencia/hoy');
+        if (resHoy.ok) {
+          const marcaciones = await resHoy.json();
+          const tbody = document.getElementById('tabla-dashboard-recent');
+          tbody.innerHTML = '';
+
+          let puntuales = 0, tardanzas = 0;
+
+          marcaciones.forEach((item, index) => {
+            const estadoUpper = (item.estado || '').toUpperCase();
+            if (estadoUpper === 'PUNTUAL') puntuales++;
+            if (estadoUpper === 'TARDANZA' || estadoUpper === 'TARDE') tardanzas++;
+
+            if (index < 6) {
+              const badge = (estadoUpper === 'TARDANZA' || estadoUpper === 'TARDE')
+                ? '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">TARDE</span>'
+                : '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">PUNTUAL</span>';
+
+              tbody.innerHTML += `
+                <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+                  <td class="py-3 px-3 font-mono font-bold text-slate-700">${item.codigo}</td>
+                  <td class="py-3 px-3 font-semibold text-slate-800">${item.nombre}</td>
+                  <td class="py-3 px-3 text-slate-500 font-medium">${item.rol || 'General'}</td>
+                  <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">${item.hora}</td>
+                  <td class="py-3 px-3 text-center">${badge}</td>
+                </tr>
+              `;
+            }
+          });
+
+          document.getElementById('total-asistencias').innerText = puntuales;
+          document.getElementById('total-tardanzas').innerText = tardanzas;
+        }
+      } catch (err) { console.error("Error marcaciones", err); }
     }
   </script>
 </body>
