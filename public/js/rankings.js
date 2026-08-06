@@ -110,7 +110,10 @@ async function imprimirRankingDocentesPDF() {
     head: [['Posición', 'Nombre Completo', 'Materia / Área', 'Puntaje']],
     body: bodyData,
     theme: 'grid',
-    headStyles: { fillColor: [14, 42, 71], textColor: [255, 255, 255], fontStyle: 'bold' },
+    headStyles: { 
+    fillColor: [0, 102, 51], 
+    textColor: [255, 255, 255], 
+    fontStyle: 'bold' },
     styles: { 
       fontSize: 8,
       fillColor: false // Permite ver el logo de fondo
@@ -157,7 +160,10 @@ async function imprimirRankingAlumnosPDF() {
     head: [['Posición', 'Nombre Completo', 'Aula / Grado', 'Puntaje']],
     body: bodyData,
     theme: 'grid',
-    headStyles: { fillColor: [0, 102, 51], textColor: [255, 255, 255], fontStyle: 'bold' },
+    headStyles: { 
+    fillColor: [0, 102, 51], 
+    textColor: [255, 255, 255], 
+    fontStyle: 'bold' },
     styles: { 
       fontSize: 8,
       fillColor: false // Permite ver el logo de fondo
