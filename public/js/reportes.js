@@ -192,12 +192,10 @@ function obtenerAlumnosPorAula() {
     if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) return false;
     if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
 
+    // CORREGIDO: Comparación robusta para identificar la sección en la cadena de texto
     if (seccion !== 'Todos') {
       const seccionNormalizada = seccion.toUpperCase();
-      const partesAula = aulaStr.split(' ');
-      const ultimaLetra = partesAula[partesAula.length - 1];
-
-      if (ultimaLetra !== seccionNormalizada && !aulaStr.endsWith(` ${seccionNormalizada}`)) {
+      if (!aulaStr.includes(seccionNormalizada)) {
         return false;
       }
     }
@@ -222,7 +220,8 @@ function actualizarOpcionesAlumnosSegunAula() {
     selectAlumno.appendChild(option);
   });
 
-  if (valorSeleccionadoPrevio && Array.from(selectAlumno.options).some(o => o.value === valorSeleccionativePrevio)) {
+  // CORREGIDO: Se resolvió el error de sintaxis 'valorSeleccionativePrevio' -> 'valorSeleccionadoPrevio'
+  if (valorSeleccionadoPrevio && Array.from(selectAlumno.options).some(o => o.value === valorSeleccionadoPrevio)) {
     selectAlumno.value = valorSeleccionadoPrevio;
   } else {
     selectAlumno.value = 'todos';
@@ -584,7 +583,8 @@ async function generarFichaAlumnoPDF() {
     return;
   }
 
-  const alumno = datosReporteGlobal.find(d => d.codigo === selectAlumno);
+  // CORREGIDO: Búsqueda tolerante a variaciones de mayúsculas/minúsculas y espacios
+  const alumno = datosReporteGlobal.find(d => String(d.codigo).trim().toUpperCase() === String(selectAlumno).trim().toUpperCase());
   if (!alumno) {
     alert("No se encontraron los datos del alumno seleccionado.");
     return;
@@ -684,13 +684,13 @@ async function generarDocentesPDF() {
   let faltas = 0;
 
   historial.forEach(reg => {
-    const estado = (reg.estado || '').toUpperCase();
+    const fontEstado = (reg.estado || '').toUpperCase();
     
-    if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') {
+    if (fontEstado === 'PUNTUAL' || fontEstado === 'ASISTENCIA') {
       puntuales++;
-    } else if (estado === 'TARDANZA' || estado === 'TARDE') {
+    } else if (fontEstado === 'TARDANZA' || fontEstado === 'TARDE') {
       tardanzas++;
-    } else if (estado === 'FALTA' || estado === 'INJUSTIFICADA' || estado === 'JUSTIFICADA') {
+    } else if (fontEstado === 'FALTA' || fontEstado === 'INJUSTIFICADA' || fontEstado === 'JUSTIFICADA') {
       faltas++;
     }
   });

@@ -72,12 +72,12 @@ db.serialize(() => {
   `);
 
   const stmt = db.prepare("INSERT OR IGNORE INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)");
-  stmt.run('DIR-SRN-001', 'Director Manuel Asencio Málaga', 'Director', 'Dirección General');
+  stmt.run('DIR-SRN-001', 'Manuel Asencio Málaga', 'Director', 'Dirección General');
   stmt.finalize();
 
   db.run(`
     UPDATE usuarios 
-    SET rol = 'Director', nombre = 'Director Manuel Asencio Málaga', materia_aula = 'Dirección General'
+    SET rol = 'Director', nombre = 'Manuel Asencio Málaga', materia_aula = 'Dirección General'
     WHERE codigo = 'DIR-SRN-001'
   `, (err) => {
     if (err) console.error("Error al verificar el rol del Director:", err.message);
