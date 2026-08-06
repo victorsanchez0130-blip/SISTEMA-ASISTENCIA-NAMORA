@@ -364,9 +364,9 @@ function mostrarTarjetaResultado(data) {
   const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data;
 
   // Obtener nombre, código y aula/asignación de forma segura y robusta
-  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || 'Nombre No Especificado';
+  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || data.nombre_completo || 'Usuario Desconocido';
   const codigo = entidad.codigo || data.codigo || '-';
-  const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || '---';
+  const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || 'Asignación Regular';
 
   const esSalida = modoActual === 'SALIDA';
   const colorBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
