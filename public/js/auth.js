@@ -31,9 +31,7 @@ function checkAuth(requiredRol = null) {
       window.location.href = 'dashboard.html';
     } else if (userRol === 'docente') {
       window.location.href = 'dashboard.html';
-    } else {
-      window.location.href = 'escaner.html';
-    }
+    } 
     return;
   }
 

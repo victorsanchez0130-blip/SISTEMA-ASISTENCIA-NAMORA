@@ -276,7 +276,12 @@
           weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
         });
       }
-
+      
+      // Ocultar cualquier botón con la clase o id de edición/eliminación que exista
+      document.querySelectorAll('.btn-editar, .btn-eliminar, .btn-modificar, .acciones-crud').forEach(el => {
+        el.style.display = 'none';
+      });
+      
       cargarMetricasDashboard();
     });
 

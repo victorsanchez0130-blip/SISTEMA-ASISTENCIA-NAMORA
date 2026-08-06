@@ -28,7 +28,7 @@
       </div>
       <div class="flex items-center gap-3">
         <span id="usuario-login" class="text-xs font-medium bg-indigo-800 px-3 py-1.5 rounded-lg border border-indigo-700 flex items-center gap-1">
-          <i class="fa-solid fa-user-gear mr-1"></i> <span id="label-rol-operador" class="font-bold">OPERADOR:</span> <span id="nombre-auxiliar">Cargando...</span>
+          <i class="fa-solid fa-user-gear mr-1"></i> <span id="label-rol-auxiliar" class="font-bold">AUXILIAR:</span> <span id="nombre-auxiliar">Cargando...</span>
         </span>
         <button onclick="cerrarSesion()" class="bg-red-500/20 hover:bg-red-500 text-red-200 hover:text-white text-xs font-semibold py-1.5 px-3 rounded-lg border border-red-500/30 transition-all">
           <i class="fa-solid fa-right-from-bracket mr-1"></i> Salir
@@ -64,20 +64,6 @@
           <i class="fa-solid fa-stop"></i> Cerrar Asistencia
         </button>
       </div>
-    </section>
-
-    <!-- ENTRADA PARA ESCÁNER FÍSICO / BARRAS USB -->
-    <section class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
-      <form id="formEscanerManual" onsubmit="procesarEscaneoManual(event)" class="flex gap-2">
-        <div class="relative flex-1">
-          <i class="fa-solid fa-barcode absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-          <input type="text" id="input-codigo-manual" autocomplete="off" placeholder="Modo Escáner USB: Haz clic aquí o ingresa código..." 
-                 class="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-        </div>
-        <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all">
-          Marcar
-        </button>
-      </form>
     </section>
 
     <!-- ÁREA DEL ESCÁNER Y RESULTADOS -->

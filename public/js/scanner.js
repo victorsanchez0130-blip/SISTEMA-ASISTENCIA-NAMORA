@@ -15,44 +15,37 @@ document.addEventListener('DOMContentLoaded', () => {
 // ----------------------------------------------------
 function verificarSesion() {
   const sessionData = localStorage.getItem('user_session') || localStorage.getItem('usuario');
-  
   if (!sessionData) {
     window.location.href = 'index.html';
     return;
   }
-
   try {
     const user = JSON.parse(sessionData);
     const userRol = (user.rol || '').trim().toLowerCase();
-
     // Redirección si un Docente intenta ingresar directamente a esta URL
     if (userRol === 'docente') {
       alert('Acceso restringido: El personal docente solo puede acceder a Dashboard, Reportes y Rankings.');
       window.location.href = 'dashboard.html';
       return;
     }
-
     // Permitir acceso únicamente a Auxiliar, Director y Admin
     const rolesPermitidos = ['auxiliar', 'director', 'directivo', 'admin'];
     if (!rolesPermitidos.includes(userRol)) {
-      alert('Acceso restringido: No cuenta con permisos de operador para el escáner.');
+      alert('Acceso restringido: No cuenta con permisos de auxiliar para el escáner.');
       window.location.href = 'index.html';
       return;
     }
-
     // Actualizar nombre y rol en el Navbar
     const elNombreAuxiliar = document.getElementById('nombre-auxiliar');
-    const elLabelRol = document.getElementById('label-rol-operador');
-
+    const elLabelRol = document.getElementById('label-rol-auxiliar');
     if (elNombreAuxiliar) {
-      elNombreAuxiliar.innerText = user.nombre || user.usuario || 'Operador';
+      elNombreAuxiliar.innerText = user.nombre || user.usuario || 'Auxiliar';
     }
     if (elLabelRol) {
       elLabelRol.innerText = `${userRol.toUpperCase()}:`;
     }
-
   } catch (e) {
-    console.error('Error al leer datos de sesión:', e);
+    console.error('Error al verificar sesión:', e);
     localStorage.removeItem('usuario');
     localStorage.removeItem('user_session');
     window.location.href = 'index.html';
