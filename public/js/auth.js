@@ -11,10 +11,10 @@ function checkAuth(requiredRol = null) {
   }
 
   // Identificar página actual
-  const currentPage = window.location.pathname.split('/').pop().toLowerCase();
+  const currentPage = window.location.pathname.split('/').pop().toLowerCase() || 'index.html';
   const isLoginPage = currentPage === 'index.html' || currentPage === '';
 
-  // 2. Si no hay usuario activo y no está en el login, redirigir
+  // 2. Si no hay usuario activo y no está en el login, redirigir al login
   if (!user) {
     if (!isLoginPage) {
       window.location.href = 'index.html';
@@ -22,28 +22,43 @@ function checkAuth(requiredRol = null) {
     return;
   }
 
-  // 3. Normalizar el rol
+  // 3. Normalizar el rol a minúsculas
   const userRol = (user.rol || '').trim().toLowerCase();
 
-  // Si está en el login pero YA tiene sesión activa, redirigir a su vista autorizada
+  // 4. Si el usuario YA tiene sesión activa e intenta cargar 'index.html', redirigirlo a su página inicial correspondiente
   if (isLoginPage) {
-    if (['admin', 'director', 'directivo'].includes(userRol)) {
-      window.location.href = 'dashboard.html';
-    } else if (userRol === 'docente') {
-      window.location.href = 'dashboard.html';
-    } 
+    switch (userRol) {
+      case 'director':
+      case 'admin':
+      case 'directivo':
+      case 'docente':
+        window.location.href = 'dashboard.html';
+        break;
+      case 'auxiliar':
+        window.location.href = 'escaner.html';
+        break;
+      case 'alumno':
+      case 'estudiante':
+        window.location.href = 'rankings.html';
+        break;
+      default:
+        localStorage.clear();
+        window.location.href = 'index.html';
+        break;
+    }
     return;
   }
 
   // --- MATRIZ DE PERMISOS POR ROL ---
-  // ADMIN: Acceso total a todas las páginas.
-  if (['admin', 'director', 'directivo'].includes(userRol)) {
+
+  // DIRECTOR (y aliases Admin/Directivo): Acceso TOTAL
+  if (['director', 'admin', 'directivo'].includes(userRol)) {
     return; // Pasa sin restricciones
   }
 
   // DOCENTE: Solo Dashboard, Reportes y Rankings
-  const paginasDocente = ['dashboard.html', 'reportes.html', 'rankings.html'];
   if (userRol === 'docente') {
+    const paginasDocente = ['dashboard.html', 'reportes.html', 'rankings.html'];
     if (!paginasDocente.includes(currentPage)) {
       alert('Acceso restringido: Los docentes solo tienen acceso a Dashboard, Reportes y Rankings.');
       window.location.href = 'dashboard.html';
@@ -54,19 +69,32 @@ function checkAuth(requiredRol = null) {
   // AUXILIAR: Solo Escáner
   if (userRol === 'auxiliar') {
     if (currentPage !== 'escaner.html') {
-      alert('Acceso restringido: Los auxiliares solo tienen acceso al Escáner.');
+      alert('Acceso restringido: Los auxiliares solo tienen acceso al módulo Escáner.');
       window.location.href = 'escaner.html';
     }
     return;
   }
 
-  // OTROS ROLES/ALUMNOS: Redirigir por defecto al inicio
-  alert('Acceso denegado: Su rol no tiene permisos asignados.');
-  window.location.href = 'index.html';
+  // ALUMNO: Solo Rankings
+  if (userRol === 'alumno' || userRol === 'estudiante') {
+    if (currentPage !== 'rankings.html') {
+      alert('Acceso restringido: Los alumnos solo tienen acceso a la sección Rankings.');
+      window.location.href = 'rankings.html';
+    }
+    return;
+  }
+
+  // CUALQUIER OTRO ROL NO RECONOCIDO
+  alert('Acceso denegado: Su rol no cuenta con permisos válidos.');
+  logout();
 }
 
 function logout() {
   localStorage.removeItem('user_session');
   localStorage.removeItem('usuario');
+  localStorage.clear();
   window.location.href = 'index.html';
 }
+
+// Ejecutar automáticamente la validación al cargar el script
+checkAuth();

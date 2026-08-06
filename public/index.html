@@ -25,6 +25,9 @@
     </form>
   </div>
 
+  <!-- Cargar librería de control de sesión -->
+  <script src="js/auth.js"></script>
+
   <script>
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -42,15 +45,11 @@
         if (res.ok && data.success) {
           // Guardar sesión estandarizada
           localStorage.setItem('user_session', JSON.stringify(data.usuario));
+          localStorage.setItem('usuario', JSON.stringify(data.usuario));
           
-          // Redirección acorde al rol registrado
-          if (data.usuario.rol === 'Director' || data.usuario.rol === 'Directivo') {
-            window.location.href = 'dashboard.html';
-          } else {
-            window.location.href = 'escaner.html';
-          }
+          // Redirección centralizada según la matriz de roles
+          checkAuth();
         } else {
-          // Mostrar mensaje amigable sin undefined
           alert(data.mensaje || 'Código de usuario inválido');
         }
       } catch (error) {

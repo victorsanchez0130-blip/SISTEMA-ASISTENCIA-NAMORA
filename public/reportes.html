@@ -4,11 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Control y Reportes - I.E. Santa Rosa</title>
+
+  <!-- GUARDIA DE SEGURIDAD Y PERMISOS POR ROL -->
+  <script src="js/auth.js"></script>
+
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Generación de PDFs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+  
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     body { font-family: 'Inter', sans-serif; }
@@ -39,23 +47,23 @@
       </div>
 
       <nav class="p-3 space-y-2 text-sm font-semibold" id="nav-menu">
-        <a href="dashboard.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+        <a href="dashboard.html" id="nav-inicio" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
           <i class="fa-solid fa-chart-pie w-5 text-center text-base text-cyan-300"></i>
           <span>Inicio</span>
         </a>
 
         <!-- Control y Reportes (Activo) -->
-        <a href="reportes.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-blue-600 text-white shadow-md">
+        <a href="reportes.html" id="nav-reportes" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-blue-600 text-white shadow-md">
           <i class="fa-solid fa-folder-open w-5 text-center text-base text-emerald-400"></i>
           <span>Control y Reportes</span>
         </a>
 
-        <a href="rankings.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+        <a href="rankings.html" id="nav-rankings" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
           <i class="fa-solid fa-trophy w-5 text-center text-base text-amber-400"></i>
           <span>Rankings y Puntos</span>
         </a>
 
-        <!-- Inscribir / CRUD (Solo Visible para Admin/Director) -->
+        <!-- Inscribir / CRUD (Solo Visible para Director/Admin) -->
         <a href="inscripciones.html" id="nav-crud" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
           <i class="fa-solid fa-user-pen w-5 text-center text-base text-purple-400"></i>
           <span>Inscribir / CRUD</span>
@@ -105,9 +113,15 @@
         </div>
 
         <div class="ml-auto flex gap-2">
-          <button id="btnReporteDocentes" class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all">📄 Docentes PDF</button>
-          <button id="btnReporteGrado" class="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all">📊 Grado PDF</button>
-          <button id="btnFichaAlumno" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all">📄 Ficha Alumno PDF</button>
+          <button id="btnReporteDocentes" class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-file-pdf"></i> Docentes PDF
+          </button>
+          <button id="btnReporteGrado" class="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-chart-simple"></i> Grado PDF
+          </button>
+          <button id="btnFichaAlumno" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-id-card"></i> Ficha Alumno PDF
+          </button>
         </div>
       </div>
 
@@ -166,7 +180,11 @@
               <th class="py-3 px-3 text-center">ACCIONES</th>
             </tr>
           </thead>
-          <tbody id="tbodyReportes" class="text-xs divide-y divide-slate-100 font-medium"></tbody>
+          <tbody id="tbodyReportes" class="text-xs divide-y divide-slate-100 font-medium">
+            <tr>
+              <td colspan="8" class="text-center py-6 text-slate-400 font-medium">Cargando reporte de asistencias...</td>
+            </tr>
+          </tbody>
         </table>
       </div>
     </div>
@@ -205,8 +223,11 @@
     </div>
   </div>
 
+  <!-- Lógica de Reportes -->
   <script src="js/reportes.js"></script>
+  
   <script>
+    // Control del Menú Hamburguesa para Móviles
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebarOverlay');
@@ -219,27 +240,31 @@
     if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
     if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMenu);
 
+    // Ajuste de interfaz e información del usuario
     document.addEventListener('DOMContentLoaded', () => {
-      const sessionData = JSON.parse(localStorage.getItem('user_session') || localStorage.getItem('usuario') || '{}');
+      const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario');
+      if (!sessionRaw) {
+        window.location.href = 'index.html';
+        return;
+      }
+
+      const sessionData = JSON.parse(sessionRaw || '{}');
       const rol = (sessionData.rol || '').toLowerCase();
 
+      // Cargar datos en el perfil al pie del sidebar
       if (sessionData.nombre) {
         document.getElementById('user-name').innerText = sessionData.nombre;
         document.getElementById('user-role-badge').innerText = (sessionData.rol || 'USUARIO').toUpperCase();
         document.getElementById('user-avatar').innerText = sessionData.nombre.charAt(0).toUpperCase();
       }
 
+      // Restricción de Visibilidad: Ocultar CRUD si no es Director/Admin/Directivo
       const esAdminDirectivo = ['admin', 'director', 'directivo'].includes(rol);
       if (!esAdminDirectivo) {
         const navCrud = document.getElementById('nav-crud');
         if (navCrud) navCrud.style.display = 'none';
       }
     });
-
-    function logout() {
-      localStorage.clear();
-      window.location.href = 'index.html';
-    }
   </script>
 </body>
 </html>
