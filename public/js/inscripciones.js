@@ -37,42 +37,66 @@ document.getElementById('formRegistro').addEventListener('submit', async (e) => 
     materia_aula = 'Auxiliar de Educación';
   }
 
-  const res = await fetch('/api/usuarios', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nombre, rol, materia_aula })
-  });
+  // Obtener rol actual o por defecto 'admin' para cumplir con el middleware del servidor
+  const rolUsuarioLogueado = localStorage.getItem('userRol') || 'admin';
 
-  const data = await res.json();
-  if (data.success) {
-    alert(`Usuario registrado con éxito. Código: ${data.codigo}`);
-    document.getElementById('formRegistro').reset();
-    alternarCamposRol();
-    cargarUsuarios();
+  try {
+    const res = await fetch('/api/usuarios', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-user-rol': rolUsuarioLogueado // <- ¡Clave para que el servidor autorice la inserción!
+      },
+      body: JSON.stringify({ nombre, rol, materia_aula })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      alert(`Usuario registrado con éxito. Código: ${data.codigo}`);
+      document.getElementById('formRegistro').reset();
+      alternarCamposRol();
+      cargarUsuarios();
+    } else {
+      alert('Error al registrar: ' + (data.mensaje || 'No se pudo completar la acción.'));
+    }
+  } catch (err) {
+    console.error("Error de red:", err);
+    alert("Error al conectar con el servidor.");
   }
 });
 
 async function cargarUsuarios() {
-  const res = await fetch('/api/usuarios');
-  const usuarios = await res.json();
-  const tbody = document.getElementById('tbodyUsuarios');
-  tbody.innerHTML = '';
+  try {
+    const res = await fetch('/api/usuarios');
+    const usuarios = await res.json();
+    const tbody = document.getElementById('tbodyUsuarios');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
 
-  usuarios.forEach(u => {
-    tbody.innerHTML += `
-      <tr>
-        <td><b>${u.codigo}</b></td>
-        <td>${u.nombre}</td>
-        <td>${u.rol}</td>
-        <td>${u.materia_aula || '-'}</td>
-        <td style="display:flex; gap:5px;">
-          <button onclick="descargarFotocheck('${u.codigo}', '${u.nombre}', '${u.rol}', '${u.materia_aula}')" class="btn-submit" style="background:#0284c7; padding:6px 12px; font-size:12px;">📱 Fotocheck</button>
-          <button onclick="abrirModalEditar(${u.id}, '${u.nombre}', '${u.rol}', '${u.materia_aula}')" class="btn-submit" style="background:#eab308; padding:6px 12px; font-size:12px;">✏️ Editar</button>
-          <button onclick="eliminarUsuario(${u.id})" class="btn-delete" style="padding:6px 12px; font-size:12px;">Eliminar</button>
-        </td>
-      </tr>
-    `;
-  });
+    if (usuarios.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px;">No hay usuarios registrados.</td></tr>`;
+      return;
+    }
+
+    usuarios.forEach(u => {
+      tbody.innerHTML += `
+        <tr>
+          <td><b>${u.codigo}</b></td>
+          <td>${u.nombre}</td>
+          <td>${u.rol}</td>
+          <td>${u.materia_aula || '-'}</td>
+          <td style="display:flex; gap:5px;">
+            <button onclick="descargarFotocheck('${u.codigo}', '${u.nombre}', '${u.rol}', '${u.materia_aula}')" class="btn-submit" style="background:#0284c7; padding:6px 12px; font-size:12px;">📱 Fotocheck</button>
+            <button onclick="abrirModalEditar(${u.id}, '${u.nombre}', '${u.rol}', '${u.materia_aula}')" class="btn-submit" style="background:#eab308; padding:6px 12px; font-size:12px;">✏️ Editar</button>
+            <button onclick="eliminarUsuario(${u.id})" class="btn-delete" style="padding:6px 12px; font-size:12px;">Eliminar</button>
+          </td>
+        </tr>
+      `;
+    });
+  } catch (err) {
+    console.error("Error al cargar usuarios:", err);
+  }
 }
 
 function abrirModalEditar(id, nombre, rol, materia_aula) {
@@ -92,36 +116,64 @@ async function guardarEdicionUsuario() {
   const nombre = document.getElementById('editNombre').value;
   const rol = document.getElementById('editRol').value;
   const materia_aula = document.getElementById('editAsignacion').value;
+  const rolUsuarioLogueado = localStorage.getItem('userRol') || 'admin';
 
-  const res = await fetch(`/api/usuarios/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nombre, rol, materia_aula })
-  });
+  try {
+    const res = await fetch(`/api/usuarios/${id}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-user-rol': rolUsuarioLogueado
+      },
+      body: JSON.stringify({ nombre, rol, materia_aula })
+    });
 
-  const data = await res.json();
-  if (data.success) {
-    alert('Usuario actualizado correctamente');
-    cerrarModalEditar();
-    cargarUsuarios();
+    const data = await res.json();
+    if (data.success) {
+      alert('Usuario actualizado correctamente');
+      cerrarModalEditar();
+      cargarUsuarios();
+    } else {
+      alert('Error al actualizar: ' + (data.mensaje || ''));
+    }
+  } catch (err) {
+    console.error("Error al editar:", err);
   }
 }
 
 async function eliminarUsuario(id) {
   if (confirm('¿Desea eliminar este usuario?')) {
-    await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
-    cargarUsuarios();
+    const rolUsuarioLogueado = localStorage.getItem('userRol') || 'admin';
+    try {
+      const res = await fetch(`/api/usuarios/${id}`, { 
+        method: 'DELETE',
+        headers: {
+          'x-user-rol': rolUsuarioLogueado
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        cargarUsuarios();
+      } else {
+        alert('Error al eliminar: ' + (data.mensaje || ''));
+      }
+    } catch (err) {
+      console.error("Error al eliminar:", err);
+    }
   }
 }
 
 function descargarFotocheck(codigo, nombre, rol, asignacion) {
   const qrDiv = document.getElementById('qrcode');
+  if (!qrDiv) return;
   qrDiv.innerHTML = '';
   
   new QRCode(qrDiv, { text: codigo, width: 128, height: 128 });
 
   setTimeout(() => {
-    const imgData = qrDiv.querySelector('img').src;
+    const imgElement = qrDiv.querySelector('img');
+    if (!imgElement) return;
+    const imgData = imgElement.src;
     const { jsPDF } = window.jspdf;
     
     const doc = new jsPDF({ unit: 'mm', format: [54, 85] });
