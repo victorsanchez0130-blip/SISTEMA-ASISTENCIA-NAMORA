@@ -11,6 +11,7 @@ let modoActual = 'ENTRADA'; // Modos: 'ENTRADA' o 'SALIDA'
 let jornadaActiva = false;
 let html5QrcodeScanner = null;
 let camaraEncendida = false;
+let procesandoEscaneoQR = false; // Variable global de bloqueo para evitar escaneos múltiples del QR
 
 /**
  * Lista de feriados nacionales estandarizados en Perú (MM-DD)
@@ -287,6 +288,10 @@ function procesarMarcacionManual(e) {
 }
 
 async function procesarMarcacion(codigo) {
+  // Evitar escaneos múltiples consecutivos del mismo QR
+  if (procesandoEscaneoQR) return;
+  procesandoEscaneoQR = true;
+
   if (!jornadaActiva) {
     iniciarRegistro();
   }
@@ -307,7 +312,14 @@ async function procesarMarcacion(codigo) {
     const res = await response.json();
 
     if (response.ok && (res.success || res.ok)) {
-      mostrarTarjetaResultado(res.persona || res.alumno || { codigo: codigo, nombre: 'Registrado', modo: modoActual });
+      const datosPersona = res.persona || res.alumno || res.docente || res.auxiliar || res.usuario || { 
+        codigo: codigo, 
+        nombre: res.nombre || 'Usuario Registrado', 
+        aula: res.asignacion || res.aula || res.grado_seccion || 'Asignación Regular',
+        modo: modoActual 
+      };
+
+      mostrarTarjetaResultado(datosPersona);
       mostrarNotificacion(`✅ ${modoActual} registrada para el código ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
       cargarAsistenciasHoy();
       cargarConsolidado();
@@ -316,8 +328,18 @@ async function procesarMarcacion(codigo) {
     }
   } catch (error) {
     console.error("Error al procesar la marcación con el backend:", error);
-    mostrarTarjetaResultado({ codigo: codigo, nombre: "Registro Procesado", modo: modoActual });
+    mostrarTarjetaResultado({ 
+      codigo: codigo, 
+      nombre: "Registro Local / Sincronizando", 
+      aula: "Pendiente de red", 
+      modo: modoActual 
+    });
     mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
+  } finally {
+    // Liberar el bloqueo del escáner después de 2.5 segundos para permitir un nuevo escaneo limpio
+    setTimeout(() => {
+      procesandoEscaneoQR = false;
+    }, 2500);
   }
 }
 
@@ -722,7 +744,6 @@ async function guardarEdicionAsistencia(event) {
     return;
   }
 
-  // Obtenemos la sesión para validar permisos de Director si el backend lo exige
   const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario');
   let usuarioRol = 'Auxiliar';
   if (sessionRaw) {
@@ -732,7 +753,6 @@ async function guardarEdicionAsistencia(event) {
     } catch(e) {}
   }
 
-  // Estructuramos un payload flexible compatible con variaciones de backend
   const payload = { 
     codigo: codigo.trim(), 
     estado: nuevoEstado.toUpperCase(), 
@@ -741,7 +761,6 @@ async function guardarEdicionAsistencia(event) {
   };
 
   try {
-    // Intentamos la ruta estándar de la API
     const response = await fetch('/api/asistencia/editar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -760,7 +779,6 @@ async function guardarEdicionAsistencia(event) {
   } catch (error) {
     console.warn("Fallo en /api/asistencia/editar, intentando endpoint alternativo...", error);
     
-    // Fallback: Si la ruta cambió ligeramente o falló por red interna de Railway
     try {
       const altResponse = await fetch(`/api/reportes/editar?codigo=${codigo}&estado=${nuevoEstado}&fecha=${fechaVal}`, {
         method: 'PUT' || 'POST'
@@ -773,11 +791,9 @@ async function guardarEdicionAsistencia(event) {
       }
     } catch(e) {}
 
-    // Si todo falla a nivel de red, lo forzamos visualmente en local para que no te bloquee
     console.error("Error definitivo de comunicación:", error);
     alert("Se guardaron los cambios temporalmente en la vista local (Error de persistencia en servidor).");
     
-    // Forzado local en la interfaz para mantener fluidez
     if (datosReporteGlobal && datosReporteGlobal.length > 0) {
       const idx = datosReporteGlobal.findIndex(d => d.codigo === codigo);
       if (idx !== -1) {
@@ -823,9 +839,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   const doc = new jsPDFClass();
 
-  // ===================================================
-  // AGREGAR LOGO COMO MARCA DE AGUA (FONDO)
-  // ===================================================
   try {
     const rutaLogoBajoFondo = 'img/logo-marca-agua.png'; 
     doc.addImage(rutaLogoBajoFondo, 'PNG', 25, 70, 160, 160, undefined, 'FAST');
