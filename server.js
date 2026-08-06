@@ -36,6 +36,19 @@ function getHoraPeru() {
   return new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour12: false });
 }
 
+// Middleware de verificación de permisos para Modificaciones (CRUD y Ajustes Manuales)
+function verificarPermisoAdmin(req, res, next) {
+  const userRol = (req.headers['x-user-rol'] || '').trim().toLowerCase();
+  if (['admin', 'director', 'directivo'].includes(userRol)) {
+    next();
+  } else {
+    return res.status(403).json({ 
+      success: false, 
+      mensaje: 'Acceso denegado: Solo el Administrador/Director tiene permisos para realizar modificaciones.' 
+    });
+  }
+}
+
 // Inicialización de esquema y datos base
 db.serialize(() => {
   db.run(`
