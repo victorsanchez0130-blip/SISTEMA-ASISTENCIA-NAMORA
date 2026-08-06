@@ -785,7 +785,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     
     // Posicionamiento centrado en la página A4 (Ancho: 210mm, Alto: 297mm)
     // Parámetros: image, x, y, ancho, alto, alias, ración, rotación
-    doc.addImage(rutaLogoBajoFondo, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+    doc.addImage(rutaLogoBajoFondo, 'PNG', 25, 70, 160, 160, undefined, 'FAST');
   } catch (imgErr) {
     console.warn("No se pudo cargar la marca de agua, continuando sin ella:", imgErr);
   }

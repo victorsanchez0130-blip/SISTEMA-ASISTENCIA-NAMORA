@@ -450,10 +450,10 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   const pintarFondoMarcaAgua = () => {
     if (imgLogoLoaded) {
       doc.saveGraphicsState();
-      const opacityState = new doc.GState({ opacity: 0.1 });
+      const opacityState = new doc.GState({ opacity: 0.2 });
       doc.setGState(opacityState);
       
-      doc.addImage(imgLogoLoaded, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+      doc.addImage(imgLogoLoaded, 'PNG', 25, 70, 160, 160, undefined, 'FAST');
       
       doc.restoreGraphicsState();
     }
