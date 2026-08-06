@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ----------------------------------------------------
-// VERIFICACIÓN DE SESIÓN Y ROL DE AUXILIAR
+// VERIFICACIÓN DE SESIÓN Y ROL
 // ----------------------------------------------------
 function verificarSesion() {
   const sessionData = localStorage.getItem('user_session') || localStorage.getItem('usuario');
@@ -25,18 +25,32 @@ function verificarSesion() {
     const user = JSON.parse(sessionData);
     const userRol = (user.rol || '').trim().toLowerCase();
 
-    // Permitir acceso solo a Auxiliar, Director y Directivo
+    // Redirección si un Docente intenta ingresar directamente a esta URL
+    if (userRol === 'docente') {
+      alert('Acceso restringido: El personal docente solo puede acceder a Dashboard, Reportes y Rankings.');
+      window.location.href = 'dashboard.html';
+      return;
+    }
+
+    // Permitir acceso únicamente a Auxiliar, Director y Admin
     const rolesPermitidos = ['auxiliar', 'director', 'directivo', 'admin'];
     if (!rolesPermitidos.includes(userRol)) {
-      alert('Acceso restringido: No cuenta con permisos de Auxiliar.');
+      alert('Acceso restringido: No cuenta con permisos de operador para el escáner.');
       window.location.href = 'index.html';
       return;
     }
 
+    // Actualizar nombre y rol en el Navbar
     const elNombreAuxiliar = document.getElementById('nombre-auxiliar');
+    const elLabelRol = document.getElementById('label-rol-operador');
+
     if (elNombreAuxiliar) {
-      elNombreAuxiliar.innerText = user.nombre || user.usuario || 'Auxiliar General';
+      elNombreAuxiliar.innerText = user.nombre || user.usuario || 'Operador';
     }
+    if (elLabelRol) {
+      elLabelRol.innerText = `${userRol.toUpperCase()}:`;
+    }
+
   } catch (e) {
     console.error('Error al leer datos de sesión:', e);
     localStorage.removeItem('usuario');
@@ -192,7 +206,7 @@ function onScanSuccess(decodedText) {
 
   enviarMarcacionQR(decodedText.trim());
 
-  // Pausa de 2.5 segundos para evitar lecturas continuas
+  // Pausa de 2.5 segundos para evitar lecturas continuas involuntarias
   setTimeout(() => {
     procesandoEscaneo = false;
   }, 2500);
@@ -388,6 +402,6 @@ function reproducirSonido(tipo) {
       osc.stop(audioCtx.currentTime + 0.3);
     }
   } catch (e) {
-    // Silenciar fallos de reproducción por falta de interacción inicial del usuario
+    // Silenciar fallos si el usuario no ha interactuado previamente
   }
 }

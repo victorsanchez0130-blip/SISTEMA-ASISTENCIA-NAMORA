@@ -192,7 +192,7 @@
           <p class="text-xs text-slate-500 font-medium mb-4">Herramientas del sistema según permisos.</p>
           
           <div class="space-y-2.5">
-            <a href="escaner.html" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
+            <a href="escaner.html" id="link-escaner-panel" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
               <span class="flex items-center gap-2.5"><i class="fa-solid fa-qrcode text-slate-400 group-hover:text-blue-600"></i> Módulo Escáner</span>
               <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-600"></i>
             </a>
@@ -225,9 +225,17 @@
     if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
     if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMenu);
 
-    // AJUSTE DINÁMICO DE MENÚ NAVEGACIONAL POR ROLES
+    // AJUSTE DINÁMICO DE MENÚ NAVEGACIONAL Y VISIBILIDAD POR ROLES
     document.addEventListener('DOMContentLoaded', () => {
-      const sessionData = JSON.parse(localStorage.getItem('user_session') || localStorage.getItem('usuario') || '{}');
+      const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario');
+      
+      // Si no hay sesión válida, redirige al Login
+      if (!sessionRaw) {
+        window.location.href = 'index.html';
+        return;
+      }
+
+      const sessionData = JSON.parse(sessionRaw || '{}');
       const rol = (sessionData.rol || '').toLowerCase();
 
       // Actualizar datos del usuario en la interfaz
@@ -245,7 +253,7 @@
         if (elemAvatar) elemAvatar.innerText = sessionData.nombre.charAt(0).toUpperCase();
       }
 
-      // Restricción de Menú según el Rol
+      // Restricción de Menú para Inscribir/CRUD (Solo para Admin/Director)
       const esAdminDirectivo = ['admin', 'director', 'directivo'].includes(rol);
       if (!esAdminDirectivo) {
         const navCrud = document.getElementById('nav-crud');
@@ -253,6 +261,12 @@
 
         const linkCrudPanel = document.getElementById('link-crud-panel');
         if (linkCrudPanel) linkCrudPanel.style.display = 'none';
+      }
+
+      // Ocultar acceso directo al Escáner para Docentes y Alumnos
+      if (rol === 'docente' || rol === 'alumno') {
+        const linkEscanerPanel = document.getElementById('link-escaner-panel');
+        if (linkEscanerPanel) linkEscanerPanel.style.display = 'none';
       }
 
       // Fecha actual
@@ -272,6 +286,7 @@
     }
 
     async function cargarMetricasDashboard() {
+      // 1. Cargar número total de Usuarios
       try {
         let resUsuarios = await fetch('/api/usuarios');
         if (resUsuarios.ok) {
@@ -282,33 +297,49 @@
           document.getElementById('total-estudiantes').innerText = totalAlumnos;
           document.getElementById('total-docentes').innerText = totalDocentes;
         }
-      } catch (err) { console.warn("Error consultando usuarios", err); }
+      } catch (err) { console.warn("Error consultando usuarios:", err); }
 
+      // 2. Cargar Asistencias y Tardanzas de Hoy
       try {
         let resHoy = await fetch('/api/asistencia/hoy');
         if (resHoy.ok) {
           const marcaciones = await resHoy.json();
           const tbody = document.getElementById('tabla-dashboard-recent');
-          tbody.innerHTML = '';
+          
+          if (!Array.isArray(marcaciones) || marcaciones.length === 0) {
+            tbody.innerHTML = `
+              <tr>
+                <td colspan="5" class="py-8 text-center text-slate-400 font-semibold">No se han registrado marcaciones el día de hoy.</td>
+              </tr>
+            `;
+            document.getElementById('total-asistencias').innerText = '0';
+            document.getElementById('total-tardanzas').innerText = '0';
+            return;
+          }
 
+          tbody.innerHTML = '';
           let puntuales = 0, tardanzas = 0;
 
           marcaciones.forEach((item, index) => {
             const estadoUpper = (item.estado || '').toUpperCase();
-            if (estadoUpper === 'PUNTUAL') puntuales++;
+            if (estadoUpper === 'PUNTUAL' || estadoUpper === 'REGISTRADO') puntuales++;
             if (estadoUpper === 'TARDANZA' || estadoUpper === 'TARDE') tardanzas++;
 
             if (index < 6) {
-              const badge = (estadoUpper === 'TARDANZA' || estadoUpper === 'TARDE')
-                ? '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">TARDE</span>'
-                : '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">PUNTUAL</span>';
+              let badge = '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">PUNTUAL</span>';
+              
+              if (estadoUpper === 'TARDANZA' || estadoUpper === 'TARDE') {
+                badge = '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">TARDE</span>';
+              } else if (estadoUpper === 'FALTA' || estadoUpper === 'INJUSTIFICADA') {
+                badge = '<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">FALTA</span>';
+              }
 
               tbody.innerHTML += `
                 <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
-                  <td class="py-3 px-3 font-mono font-bold text-slate-700">${item.codigo}</td>
-                  <td class="py-3 px-3 font-semibold text-slate-800">${item.nombre}</td>
+                  <td class="py-3 px-3 font-mono font-bold text-slate-700">${item.codigo || item.codigoQR || '-'}</td>
+                  <td class="py-3 px-3 font-semibold text-slate-800">${item.nombre || 'Desconocido'}</td>
                   <td class="py-3 px-3 text-slate-500 font-medium">${item.rol || 'General'}</td>
-                  <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">${item.hora}</td>
+                  <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">${item.hora || '--:--'}</td>
                   <td class="py-3 px-3 text-center">${badge}</td>
                 </tr>
               `;
@@ -318,7 +349,7 @@
           document.getElementById('total-asistencias').innerText = puntuales;
           document.getElementById('total-tardanzas').innerText = tardanzas;
         }
-      } catch (err) { console.error("Error marcaciones", err); }
+      } catch (err) { console.error("Error consultando marcaciones:", err); }
     }
   </script>
 </body>
