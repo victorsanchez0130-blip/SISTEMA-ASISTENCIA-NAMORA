@@ -678,13 +678,41 @@ async function generarDocentesPDF() {
     console.error("Error recuperando historial docentes:", e);
   }
 
+  // -----------------------------------------------------------------
+  // CÁLCULO DINÁMICO DE MÉTRICAS SEGÚN HISTORIAL REAL
+  // -----------------------------------------------------------------
+  let puntuales = 0;
+  let tardanzas = 0;
+  let faltas = 0;
+
+  historial.forEach(reg => {
+    const estado = (reg.estado || '').toUpperCase();
+    
+    if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') {
+      puntuales++;
+    } else if (estado === 'TARDANZA' || estado === 'TARDE') {
+      tardanzas++;
+    } else if (estado === 'FALTA' || estado === 'INJUSTIFICADA' || estado === 'JUSTIFICADA') {
+      faltas++;
+    }
+  });
+
+  // Ajusta la regla de asignación de puntos si requiere una ponderación distinta
+  const puntajeTotal = (puntuales * 10) + (tardanzas * 5);
+
   await construirPDFModeloEstandar({
     titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
     codigo: "PERSONAL-DOCENTE",
     nombre: "Plana Docente I.E. Santa Rosa",
     aula: "Dirección Académica",
     periodo: `${tipo} (${fecha || 'General'})`,
-    metricas: { puntuales: 0, tardanzas: 0, faltas: 0, puntaje: 0, totalPeriodo: obtenerTotalDiasPeriodo() },
+    metricas: { 
+      puntuales: puntuales, 
+      tardanzas: tardanzas, 
+      faltas: faltas, 
+      puntaje: puntajeTotal, 
+      totalPeriodo: obtenerTotalDiasPeriodo() 
+    },
     historial,
     nombreArchivo: `Reporte_Docentes_${fecha || 'General'}.pdf`
   });

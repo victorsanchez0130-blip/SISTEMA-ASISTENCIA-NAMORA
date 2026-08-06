@@ -14,10 +14,21 @@
     body { font-family: 'Inter', sans-serif; }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 flex h-screen overflow-hidden">
+<body class="bg-slate-100 text-slate-800 flex flex-col md:flex-row h-screen overflow-hidden">
+
+  <!-- BOTÓN HAMBURGUESA Y HEADER PARA MÓVILES -->
+  <header class="md:hidden bg-slate-900 text-slate-300 p-4 flex justify-between items-center z-30 border-b border-slate-800">
+    <div class="flex items-center gap-3">
+      <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-8 h-8 object-contain">
+      <h2 class="text-white font-bold text-sm tracking-wider">I.E. SANTA ROSA</h2>
+    </div>
+    <button id="mobileMenuBtn" class="text-white text-xl focus:outline-none p-1">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+  </header>
 
   <!-- SIDEBAR NAVEGACIÓN -->
-  <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen">
+  <aside id="sidebar" class="fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen transition-transform duration-200 ease-in-out">
     <div>
       <div class="flex items-center gap-3 p-4 border-b border-slate-800">
         <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-12 h-12 object-contain">
@@ -56,22 +67,25 @@
     </div>
   </aside>
 
+  <!-- OVERLAY PARA CERRAR SIDEBAR EN MÓVIL -->
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-10 hidden md:hidden"></div>
+
   <!-- CONTENIDO PRINCIPAL -->
-  <main class="flex-1 overflow-y-auto p-8">
+  <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
     
     <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
       <div>
-        <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
           🏆 Rankings de Méritos
         </h1>
         <p class="text-xs font-medium text-slate-500">Puntajes acumulados por puntualidad y asistencia</p>
       </div>
 
-      <div class="flex flex-wrap gap-3">
-        <button onclick="imprimirRankingDocentesPDF()" class="flex items-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition-all">
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button onclick="imprimirRankingDocentesPDF()" class="w-full sm:w-auto flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition-all">
           <i class="fa-solid fa-file-pdf text-sm"></i> Ranking Docentes PDF
         </button>
-        <button onclick="imprimirRankingAlumnosPDF()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition-all">
+        <button onclick="imprimirRankingAlumnosPDF()" class="w-full sm:w-auto flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md transition-all">
           <i class="fa-solid fa-file-pdf text-sm"></i> Ranking Alumnos PDF
         </button>
       </div>
@@ -79,12 +93,12 @@
 
     <div class="space-y-8">
       <!-- 👨‍🏫 TABLA: RANKING DE DOCENTES -->
-      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
+        <h2 class="text-base sm:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
           <i class="fa-solid fa-chalkboard-user text-sky-600"></i> Ranking de Docentes
         </h2>
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
+          <table class="w-full text-left border-collapse min-w-[500px]">
             <thead>
               <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50/50">
                 <th class="py-3 px-4">Posición</th>
@@ -103,12 +117,12 @@
       </section>
 
       <!-- 🎓 TABLA: RANKING DE ALUMNOS -->
-      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
+        <h2 class="text-base sm:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
           <i class="fa-solid fa-user-graduate text-emerald-600"></i> Ranking de Alumnos
         </h2>
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
+          <table class="w-full text-left border-collapse min-w-[500px]">
             <thead>
               <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50/50">
                 <th class="py-3 px-4">Posición</th>
@@ -130,5 +144,19 @@
   </main>
 
   <script src="js/rankings.js"></script>
+  <script>
+    // Control del Menú Hamburguesa para Móviles
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    function toggleMenu() {
+      sidebar.classList.toggle('-translate-x-full');
+      sidebarOverlay.classList.toggle('hidden');
+    }
+
+    if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
+    if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMenu);
+  </script>
 </body>
 </html>

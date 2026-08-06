@@ -12,10 +12,21 @@
     body { font-family: 'Inter', sans-serif; }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 flex h-screen overflow-hidden">
+<body class="bg-slate-100 text-slate-800 flex flex-col md:flex-row h-screen overflow-hidden">
+
+  <!-- BOTÓN HAMBURGUESA Y HEADER PARA MÓVILES -->
+  <header class="md:hidden bg-slate-900 text-slate-300 p-4 flex justify-between items-center z-30 border-b border-slate-800">
+    <div class="flex items-center gap-3">
+      <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-8 h-8 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'">
+      <h2 class="text-white font-bold text-sm tracking-wider">I.E. SANTA ROSA</h2>
+    </div>
+    <button id="mobileMenuBtn" class="text-white text-xl focus:outline-none p-1">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+  </header>
 
   <!-- SIDEBAR NAVEGACIÓN -->
-  <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen">
+  <aside id="sidebar" class="fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen transition-transform duration-200 ease-in-out">
     <div>
       <!-- Header Sidebar con Logo Local -->
       <div class="flex items-center gap-3 p-4 border-b border-slate-800">
@@ -61,17 +72,20 @@
     </div>
   </aside>
 
+  <!-- OVERLAY PARA CERRAR SIDEBAR EN MÓVIL -->
+  <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-10 hidden md:hidden"></div>
+
   <!-- CONTENIDO PRINCIPAL -->
-  <main class="flex-1 overflow-y-auto p-8">
+  <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
     
     <!-- Header Superior con Fecha Actual Dinámica -->
     <header class="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
       <div>
-        <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">PANEL DIRECTIVO</h1>
+        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">PANEL DIRECTIVO</h1>
         <p class="text-xs font-medium text-slate-500" id="director-saludo">Gestión total y métricas de asistencia en tiempo real</p>
       </div>
 
-      <div class="flex items-center gap-4">
+      <div class="flex items-center justify-between md:justify-end gap-4">
         <span class="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-bold px-3.5 py-1.5 rounded-full border border-emerald-200 shadow-sm">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span> Sistema En Línea
         </span>
@@ -83,7 +97,7 @@
     </header>
 
     <!-- 1. TARJETAS DE MÉTRICAS -->
-    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
       
       <!-- Card Estudiantes -->
       <div class="bg-gradient-to-r from-red-500 to-rose-500 rounded-2xl shadow-lg p-5 text-white flex items-center justify-between">
@@ -139,10 +153,10 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
       <!-- Cronograma de Asistencia Diaria -->
-      <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <div class="flex items-center justify-between mb-5">
+      <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-5 gap-2">
           <div>
-            <h2 class="text-lg font-bold text-slate-800">Cronograma de Asistencia Diaria</h2>
+            <h2 class="text-base sm:text-lg font-bold text-slate-800">Cronograma de Asistencia Diaria</h2>
             <p class="text-xs text-slate-500 font-medium">Últimos registros reportados por el escáner hoy</p>
           </div>
           <a href="reportes.html" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors">
@@ -151,7 +165,7 @@
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
+          <table class="w-full text-left border-collapse min-w-[500px]">
             <thead>
               <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50/50">
                 <th class="py-3 px-3">Código</th>
@@ -173,7 +187,7 @@
       <!-- Panel Lateral de Acceso Directivo -->
       <div class="space-y-6">
         
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
           <h2 class="text-base font-bold text-slate-800 mb-1">Acceso Directivo</h2>
           <p class="text-xs text-slate-500 font-medium mb-4">CRUD & Control de Asistencia Habilitado.</p>
           
@@ -193,7 +207,7 @@
           </div>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
           <h2 class="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
             <i class="fa-solid fa-server text-blue-600"></i> Estado del Sistema
           </h2>
@@ -215,6 +229,19 @@
 
   <script src="js/auth.js"></script>
   <script>
+    // Control del Menú Hamburguesa para Móviles
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+
+    function toggleMenu() {
+      sidebar.classList.toggle('-translate-x-full');
+      sidebarOverlay.classList.toggle('hidden');
+    }
+
+    if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
+    if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMenu);
+
     document.addEventListener('DOMContentLoaded', () => {
       // Verificar sesión activa
       if (typeof checkAuth === 'function') {
