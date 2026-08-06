@@ -58,6 +58,14 @@ function checkAuth(requiredRol = null) {
       alert('Acceso restringido: Los docentes solo tienen acceso de lectura y descargas en el Dashboard.');
       window.location.href = 'dashboard.html';
     }
+    else if (currentPage !== 'reportes.html') {
+      alert('Acceso restringido: Los docentes solo tienen acceso de lectura y descargas en el Reporte.');
+      window.location.href = 'reportes .html';
+    }
+    else if (currentPage !== 'rankings.html') {
+      alert('Acceso restringido: Los docentes solo tienen acceso de lectura y descargas en el Rankings.');
+      window.location.href = 'rankings.html';
+    }
     return;
   }
 
