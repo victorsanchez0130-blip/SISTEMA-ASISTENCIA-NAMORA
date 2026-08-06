@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <!-- Generación de PDFs -->
+  <!-- Generación de PDFs (jsPDF y AutoTable) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
   
@@ -52,7 +52,7 @@
           <span>Inicio</span>
         </a>
 
-        <!-- Control y Reportes (Activo) -->
+        <!-- Control y Reportes (Módulo Activo) -->
         <a href="reportes.html" id="nav-reportes" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-blue-600 text-white shadow-md">
           <i class="fa-solid fa-folder-open w-5 text-center text-base text-emerald-400"></i>
           <span>Control y Reportes</span>
@@ -63,7 +63,7 @@
           <span>Rankings y Puntos</span>
         </a>
 
-        <!-- Inscribir / CRUD (Solo Visible para Director/Admin) -->
+        <!-- Inscribir / CRUD (Restringido para Director y Admin) -->
         <a href="inscripciones.html" id="nav-crud" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
           <i class="fa-solid fa-user-pen w-5 text-center text-base text-purple-400"></i>
           <span>Inscribir / CRUD</span>
@@ -125,7 +125,7 @@
         </div>
       </div>
 
-      <!-- Filtro por Aula y Buscador -->
+      <!-- Filtros por Aula, Nivel, Grado, Sección y Buscador Texto -->
       <div class="flex flex-wrap gap-3 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-200 items-center">
         <div class="flex items-center gap-2">
           <label class="text-xs font-bold text-slate-600">Filtro por Aula:</label>
@@ -240,7 +240,7 @@
     if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
     if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMenu);
 
-    // Ajuste de interfaz e información del usuario
+    // Ajuste de interfaz e información del usuario logueado
     document.addEventListener('DOMContentLoaded', () => {
       const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario');
       if (!sessionRaw) {

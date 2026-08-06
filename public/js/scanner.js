@@ -1,400 +1,717 @@
-// Variable global para la instancia del escáner HTML5
-let html5QrCode = null;
-let camaraEncendida = false;
-let procesandoEscaneo = false;
+// Variable global para almacenar los datos del consolidado recuperados de la API
+let datosReporteGlobal = [];
 
-// Inicialización cuando carga el DOM
+/**
+ * Lista de feriados nacionales estandarizados en Perú (MM-DD)
+ */
+const FERIADOS_PERU_MMDD = [
+  '01-01', // Año Nuevo
+  '05-01', // Día del Trabajo
+  '06-07', // Batalla de Arica y Día de la Bandera
+  '06-29', // San Pedro y San Pablo
+  '07-23', // Día de la Fuerza Aérea del Perú
+  '07-28', // Fiestas Patrias
+  '07-29', // Fiestas Patrias
+  '08-06', // Batalla de Junín
+  '08-30', // Santa Rosa de Lima
+  '10-08', // Combate de Angamos
+  '11-01', // Día de Todos los Santos
+  '12-08', // Inmaculada Concepción
+  '12-09', // Batalla de Ayacucho
+  '12-25'  // Navidad
+];
+
 document.addEventListener('DOMContentLoaded', () => {
-  verificarSesion();
-  cargarAsistenciasHoy();
-  enfocarInputManual();
+  configurarEventosFiltros();
+  // Se envía 'false' para evitar ejecuciones innecesarias al inicializar
+  actualizarTipoSelectorFecha(false);
+  cargarConsolidado();
 });
 
 // ----------------------------------------------------
-// VERIFICACIÓN DE SESIÓN Y ROL
+// 1. CAMBIO DINÁMICO DEL INPUT DE FECHA Y DÍAS
 // ----------------------------------------------------
-function verificarSesion() {
-  const sessionData = localStorage.getItem('user_session') || localStorage.getItem('usuario');
-  if (!sessionData) {
-    window.location.href = 'index.html';
-    return;
-  }
-  try {
-    const user = JSON.parse(sessionData);
-    const userRol = (user.rol || '').trim().toLowerCase();
-    // Redirección si un Docente intenta ingresar directamente a esta URL
-    if (userRol === 'docente') {
-      alert('Acceso restringido: El personal docente solo puede acceder a Dashboard, Reportes y Rankings.');
-      window.location.href = 'dashboard.html';
-      return;
-    }
-    // Permitir acceso únicamente a Auxiliar, Director y Admin
-    const rolesPermitidos = ['auxiliar', 'director', 'directivo', 'admin'];
-    if (!rolesPermitidos.includes(userRol)) {
-      alert('Acceso restringido: No cuenta con permisos de auxiliar para el escáner.');
-      window.location.href = 'index.html';
-      return;
-    }
-    // Actualizar nombre y rol en el Navbar
-    const elNombreAuxiliar = document.getElementById('nombre-auxiliar');
-    const elLabelRol = document.getElementById('label-rol-auxiliar');
-    if (elNombreAuxiliar) {
-      elNombreAuxiliar.innerText = user.nombre || user.usuario || 'Auxiliar';
-    }
-    if (elLabelRol) {
-      elLabelRol.innerText = `${userRol.toUpperCase()}:`;
-    }
-  } catch (e) {
-    console.error('Error al verificar sesión:', e);
-    localStorage.removeItem('usuario');
-    localStorage.removeItem('user_session');
-    window.location.href = 'index.html';
-  }
-}
 
-function cerrarSesion() {
-  localStorage.removeItem('usuario');
-  localStorage.removeItem('user_session');
-  window.location.href = 'index.html';
-}
+function actualizarTipoSelectorFecha(ejecutarCarga = true) {
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
+  const contenedorFecha = document.getElementById('contenedorFecha');
+  
+  if (!contenedorFecha) return;
 
-// ----------------------------------------------------
-// CONTROL DEL PROCESO DE ASISTENCIA (INICIAR / CERRAR)
-// ----------------------------------------------------
-async function iniciarRegistro() {
-  try {
-    const res = await fetch('api/asistencia/iniciar', { method: 'POST' });
-    const data = await res.json();
-
-    if (res.ok && data.success) {
-      actualizarUIEstadoRegistro(true);
-      mostrarNotificacion('Registro de asistencia iniciado con éxito.', 'exito');
-      reproducirSonido('exito');
-    } else {
-      mostrarNotificacion(data.mensaje || 'No se pudo iniciar el registro.', 'error');
-      reproducirSonido('error');
-    }
-  } catch (err) {
-    console.error('Error al iniciar registro:', err);
-    mostrarNotificacion('Error de conexión con el servidor.', 'error');
-  }
-}
-
-async function cerrarRegistro() {
-  const confirmar = confirm('¿Desea cerrar la toma de asistencia?\n\nSe asignará automáticamente "FALTA" a todos los usuarios (alumnos y docentes) que no hayan escaneado su QR el día de hoy.');
-  if (!confirmar) return;
-
-  try {
-    const res = await fetch('api/asistencia/cerrar', { method: 'POST' });
-    const data = await res.json();
-
-    if (res.ok && data.success) {
-      actualizarUIEstadoRegistro(false);
-      mostrarNotificacion(data.mensaje || 'Asistencia cerrada correctamente.', 'alerta');
-      cargarAsistenciasHoy(); // Refrescar la tabla para mostrar las faltas
-    } else {
-      mostrarNotificacion(data.mensaje || 'Error al cerrar el registro.', 'error');
-    }
-  } catch (err) {
-    console.error('Error al cerrar registro:', err);
-    mostrarNotificacion('Error al procesar el cierre de asistencia.', 'error');
-  }
-}
-
-function actualizarUIEstadoRegistro(activo) {
-  const badge = document.getElementById('estado-registro-badge');
-  const btnIniciar = document.getElementById('btn-iniciar');
-  const btnCerrar = document.getElementById('btn-cerrar');
-
-  if (!badge || !btnIniciar || !btnCerrar) return;
-
-  if (activo) {
-    badge.className = 'inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200';
-    badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> EN PROCESO';
-
-    btnIniciar.disabled = true;
-    btnIniciar.classList.add('opacity-50', 'cursor-not-allowed');
-
-    btnCerrar.disabled = false;
-    btnCerrar.classList.remove('opacity-50', 'cursor-not-allowed');
+  if (tipoInput.includes('Semanal')) {
+    contenedorFecha.innerHTML = `<input type="week" id="filtroFecha" class="form-control rounded-xl border border-slate-300 p-2 text-xs font-bold" style="width: 170px;" value="${obtenerSemanaActual()}">`;
+  } else if (tipoInput.includes('Mensual')) {
+    contenedorFecha.innerHTML = `<input type="month" id="filtroFecha" class="form-control rounded-xl border border-slate-300 p-2 text-xs font-bold" style="width: 170px;" value="${obtenerMesActual()}">`;
   } else {
-    badge.className = 'inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-red-100 text-red-700 border border-red-200';
-    badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> CERRADO';
+    contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="form-control rounded-xl border border-slate-300 p-2 text-xs font-bold" style="width: 170px;" value="${obtenerFechaHoy()}">`;
+  }
 
-    btnIniciar.disabled = false;
-    btnIniciar.classList.remove('opacity-50', 'cursor-not-allowed');
+  // Reasignar el evento change al nuevo elemento dinámico
+  document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
 
-    btnCerrar.disabled = true;
-    btnCerrar.classList.add('opacity-50', 'cursor-not-allowed');
+  if (ejecutarCarga) {
+    cargarConsolidado();
   }
 }
 
-// ----------------------------------------------------
-// CONTROL DE LA CÁMARA (HTML5-QRCode)
-// ----------------------------------------------------
-function toggleCamara() {
-  if (camaraEncendida) {
-    detenerCamara();
-  } else {
-    encenderCamara();
-  }
+function obtenerFechaHoy() {
+  const hoy = new Date();
+  return hoy.toISOString().split('T')[0];
 }
 
-function encenderCamara() {
-  if (!html5QrCode) {
-    html5QrCode = new Html5Qrcode("reader");
+function obtenerSemanaActual() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getFullYear()}-W${weekNo < 10 ? '0' + weekNo : weekNo}`;
+}
+
+function obtenerMesActual() {
+  const hoy = new Date();
+  const mes = hoy.getMonth() + 1;
+  return `${hoy.getFullYear()}-${mes < 10 ? '0' + mes : mes}`;
+}
+
+/**
+ * Verifica si una fecha dada en formato Date es un día laborable (Lunes a Viernes y NO feriado)
+ */
+function esDiaLaborable(fecha) {
+  const dayOfWeek = fecha.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+
+  const mesStr = String(fecha.getMonth() + 1).padStart(2, '0');
+  const diaStr = String(fecha.getDate()).padStart(2, '0');
+  const claveMMDD = `${mesStr}-${diaStr}`;
+
+  return !FERIADOS_PERU_MMDD.includes(claveMMDD);
+}
+
+/**
+ * Retorna el número exacto de días lectivos del periodo descartando fines de semana y feriados.
+ */
+function obtenerTotalDiasPeriodo() {
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fechaVal = document.getElementById('filtroFecha')?.value || '';
+
+  // 1. REPORTE DIARIO
+  if (!tipoInput.includes('Semanal') && !tipoInput.includes('Mensual')) {
+    if (!fechaVal) return 1;
+    const [a, m, d] = fechaVal.split('-').map(Number);
+    const fechaObj = new Date(a, m - 1, d);
+    return esDiaLaborable(fechaObj) ? 1 : 0;
   }
 
-  const config = { fps: 10, qrbox: { width: 220, height: 220 } };
-
-  html5QrCode.start(
-    { facingMode: "environment" },
-    config,
-    onScanSuccess,
-    onScanFailure
-  ).then(() => {
-    camaraEncendida = true;
-    const statusEl = document.getElementById('camara-status');
-    if (statusEl) {
-      statusEl.innerText = 'Activa';
-      statusEl.className = 'text-xs font-semibold text-emerald-600';
-    }
+  // 2. REPORTE SEMANAL
+  if (tipoInput.includes('Semanal')) {
+    if (!fechaVal) return 5;
     
-    const btn = document.getElementById('btn-toggle-camara');
-    if (btn) {
-      btn.innerHTML = '<i class="fa-solid fa-power-off mr-1"></i> Apagar Cámara';
-      btn.className = 'w-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm';
+    const partes = fechaVal.split('-W');
+    if (partes.length !== 2) return 5;
+
+    const anio = Number(partes[0]);
+    const semana = Number(partes[1]);
+
+    const simple = new Date(anio, 0, 1 + (semana - 1) * 7);
+    const dow = simple.getDay();
+    const ISOweekStart = simple;
+    if (dow <= 4)
+      ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+    else
+      ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+
+    let diasLectivos = 0;
+    for (let i = 0; i < 5; i++) {
+      const diaActual = new Date(ISOweekStart);
+      diaActual.setDate(ISOweekStart.getDate() + i);
+      if (esDiaLaborable(diaActual)) {
+        diasLectivos++;
+      }
     }
-  }).catch(err => {
-    console.error("Error al iniciar cámara:", err);
-    mostrarNotificacion('No se pudo acceder a la cámara. Verifique los permisos.', 'error');
+    return diasLectivos;
+  }
+
+  // 3. REPORTE MENSUAL
+  if (tipoInput.includes('Mensual')) {
+    if (!fechaVal) return 22;
+    
+    const [anio, mes] = fechaVal.split('-').map(Number);
+    if (!anio || !mes) return 22;
+
+    let diasLectivos = 0;
+    const totalDiasMes = new Date(anio, mes, 0).getDate();
+
+    for (let dia = 1; dia <= totalDiasMes; dia++) {
+      const fechaObj = new Date(anio, mes - 1, dia);
+      if (esDiaLaborable(fechaObj)) {
+        diasLectivos++;
+      }
+    }
+    return diasLectivos;
+  }
+
+  return 1;
+}
+
+// ----------------------------------------------------
+// 2. CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR
+// ----------------------------------------------------
+
+async function cargarConsolidado() {
+  const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fechaVal = document.getElementById('filtroFecha')?.value || '';
+
+  let tipo = 'Diario';
+  if (tipoInput.includes('Semanal')) tipo = 'Semanal';
+  if (tipoInput.includes('Mensual')) tipo = 'Mensual';
+
+  try {
+    const res = await fetch(`/api/reportes/consolidado?tipo=${tipo}&fecha=${encodeURIComponent(fechaVal)}`);
+    if (!res.ok) throw new Error("Error en la respuesta del servidor");
+    
+    datosReporteGlobal = await res.json();
+    
+    actualizarOpcionesAlumnosSegunAula();
+    renderizarTablaReportes();
+  } catch (err) {
+    console.error("Error al cargar datos del reporte:", err);
+    datosReporteGlobal = [];
+    renderizarTablaReportes();
+  }
+}
+
+function obtenerAlumnosPorAula() {
+  const nivel = document.getElementById('filtroNivel')?.value || 'Todos';
+  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+
+  return datosReporteGlobal.filter(item => {
+    const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
+
+    if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) return false;
+    if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
+
+    if (seccion !== 'Todos') {
+      const seccionNormalizada = seccion.toUpperCase();
+      const partesAula = aulaStr.split(' ');
+      const ultimaLetra = partesAula[partesAula.length - 1];
+
+      if (ultimaLetra !== seccionNormalizada && !aulaStr.endsWith(` ${seccionNormalizada}`)) {
+        return false;
+      }
+    }
+
+    return true;
   });
 }
 
-function detenerCamara() {
-  if (html5QrCode && camaraEncendida) {
-    html5QrCode.stop().then(() => {
-      camaraEncendida = false;
-      const statusEl = document.getElementById('camara-status');
-      if (statusEl) {
-        statusEl.innerText = 'Inactiva';
-        statusEl.className = 'text-xs font-normal text-slate-400';
-      }
+function actualizarOpcionesAlumnosSegunAula() {
+  const selectAlumno = document.getElementById('selectAlumnoIndividual');
+  if (!selectAlumno) return;
 
-      const btn = document.getElementById('btn-toggle-camara');
-      if (btn) {
-        btn.innerHTML = '<i class="fa-solid fa-power-off mr-1"></i> Encender Cámara';
-        btn.className = 'w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm';
-      }
-    }).catch(err => console.error("Error al detener cámara:", err));
+  const valorSeleccionadoPrevio = selectAlumno.value;
+  selectAlumno.innerHTML = '<option value="todos">-- Seleccionar Alumno --</option>';
+
+  const alumnosDelAula = obtenerAlumnosPorAula();
+
+  alumnosDelAula.forEach(alumno => {
+    const option = document.createElement('option');
+    option.value = alumno.codigo;
+    option.textContent = `${alumno.nombre} (${alumno.codigo})`;
+    selectAlumno.appendChild(option);
+  });
+
+  if (valorSeleccionadoPrevio && Array.from(selectAlumno.options).some(o => o.value === valorSeleccionadoPrevio)) {
+    selectAlumno.value = valorSeleccionadoPrevio;
+  } else {
+    selectAlumno.value = 'todos';
   }
 }
 
-// ----------------------------------------------------
-// PROCESAMIENTO DE ESCANEO QR Y BARRAS
-// ----------------------------------------------------
-function onScanSuccess(decodedText) {
-  if (procesandoEscaneo) return;
-  procesandoEscaneo = true;
-
-  enviarMarcacionQR(decodedText.trim());
-
-  // Pausa de 2.5 segundos para evitar lecturas continuas involuntarias
-  setTimeout(() => {
-    procesandoEscaneo = false;
-  }, 2500);
-}
-
-function onScanFailure(error) {
-  // Búsqueda continua silenciosa
-}
-
-function procesarEscaneoManual(e) {
-  e.preventDefault();
-  const input = document.getElementById('input-codigo-manual');
-  if (!input) return;
-
-  const codigo = input.value.trim();
-  if (codigo) {
-    enviarMarcacionQR(codigo);
-    input.value = '';
+function configurarEventosFiltros() {
+  const selectTipo = document.getElementById('filtroTipo');
+  if (selectTipo) {
+    selectTipo.addEventListener('change', () => actualizarTipoSelectorFecha(true));
   }
-}
 
-function enfocarInputManual() {
-  const input = document.getElementById('input-codigo-manual');
-  if (input) input.focus();
-}
-
-async function enviarMarcacionQR(codigoQR) {
-  try {
-    const res = await fetch('api/asistencia/marcar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codigoQR })
-    });
-
-    const data = await res.json();
-
-    if (res.ok && data.success) {
-      renderizarTarjetaResultado(data.usuario || { nombre: data.nombre || 'Usuario' }, data.estado || 'REGISTRADO', data.hora || '--:--', false);
-      mostrarNotificacion(data.mensaje || 'Asistencia registrada correctamente.', 'exito');
-      reproducirSonido('exito');
-      cargarAsistenciasHoy();
-    } else if (data.duplicado) {
-      renderizarTarjetaResultado(data.usuario || { nombre: data.nombre || 'Usuario' }, 'DUPLICADO', data.horaAnterior || '--:--', true);
-      mostrarNotificacion(data.mensaje || 'El usuario ya registró su asistencia.', 'alerta');
-      reproducirSonido('alerta');
-    } else {
-      mostrarNotificacion(data.mensaje || 'Código QR no registrado o inválido.', 'error');
-      reproducirSonido('error');
+  ['filtroNivel', 'filtroGrado', 'filtroSeccion'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', () => {
+        actualizarOpcionesAlumnosSegunAula();
+        renderizarTablaReportes();
+      });
     }
-  } catch (err) {
-    console.error('Error de red:', err);
-    mostrarNotificacion('Error de comunicación con el servidor.', 'error');
-  } finally {
-    enfocarInputManual();
+  });
+
+  const selectAlumno = document.getElementById('selectAlumnoIndividual');
+  if (selectAlumno) {
+    selectAlumno.addEventListener('change', renderizarTablaReportes);
   }
+
+  const busqueda = document.getElementById('filtroBusqueda');
+  if (busqueda) {
+    busqueda.addEventListener('input', renderizarTablaReportes);
+  }
+
+  document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
+  document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
+  document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
 }
 
 // ----------------------------------------------------
-// RENDERIZADO Y TABLA DE ASISTENCIAS
+// 3. FILTRADO Y RENDERIZADO EN TABLA HTML
 // ----------------------------------------------------
-function renderizarTarjetaResultado(usuario, estado, hora, esDuplicado) {
-  const card = document.getElementById('resultado-card');
-  if (!card) return;
 
-  let badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-  if (estado === 'TARDANZA' || estado === 'TARDE') badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
-  if (esDuplicado) badgeColor = 'bg-blue-100 text-blue-800 border-blue-300';
-  if (estado === 'FALTA') badgeColor = 'bg-red-100 text-red-800 border-red-300';
+function obtenerAlumnosFiltradosBase() {
+  const alumnoSeleccionado = document.getElementById('selectAlumnoIndividual')?.value || 'todos';
+  const busqueda = (document.getElementById('filtroBusqueda')?.value || '').toLowerCase().trim();
 
-  const inicial = usuario && usuario.nombre ? usuario.nombre.charAt(0).toUpperCase() : 'U';
-  const nombre = usuario && usuario.nombre ? usuario.nombre : 'Usuario General';
-  const rolMateria = usuario ? `${usuario.rol || 'Estudiante'} — ${usuario.materia_aula || 'Sin asignación'}` : 'Sin datos';
+  let resultado = obtenerAlumnosPorAula();
 
-  card.className = "bg-white border border-slate-200 rounded-xl p-5 shadow-sm text-center flex flex-col items-center justify-center w-full min-h-[220px]";
-  card.innerHTML = `
-    <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold mb-3 border border-indigo-100 shadow-inner">
-      ${inicial}
-    </div>
-    <h3 class="text-base font-bold text-slate-800">${nombre}</h3>
-    <p class="text-xs text-slate-500 font-medium mb-3">${rolMateria}</p>
-    
-    <div class="flex items-center gap-2">
-      <span class="text-xs font-bold px-3 py-1 rounded-full border ${badgeColor}">
-        ${estado}
-      </span>
-      <span class="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
-        <i class="fa-regular fa-clock mr-1"></i>${hora}
-      </span>
-    </div>
-  `;
+  if (alumnoSeleccionado !== 'todos') {
+    resultado = resultado.filter(item => (item.codigo || '').toUpperCase() === alumnoSeleccionado.toUpperCase());
+  }
+
+  if (busqueda !== '') {
+    resultado = resultado.filter(item => {
+      const nom = (item.nombre || '').toLowerCase();
+      const cod = (item.codigo || '').toLowerCase();
+      return nom.includes(busqueda) || cod.includes(busqueda);
+    });
+  }
+
+  return resultado;
 }
 
-async function cargarAsistenciasHoy() {
-  const tbody = document.getElementById('tabla-asistencias-hoy');
+function renderizarTablaReportes() {
+  const tbody = document.getElementById('tbodyReportes');
   if (!tbody) return;
 
-  try {
-    const res = await fetch('api/asistencia/hoy');
-    
-    if (!res.ok) throw new Error('Error en HTTP ' + res.status);
-    
-    const marcaciones = await res.json();
+  const filtrados = obtenerAlumnosFiltradosBase();
+  tbody.innerHTML = '';
 
-    if (!Array.isArray(marcaciones) || marcaciones.length === 0) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="5" class="text-center py-6 text-slate-400 font-medium">No hay marcaciones registradas el día de hoy.</td>
-        </tr>
-      `;
-      return;
-    }
-
-    tbody.innerHTML = marcaciones.map(m => {
-      let badgeClase = 'bg-emerald-100 text-emerald-700';
-      if (m.estado === 'TARDANZA' || m.estado === 'TARDE') badgeClase = 'bg-amber-100 text-amber-700';
-      if (m.estado === 'FALTA' || m.estado === 'INJUSTIFICADA') badgeClase = 'bg-red-100 text-red-700';
-      if (m.estado === 'JUSTIFICADA') badgeClase = 'bg-blue-100 text-blue-700';
-
-      return `
-        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
-          <td class="py-3 px-3 font-mono text-slate-600 font-bold">${m.codigo || m.codigoQR || '-'}</td>
-          <td class="py-3 px-3 font-semibold text-slate-800">${m.nombre || 'Desconocido'}</td>
-          <td class="py-3 px-3 text-slate-500">${m.rol || 'Estudiante'}</td>
-          <td class="py-3 px-3 font-medium text-slate-600">${m.hora || '--:--'}</td>
-          <td class="py-3 px-3">
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClase}">
-              ${m.estado}
-            </span>
-          </td>
-        </tr>
-      `;
-    }).join('');
-  } catch (err) {
-    console.error("Error al cargar asistencias:", err);
+  if (filtrados.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center py-6 text-red-500 font-medium">Error al actualizar la lista de asistencia.</td>
-      </tr>
+        <td colspan="8" style="text-align: center; color: #64748b; padding: 20px;">
+          No se encontraron registros que coincidan con los filtros aplicados.
+        </td>
+      </tr>`;
+    return;
+  }
+
+  const totalDiasPeriodo = obtenerTotalDiasPeriodo();
+
+  filtrados.forEach(d => {
+    const asist = d.asistencias || 0;
+    const tard = d.tardanzas || 0;
+    const faltasJust = d.fJustificadas || 0;
+    const faltasInjust = d.fInjustificadas || 0;
+    const totalFaltas = faltasJust + faltasInjust;
+
+    const tr = document.createElement('tr');
+    tr.className = "hover:bg-slate-50 transition-colors border-b border-slate-100";
+    tr.innerHTML = `
+      <td class="py-3 px-3"><strong>${d.codigo || '-'}</strong></td>
+      <td class="py-3 px-3 font-semibold text-slate-800">${d.nombre || '-'}</td>
+      <td class="py-3 px-3 text-slate-500">${d.aula || d.materia_aula || 'Sin Asignación'}</td>
+      <td class="py-3 px-3 text-center text-emerald-600 font-bold">${asist} / ${totalDiasPeriodo}</td>
+      <td class="py-3 px-3 text-center text-amber-600 font-bold">${tard} / ${totalDiasPeriodo}</td>
+      <td class="py-3 px-3 text-center text-rose-600 font-bold">${totalFaltas} / ${totalDiasPeriodo}</td>
+      <td class="py-3 px-3 text-center font-bold bg-slate-50">${d.puntajeTotal !== undefined ? d.puntajeTotal : 0} pts</td>
+      <td class="py-3 px-3 text-center">
+        <button onclick="abrirModalEditar('${d.codigo}', '${(d.nombre || '').replace(/'/g, "\\'")}')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-1 px-3 rounded-lg text-xs transition-all shadow-sm">
+          ✏️ Editar
+        </button>
+      </td>
     `;
-  }
+    tbody.appendChild(tr);
+  });
 }
 
 // ----------------------------------------------------
-// NOTIFICACIONES Y FEEDBACK SONORO
+// 4. CONTROLADOR DE EDICIÓN DIRECTIVA (MODAL)
 // ----------------------------------------------------
-function mostrarNotificacion(mensaje, tipo) {
-  const notif = document.getElementById('notificacion-alerta');
-  if (!notif) return;
 
-  notif.className = 'mt-3 p-3 rounded-xl text-xs font-semibold text-center transition-all block';
+function abrirModalEditar(codigo, nombre) {
+  const modal = document.getElementById('modal-editar-asistencia');
+  const inputCodigo = document.getElementById('edit-codigo-input');
+  const spanNombre = document.getElementById('edit-nombre-alumno');
+  const spanCodigo = document.getElementById('edit-codigo-alumno');
 
-  if (tipo === 'exito') {
-    notif.classList.add('bg-emerald-100', 'text-emerald-800', 'border', 'border-emerald-200');
-  } else if (tipo === 'alerta') {
-    notif.classList.add('bg-amber-100', 'text-amber-800', 'border', 'border-amber-200');
-  } else {
-    notif.classList.add('bg-red-100', 'text-red-800', 'border', 'border-red-200');
+  if (inputCodigo) inputCodigo.value = codigo;
+  if (spanNombre) spanNombre.innerText = nombre;
+  if (spanCodigo) spanCodigo.innerText = codigo;
+
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
   }
-
-  notif.innerText = mensaje;
-
-  setTimeout(() => {
-    notif.className = 'hidden';
-  }, 4000);
 }
 
-function reproducirSonido(tipo) {
+function cerrarModalEditar() {
+  const modal = document.getElementById('modal-editar-asistencia');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+}
+
+async function guardarEdicionAsistencia(event) {
+  event.preventDefault();
+
+  const codigo = document.getElementById('edit-codigo-input')?.value;
+  const nuevoEstado = document.getElementById('edit-estado-select')?.value;
+  const fechaVal = document.getElementById('filtroFecha')?.value || obtenerFechaHoy();
+
+  if (!codigo || !nuevoEstado) {
+    alert("Faltan datos obligatorios para realizar la modificación.");
+    return;
+  }
+
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
+    const response = await fetch('/api/asistencia/editar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        codigo: codigo, 
+        estado: nuevoEstado, 
+        fecha: fechaVal 
+      })
+    });
 
-    const audioCtx = new AudioContext();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    const resultado = await response.json();
 
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    if (tipo === 'exito') {
-      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.15);
-    } else if (tipo === 'alerta') {
-      osc.frequency.setValueAtTime(500, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.2);
+    if (response.ok && (resultado.success || resultado.ok)) {
+      alert("¡Asistencia actualizada correctamente!");
+      cerrarModalEditar();
+      cargarConsolidado();
     } else {
-      osc.frequency.setValueAtTime(250, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.3);
+      alert("Error al actualizar: " + (resultado.mensaje || resultado.error || "No se pudo completar la acción."));
     }
-  } catch (e) {
-    // Silenciar fallos si el usuario no ha interactuado previamente
+  } catch (error) {
+    console.error("Error de red al guardar la edición de asistencia:", error);
+    alert("Error de conexión con el servidor.");
   }
+}
+
+// ----------------------------------------------------
+// 5. GENERACIÓN DE REPORTES EN PDF
+// ----------------------------------------------------
+
+function obtenerInstanciaPDF() {
+  if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  if (window.jsPDF) return window.jsPDF;
+  return null;
+}
+
+function obtenerNombreDia(fechaStr) {
+  if (!fechaStr) return '-';
+  const partes = fechaStr.split('-');
+  if (partes.length !== 3) return '-';
+  const fecha = new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10));
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  return dias[fecha.getDay()] || '-';
+}
+
+function obtenerObservacionEstado(estado) {
+  const est = (estado || '').toUpperCase();
+  if (est === 'PUNTUAL' || est === 'ASISTENCIA') return 'Ingreso dentro del horario regular';
+  if (est === 'TARDANZA' || est === 'TARDE') return 'Ingreso fuera de horario regular';
+  if (est === 'JUSTIFICADA') return 'Falta justificada con documento';
+  if (est === 'INJUSTIFICADA' || est === 'FALTA') return 'Inasistencia sin justificación';
+  return 'Registro de marcación';
+}
+
+async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, periodo, metricas, historial, nombreArchivo }) {
+  const jsPDFClass = obtenerInstanciaPDF();
+  if (!jsPDFClass) {
+    alert("La librería jsPDF no está disponible.");
+    return;
+  }
+
+  const doc = new jsPDFClass();
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(30, 41, 59);
+  doc.text("I.E. SANTA ROSA - NAMORA", 105, 15, { align: "center" });
+
+  doc.setFontSize(11);
+  doc.text(titulo.toUpperCase(), 105, 22, { align: "center" });
+
+  const tablaDatos = [
+    [
+      { content: `CÓDIGO ALUMNO / REGISTRO:\n${codigo}`, styles: { fontStyle: 'bold' } },
+      { content: `APELLIDOS Y NOMBRES:\n${nombre}`, styles: { fontStyle: 'bold' } }
+    ],
+    [
+      { content: `AULA / SECCIÓN / CARGO:\n${aula}` },
+      { content: `PERÍODO EVALUADO:\n${periodo}` }
+    ]
+  ];
+
+  doc.autoTable({
+    startY: 28,
+    body: tablaDatos,
+    theme: 'plain',
+    styles: {
+      fontSize: 9,
+      cellPadding: 4,
+      lineColor: [203, 213, 225],
+      lineWidth: 0.5,
+      textColor: [51, 65, 85]
+    },
+    columnStyles: {
+      0: { cellWidth: 85 },
+      1: { cellWidth: 95 }
+    }
+  });
+
+  const maxDias = metricas.totalPeriodo || 1;
+  const pctPuntual = Math.round((metricas.puntuales / maxDias) * 100);
+  const pctTardanza = Math.round((metricas.tardanzas / maxDias) * 100);
+  const pctFaltas = Math.round((metricas.faltas / maxDias) * 100);
+
+  const tablaMetricasHead = [["PUNTUALES", "TARDANZAS", "FALTAS", "PUNTAJE"]];
+  const tablaMetricasBody = [[
+    `${metricas.puntuales}/${maxDias} (${pctPuntual}%)`,
+    `${metricas.tardanzas}/${maxDias} (${pctTardanza}%)`,
+    `${metricas.faltas}/${maxDias} (${pctFaltas}%)`,
+    `${metricas.puntaje} pts`
+  ]];
+
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 6,
+    head: tablaMetricasHead,
+    body: tablaMetricasBody,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [30, 41, 59],
+      fontStyle: 'bold',
+      halign: 'center',
+      fontSize: 9
+    },
+    bodyStyles: {
+      halign: 'center',
+      fontSize: 10,
+      fontStyle: 'bold',
+      textColor: [15, 23, 42]
+    }
+  });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
+
+  const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN", "DOCENTE"]];
+  
+  const rowsHistorial = historial.map(h => {
+    const nombreDocente = h.docente_nombre 
+      || h.nombre_docente 
+      || h.docente 
+      || h.profesor 
+      || h.profesor_nombre 
+      || h.nombre 
+      || h.docente_completo 
+      || '-';
+
+    return [
+      h.fecha || '-',
+      obtenerNombreDia(h.fecha),
+      h.hora || '-',
+      (h.estado || '-').toUpperCase(),
+      obtenerObservacionEstado(h.estado),
+      nombreDocente
+    ];
+  });
+
+  if (rowsHistorial.length === 0) {
+    rowsHistorial.push(["-", "-", "-", "SIN REGISTROS", "No existen registros de marcación en el periodo", "-"]);
+  }
+
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 14,
+    head: headersHistorial,
+    body: rowsHistorial,
+    theme: 'striped',
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'center'
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [51, 65, 85]
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 22 },
+      1: { halign: 'center', cellWidth: 20 },
+      2: { halign: 'center', cellWidth: 24 },
+      3: { halign: 'center', cellWidth: 22 },
+      4: { cellWidth: 52 },
+      5: { cellWidth: 40 }
+    }
+  });
+
+  const finalY = doc.lastAutoTable.finalY + 30;
+  const posY = finalY > 260 ? 260 : finalY;
+
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(148, 163, 184);
+
+  doc.line(30, posY, 85, posY);
+  doc.line(125, posY, 180, posY);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Auxiliar / Auxiliar de Disciplina", 57, posY + 5, { align: "center" });
+  doc.text("Dirección / Dirección Académica", 152, posY + 5, { align: "center" });
+
+  doc.save(nombreArchivo);
+}
+
+async function generarFichaAlumnoPDF() {
+  const selectAlumno = document.getElementById('selectAlumnoIndividual')?.value;
+  if (!selectAlumno || selectAlumno === 'todos') {
+    alert("Por favor, selecciona un alumno específico en el menú desplegable.");
+    return;
+  }
+
+  const alumno = datosReporteGlobal.find(d => d.codigo === selectAlumno);
+  if (!alumno) {
+    alert("No se encontraron los datos del alumno seleccionado.");
+    return;
+  }
+
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado?codigo=${encodeURIComponent(alumno.codigo)}`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial del alumno:", e);
+  }
+
+  const metricas = {
+    puntuales: alumno.asistencias || 0,
+    tardanzas: alumno.tardanzas || 0,
+    faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
+    puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
+    totalPeriodo: obtenerTotalDiasPeriodo()
+  };
+
+  await construirPDFModeloEstandar({
+    titulo: "FICHA INDIVIDUAL DE ASISTENCIA Y PUNTUALIDAD",
+    codigo: alumno.codigo || '-',
+    nombre: alumno.nombre || '-',
+    aula: alumno.aula || alumno.materia_aula || 'Sin Asignación',
+    periodo: `${tipo} (${fecha || 'General'})`,
+    metricas,
+    historial,
+    nombreArchivo: `Ficha_Asistencia_${alumno.codigo}.pdf`
+  });
+}
+
+async function generarGradoPDF() {
+  const filtrados = obtenerAlumnosFiltradosBase();
+  if (filtrados.length === 0) {
+    alert("No existen registros con los filtros seleccionados.");
+    return;
+  }
+
+  const grado = document.getElementById('filtroGrado')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+
+  let totPuntual = 0, totTardanza = 0, totFaltas = 0, totPuntos = 0;
+  filtrados.forEach(a => {
+    totPuntual += (a.asistencias || 0);
+    totTardanza += (a.tardanzas || 0);
+    totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
+    totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
+  });
+
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial general:", e);
+  }
+
+  await construirPDFModeloEstandar({
+    titulo: `CONSOLIDADO DE ASISTENCIA - GRADO ${grado} ${seccion}`,
+    codigo: `AULA-${grado}-${seccion}`,
+    nombre: `Consolidado Aula (${filtrados.length} Alumnos)`,
+    aula: `Grado: ${grado} | Sección: ${seccion}`,
+    periodo: `${tipo} (${fecha || 'General'})`,
+    metricas: { 
+      puntuales: totPuntual, 
+      tardanzas: totTardanza, 
+      faltas: totFaltas, 
+      puntaje: totPuntos,
+      totalPeriodo: obtenerTotalDiasPeriodo() * filtrados.length
+    },
+    historial,
+    nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
+  });
+}
+
+async function generarDocentesPDF() {
+  const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
+  const fecha = document.getElementById('filtroFecha')?.value || '';
+
+  let historial = [];
+  try {
+    const res = await fetch(`/api/reportes/historial-detallado`);
+    if (res.ok) historial = await res.json();
+  } catch (e) {
+    console.error("Error recuperando historial docentes:", e);
+  }
+
+  let puntuales = 0;
+  let tardanzas = 0;
+  let faltas = 0;
+
+  historial.forEach(reg => {
+    const estado = (reg.estado || '').toUpperCase();
+    
+    if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') {
+      puntuales++;
+    } else if (estado === 'TARDANZA' || estado === 'TARDE') {
+      tardanzas++;
+    } else if (estado === 'FALTA' || estado === 'INJUSTIFICADA' || estado === 'JUSTIFICADA') {
+      faltas++;
+    }
+  });
+
+  const puntajeTotal = (puntuales * 10) + (tardanzas * 5);
+
+  await construirPDFModeloEstandar({
+    titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
+    codigo: "PERSONAL-DOCENTE",
+    nombre: "Plana Docente I.E. Santa Rosa",
+    aula: "Dirección Académica",
+    periodo: `${tipo} (${fecha || 'General'})`,
+    metricas: { 
+      puntuales: puntuales, 
+      tardanzas: tardanzas, 
+      faltas: faltas, 
+      puntaje: puntajeTotal, 
+      totalPeriodo: obtenerTotalDiasPeriodo() 
+    },
+    historial,
+    nombreArchivo: `Reporte_Docentes_${fecha || 'General'}.pdf`
+  });
 }
