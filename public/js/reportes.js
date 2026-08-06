@@ -531,8 +531,8 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     body: tablaMetricasBody,
     theme: 'grid',
     headStyles: {
-      fillColor: [241, 245, 249],
-      textColor: [30, 41, 59],
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
       fontStyle: 'bold',
       halign: 'center',
       fontSize: 9
