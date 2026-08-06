@@ -254,34 +254,13 @@
         if (elemAvatar) elemAvatar.innerText = sessionData.nombre.charAt(0).toUpperCase();
       }
 
-      // --- VERIFICACIÓN DE PRIVILEGIOS CRÍTICA ---
+      // --- VERIFICACIÓN DE PRIVILEGIOS MODIFICADA ---
       
-      const esAdminDirectivo = ['admin', 'director', 'directivo'].includes(rol);
-
-      if (!esAdminDirectivo) {
-        // Bloquear módulos de mutación para roles inferiores
-        const navCrud = document.getElementById('nav-crud');
-        if (navCrud) navCrud.style.display = 'none';
-
-        const linkCrudPanel = document.getElementById('link-crud-panel');
-        if (linkCrudPanel) linkCrudPanel.style.display = 'none';
-        
-        // Bloquear acciones de edición remanentes en las vistas comunes
-        document.querySelectorAll('.btn-editar, .btn-eliminar, .btn-modificar, .acciones-crud').forEach(el => {
-          el.style.display = 'none';
-        });
-      }
+      const esAdminDirectivo = ['admin', 'director', 'directivo', 'docente'].includes(rol);
 
       // Aplicar restricciones estrictas para el rol "Docente" (Modo Lectura en Dashboard ÚNICAMENTE)
       if (rol === 'docente') {
-        // 1. Quitar acceso en Sidebar a Reportes y Rankings
-        const navReportes = document.getElementById('nav-reportes');
-        if (navReportes) navReportes.style.display = 'none';
-
-        const navRankings = document.getElementById('nav-rankings');
-        if (navRankings) navRankings.style.display = 'none';
-
-        // 2. Quitar accesos en la sección de "Accesos Directos" y enlaces alternos
+        // 1. Quitar accesos en la sección de "Accesos Directos" y enlaces alternos
         const linkRankingsPanel = document.getElementById('link-rankings-panel');
         if (linkRankingsPanel) linkRankingsPanel.style.display = 'none';
 
