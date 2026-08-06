@@ -255,37 +255,39 @@
       }
 
       // --- VERIFICACIÓN DE PRIVILEGIOS MODIFICADA ---
- 
-      const esAdminDirectivo = ['admin', 'director', 'directivo'].includes(rol);
+      
+      const esAdminDirectivo = ['admin', 'director', 'directivo', 'docente'].includes(rol);
 
-      // Aplicar restricciones estrictas para el rol "Docente"
-        if (rol === 'docente') {
-          // 1. Ocultar la opción "Inscribir / CRUD" del Menú Lateral (Sidebar)
-          const linksSidebar = document.querySelectorAll('.sidebar a, nav a, aside a');
-          linksSidebar.forEach(link => {
-            if (link.getAttribute('href') && (link.getAttribute('href').includes('inscrip') || link.getAttribute('href').includes('crud'))) {
-              const contenedorLi = link.closest('li') || link.parentElement;
-              if (contenedorLi) contenedorLi.style.display = 'none';
-            }
-        });
+      if (!esAdminDirectivo) {
+        // Bloquear módulos de mutación solo para roles que no sean admin ni docentes (ej. alumnos)
+        const navCrud = document.getElementById('nav-crud');
+        if (navCrud) navCrud.style.display = 'none';
+
+        const linkCrudPanel = document.getElementById('link-crud-panel');
+        if (linkCrudPanel) linkCrudPanel.style.display = 'none';
         
-        // 2. Ocultar el Acceso Directo de "Inscribir / CRUD" en el panel principal
-        const accesosDirectos = document.querySelectorAll('.card-acceso-directo, .acceso-directo, a');
-        accesosDirectos.forEach(el => {
-          if (el.textContent.includes('Inscribir') || el.textContent.includes('CRUD')) {
-            const tarjetaAcceso = el.closest('.card, div') || el;
-            tarjetaAcceso.style.display = 'none';
-          }
+        // Bloquear acciones de edición solo si es un rol sin permisos
+        document.querySelectorAll('.btn-editar, .btn-eliminar, .btn-modificar, .acciones-crud').forEach(el => {
+          el.style.display = 'none';
         });
+      }
+
+      // Aplicar restricciones estrictas para el rol "Docente" (Modo Lectura en Dashboard ÚNICAMENTE)
+      if (rol === 'docente') {
+        // 2. Quitar accesos en la sección de "Accesos Directos" y enlaces alternos
+        const linkRankingsPanel = document.getElementById('link-rankings-panel');
+        if (linkRankingsPanel) linkRankingsPanel.style.display = 'none';
+
+        const linkVerReportesCompleto = document.getElementById('link-ver-reportes-completo');
+        if (linkVerReportesCompleto) linkVerReportesCompleto.style.display = 'none';
+
+        console.log("🔒 Modo de lectura estricto asignado al Docente.");
+      }
 
       // Ocultar acceso directo al Escáner para Docentes y Alumnos
       if (rol === 'docente' || rol === 'alumno') {
         const linkEscanerPanel = document.getElementById('link-escaner-panel');
         if (linkEscanerPanel) linkEscanerPanel.style.display = 'none';
-      }
-
-      // Nota: El docente SÍ tiene acceso a Reportes y Rankings, por lo que no se ocultan esos elementos.
-      console.log("🔒 Restricciones aplicadas al Docente: Sin acceso a CRUD/Inscripciones.");
       }
 
       // Fecha actual
