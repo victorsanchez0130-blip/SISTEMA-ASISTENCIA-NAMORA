@@ -373,7 +373,7 @@
           nombre: 'Nombre No Especificado',
           aula: '---'
         };
-        
+
         abrirModalAsistencia(fallbackData);
         mostrarTarjetaResultado(fallbackData);
         cargarAsistenciasHoy();
@@ -421,24 +421,36 @@
     }
 
     function mostrarTarjetaResultado(data) {
-      const card = document.getElementById('resultado-card');
-      const esSalida = modoActual === 'SALIDA';
-      const colorBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  const card = document.getElementById('resultado-card');
+  if (!card) return;
 
-      card.innerHTML = `
-        <div class="w-16 h-16 rounded-full ${esSalida ? 'bg-indigo-600' : 'bg-emerald-600'} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
-          ${(data.nombre || 'U').charAt(0).toUpperCase()}
-        </div>
-        <h3 class="text-base font-extrabold text-slate-800 mb-0.5">${data.nombre || 'Nombre No Especificado'}</h3>
-        <p class="text-xs font-mono font-bold text-slate-500 mb-2">${data.codigo || '-'}</p>
-        <div class="flex items-center gap-2">
-          <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${colorBadge}">
-            <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${modoActual}
-          </span>
-          <span class="text-xs font-semibold text-slate-500">${new Date().toLocaleTimeString()}</span>
-        </div>
-      `;
-    }
+  // Extracción robusta buscando en la estructura principal o en subobjetos anidados
+  const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data;
+
+  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || 'Nombre No Especificado';
+  const codigo = entidad.codigo || data.codigo || '-';
+  const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || '---';
+
+  const esSalida = modoActual === 'SALIDA';
+  const colorBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+
+  card.innerHTML = `
+    <div class="flex flex-col items-center justify-center py-2">
+      <div class="w-16 h-16 rounded-full ${esSalida ? 'bg-indigo-600' : 'bg-emerald-600'} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
+        ${nombre.charAt(0).toUpperCase()}
+      </div>
+      <h3 class="text-base font-extrabold text-slate-800 mb-0.5 text-center">${nombre}</h3>
+      <p class="text-xs font-mono font-bold text-slate-500 mb-1">${codigo}</p>
+      <p class="text-xs font-medium text-slate-600 mb-2">${aula}</p>
+      <div class="flex items-center gap-2">
+        <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${colorBadge}">
+          <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${modoActual}
+        </span>
+        <span class="text-xs font-semibold text-slate-500">${new Date().toLocaleTimeString()}</span>
+      </div>
+    </div>
+  `;
+}
 
     function mostrarNotificacion(msj, clases) {
       const notif = document.getElementById('notificacion-alerta');

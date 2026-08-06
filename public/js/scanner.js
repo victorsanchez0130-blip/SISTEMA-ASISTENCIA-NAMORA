@@ -11,7 +11,9 @@ let modoActual = 'ENTRADA'; // Modos: 'ENTRADA' o 'SALIDA'
 let jornadaActiva = false;
 let html5QrcodeScanner = null;
 let camaraEncendida = false;
-let procesandoEscaneoQR = false; // Variable global de bloqueo para evitar escaneos múltiples del QR
+let procesandoEscaneoQR = false; // Variable global de bloqueo principal
+let ultimoCodigoEscaneado = ''; // Almacena el último código para evitar lecturas duplicadas seguidas
+let tiempoUltimoEscaneo = 0;    // Marca de tiempo para controlar el intervalo mínimo
 
 /**
  * Lista de feriados nacionales estandarizados en Perú (MM-DD)
@@ -44,9 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
   cargarConsolidado();
   cargarAsistenciasHoy();
 
-  // Escuchar el submit del formulario de edición si existe en el HTML
   document.getElementById('form-editar-asistencia')?.addEventListener('submit', guardarEdicionAsistencia);
-  // Escuchar el botón de cierre del modal si existe
   document.getElementById('btn-cerrar-modal-editar')?.addEventListener('click', cerrarModalEditar);
 });
 
@@ -66,7 +66,6 @@ function cargarDatosAuxiliar() {
     }
   }
 
-  // Buscar todos los posibles elementos que muestran el nombre del auxiliar
   const elementosNombre = [
     document.getElementById('nombre-auxiliar'),
     document.getElementById('auxiliar-nombre'),
@@ -79,7 +78,6 @@ function cargarDatosAuxiliar() {
     }
   });
 
-  // Si hay un contenedor de texto relativo a la barra superior
   const badgeAuxiliar = document.querySelector('[id*="auxiliar"]');
   if (badgeAuxiliar && badgeAuxiliar.innerText.includes('Cargando')) {
     badgeAuxiliar.innerText = `AUXILIAR: ${nombreAuxiliar}`;
@@ -90,9 +88,6 @@ function cargarDatosAuxiliar() {
 // NUCLEO DEL ESCÁNER, JORNADA Y REGISTRO (ENTRADA / SALIDA)
 // ====================================================
 
-/**
- * Cambia el modo entre ENTRADA y SALIDA ajustando los estilos de los botones
- */
 function cambiarModoRegistro(nuevoModo) {
   modoActual = nuevoModo;
 
@@ -200,7 +195,7 @@ function iniciarCamara() {
       { facingMode: "environment" },
       config,
       (decodedText) => {
-        procesarMarcacion(decodedText);
+        manejarEscaneoControlado(decodedText);
       },
       () => {}
     ).then(() => {
@@ -211,7 +206,7 @@ function iniciarCamara() {
       html5QrcodeScanner.start(
         { facingMode: "user" },
         config,
-        (decodedText) => procesarMarcacion(decodedText),
+        (decodedText) => manejarEscaneoControlado(decodedText),
         () => {}
       ).then(() => {
         camaraEncendida = true;
@@ -224,6 +219,26 @@ function iniciarCamara() {
   } catch (e) {
     console.error("Excepción al inicializar el objeto Html5Qrcode:", e);
   }
+}
+
+/**
+ * Filtro estricto que intercepta la lectura cruda de la librería de la cámara
+ * y descarta disparos repetidos en menos de 3.5 segundos.
+ */
+function manejarEscaneoControlado(codigoLeido) {
+  const ahora = Date.now();
+  const codigoLimpio = codigoLeido.trim();
+
+  // Si ya se está procesando una petición o si el mismo código se leyó hace menos de 3.5 segundos, se ignora por completo
+  if (procesandoEscaneoQR) return;
+  if (codigoLimpio === ultimoCodigoEscaneado && (ahora - tiempoUltimoEscaneo < 3500)) {
+    return; 
+  }
+
+  ultimoCodigoEscaneado = codigoLimpio;
+  tiempoUltimoEscaneo = ahora;
+
+  procesarMarcacion(codigoLimpio);
 }
 
 function detenerCamara() {
@@ -282,14 +297,12 @@ function procesarMarcacionManual(e) {
 
   const codigo = input.value.trim();
   if (codigo) {
-    procesarMarcacion(codigo);
+    manejarEscaneoControlado(codigo);
     input.value = '';
   }
 }
 
 async function procesarMarcacion(codigo) {
-  // Evitar escaneos múltiples consecutivos del mismo QR
-  if (procesandoEscaneoQR) return;
   procesandoEscaneoQR = true;
 
   if (!jornadaActiva) {
@@ -336,31 +349,39 @@ async function procesarMarcacion(codigo) {
     });
     mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
   } finally {
-    // Liberar el bloqueo del escáner después de 2.5 segundos para permitir un nuevo escaneo limpio
+    // Mantiene el bloqueo de red y cámara por 3 segundos para asegurar un único registro limpio
     setTimeout(() => {
       procesandoEscaneoQR = false;
-    }, 2500);
+    }, 3000);
   }
 }
 
-function mostrarTarjetaResultado(persona) {
-  const card = document.getElementById('resultado-card') || document.querySelector('[id*="resultado"]') || document.querySelector('.flex-1 .bg-slate-50');
+function mostrarTarjetaResultado(data) {
+  const card = document.getElementById('resultado-card');
   if (!card) return;
 
-  const esSalida = (persona.modo || modoActual) === 'SALIDA';
-  const bgBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
-  const bgAvatar = esSalida ? 'bg-indigo-600' : 'bg-emerald-600';
+  // Extraer la entidad interna o usar el objeto principal si viene plano
+  const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data;
+
+  // Obtener nombre, código y aula/asignación de forma segura y robusta
+  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || 'Nombre No Especificado';
+  const codigo = entidad.codigo || data.codigo || '-';
+  const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || '---';
+
+  const esSalida = modoActual === 'SALIDA';
+  const colorBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
   card.innerHTML = `
-    <div class="flex flex-col items-center justify-center py-4">
-      <div class="w-16 h-16 rounded-full ${bgAvatar} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
-        ${(persona.nombre || 'U').charAt(0).toUpperCase()}
+    <div class="flex flex-col items-center justify-center py-2">
+      <div class="w-16 h-16 rounded-full ${esSalida ? 'bg-indigo-600' : 'bg-emerald-600'} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
+        ${nombre.charAt(0).toUpperCase()}
       </div>
-      <h3 class="text-base font-extrabold text-slate-800 mb-0.5">${persona.nombre || 'Personal / Alumno'}</h3>
-      <p class="text-xs font-mono font-bold text-slate-500 mb-2">${persona.codigo || '-'}</p>
+      <h3 class="text-base font-extrabold text-slate-800 mb-0.5 text-center">${nombre}</h3>
+      <p class="text-xs font-mono font-bold text-slate-500 mb-1">${codigo}</p>
+      <p class="text-xs font-medium text-slate-600 mb-2">${aula}</p>
       <div class="flex items-center gap-2">
-        <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${bgBadge}">
-          <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${persona.modo || modoActual}
+        <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${colorBadge}">
+          <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${modoActual}
         </span>
         <span class="text-xs font-semibold text-slate-500">${new Date().toLocaleTimeString()}</span>
       </div>
