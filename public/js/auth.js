@@ -1,4 +1,4 @@
-// Manejo de autenticación y sesiones
+// Manejo de autenticación y sesiones corregido
 function checkAuth(requiredRol = null) {
   // 1. Obtener la sesión (soporta 'user_session' o 'usuario')
   const sessionData = localStorage.getItem('user_session') || localStorage.getItem('usuario');
@@ -25,21 +25,17 @@ function checkAuth(requiredRol = null) {
   // 3. Normalizar el rol a minúsculas
   const userRol = (user.rol || '').trim().toLowerCase();
 
-  // 4. Si el usuario YA tiene sesión activa e intenta cargar 'index.html', redirigirlo a su página inicial correspondiente
+  // 4. Redirección inteligente desde el Login (index.html) según privilegios estrictos
   if (isLoginPage) {
     switch (userRol) {
       case 'director':
       case 'admin':
       case 'directivo':
-      case 'docente':
+      case 'docente': // Ambos entran al dashboard, pero el docente con restricciones visuales
         window.location.href = 'dashboard.html';
         break;
       case 'auxiliar':
         window.location.href = 'escaner.html';
-        break;
-      case 'alumno':
-      case 'estudiante':
-        window.location.href = 'rankings.html';
         break;
       default:
         localStorage.clear();
@@ -49,24 +45,23 @@ function checkAuth(requiredRol = null) {
     return;
   }
 
-  // --- MATRIZ DE PERMISOS POR ROL ---
+  // --- MATRIZ DE PERMISOS ESTRICTA POR ROL ---
 
-  // DIRECTOR (y aliases Admin/Directivo): Acceso TOTAL
+  // DIRECTOR / ADMIN / DIRECTIVO: Acceso total
   if (['director', 'admin', 'directivo'].includes(userRol)) {
-    return; // Pasa sin restricciones
+    return; // Pasa sin restricciones por cualquier archivo .html
   }
 
-  // DOCENTE: Solo Dashboard, Reportes y Rankings
+  // DOCENTE: ÚNICA Y EXCLUSIVAMENTE dashboard.html (Modo lectura/descargas)
   if (userRol === 'docente') {
-    const paginasDocente = ['dashboard.html', 'reportes.html', 'rankings.html'];
-    if (!paginasDocente.includes(currentPage)) {
-      alert('Acceso restringido: Los docentes solo tienen acceso a Dashboard, Reportes y Rankings.');
+    if (currentPage !== 'dashboard.html') {
+      alert('Acceso restringido: Los docentes solo tienen acceso de lectura y descargas en el Dashboard.');
       window.location.href = 'dashboard.html';
     }
     return;
   }
 
-  // AUXILIAR: Solo Escáner
+  // AUXILIAR: ÚNICA Y EXCLUSIVAMENTE escaner.html
   if (userRol === 'auxiliar') {
     if (currentPage !== 'escaner.html') {
       alert('Acceso restringido: Los auxiliares solo tienen acceso al módulo Escáner.');
@@ -75,26 +70,7 @@ function checkAuth(requiredRol = null) {
     return;
   }
 
-  // ALUMNO: Solo Rankings
-  if (userRol === 'alumno' || userRol === 'estudiante') {
-    if (currentPage !== 'rankings.html') {
-      alert('Acceso restringido: Los alumnos solo tienen acceso a la sección Rankings.');
-      window.location.href = 'rankings.html';
-    }
-    return;
-  }
-
-  // CUALQUIER OTRO ROL NO RECONOCIDO
-  alert('Acceso denegado: Su rol no cuenta con permisos válidos.');
+  // CUALQUIER OTRO ROL NO AUTORIZADO
+  alert('Acceso denegado: Su rol no cuenta con permisos para esta plataforma.');
   logout();
 }
-
-function logout() {
-  localStorage.removeItem('user_session');
-  localStorage.removeItem('usuario');
-  localStorage.clear();
-  window.location.href = 'index.html';
-}
-
-// Ejecutar automáticamente la validación al cargar el script
-checkAuth();

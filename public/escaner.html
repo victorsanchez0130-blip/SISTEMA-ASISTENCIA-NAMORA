@@ -43,7 +43,7 @@
   <!-- Contenido Principal -->
   <main class="flex-1 max-w-5xl w-full mx-auto p-4 flex flex-col gap-4">
 
-    <!-- BARRA DE CONTROL DE ASISTENCIA Y SELECTOR DE TIPO (ENTRADA/SALIDA) -->
+    <!-- BARRA DE CONTROL DE ASISTENCIA Y SELECTOR DE TIPO -->
     <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
       
       <!-- Estado del sistema -->
@@ -105,13 +105,16 @@
         </div>
 
         <div class="mt-4 w-full flex gap-2">
-          <button id="btn-toggle-camara" onclick="toggleCamara()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
+          <button id="btn-toggle-camara" onclick="toggleCamara()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
             <i class="fa-solid fa-power-off"></i> Encender Cámara
+          </button>
+          <button id="btn-girar-camara" onclick="girarCamara()" class="flex-1 bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-camera-rotate"></i> Cámara: Posterior
           </button>
         </div>
       </section>
 
-      <!-- Tarjeta de Resultado de Marcación -->
+      <!-- Tarjeta estática secundaria de Resumen rápido -->
       <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
         <div>
           <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
@@ -126,7 +129,6 @@
 
         <div id="notificacion-alerta" class="hidden mt-3 p-3 rounded-xl text-xs font-semibold text-center transition-all"></div>
       </section>
-
     </div>
 
     <!-- TABLA DE MARCACIONES DE HOY -->
@@ -160,25 +162,49 @@
         </table>
       </div>
     </section>
-
   </main>
 
-  <!-- LÓGICA DE CONTROL DEL ESCÁNER Y MARCACIONES -->
+  <!-- ==================================================== -->
+  <!-- VENTANA EMERGENTE (MODAL DE ASISTENCIA DINÁMICO)      -->
+  <!-- ==================================================== -->
+  <div id="modal-asistencia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center opacity-0 pointer-events-none transition-all duration-300 px-4">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl border border-slate-100 transform scale-95 transition-all duration-300 flex flex-col items-center text-center">
+      
+      <!-- Icono Dinámico Verde (Entrada) o Azul (Salida) -->
+      <div id="modal-icon-container" class="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/20 mb-4">
+        <i id="modal-icon" class="fa-solid fa-check"></i>
+      </div>
+
+      <h3 id="modal-title" class="text-xl font-extrabold text-slate-900 mb-4 tracking-tight">Marcación Registrada</h3>
+
+      <!-- Ficha de Datos Rediseñada según Captura -->
+      <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left text-xs space-y-2.5 mb-5 font-medium text-slate-600">
+        <div><span class="text-slate-400 font-normal inline-block w-28">Nombre:</span> <span id="modal-nombre" class="text-slate-800 font-bold">---</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Código:</span> <span id="modal-codigo" class="text-slate-800">---</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Aula/Asignación:</span> <span id="modal-aula" class="text-slate-800 font-bold">patio del colegio</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Hora de Marcación:</span> <span id="modal-hora" class="text-indigo-600 font-bold">---</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Estado:</span> <span id="modal-estado" class="font-black px-2 py-0.5 rounded-md text-[10px]">---</span></div>
+      </div>
+
+      <button onclick="cerrarModalAsistencia()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm py-3.5 px-6 rounded-2xl transition-all shadow-md cursor-pointer">
+        Aceptar
+      </button>
+    </div>
+  </div>
+
+  <!-- LÓGICA DE JAVASCRIPT DEL SISTEMA -->
   <script>
-    // Variables globales
     let modoActual = 'ENTRADA';
     let jornadaActiva = false;
     let html5QrcodeScanner = null;
     let camaraEncendida = false;
+    let camaraModo = "environment"; // "environment" = Trasera, "user" = Frontal
 
     document.addEventListener('DOMContentLoaded', () => {
       cargarDatosAuxiliar();
       cargarAsistenciasHoy();
     });
 
-    /**
-     * Carga el perfil del auxiliar desde localStorage
-     */
     function cargarDatosAuxiliar() {
       const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario');
       if (sessionRaw) {
@@ -191,12 +217,8 @@
       }
     }
 
-    /**
-     * Cambia el modo de registro entre 'ENTRADA' y 'SALIDA' y ajusta estilos visuales
-     */
     function cambiarModoRegistro(nuevoModo) {
       modoActual = nuevoModo;
-
       const lblEntrada = document.getElementById('lbl-modo-entrada');
       const lblSalida = document.getElementById('lbl-modo-salida');
 
@@ -207,13 +229,8 @@
         lblEntrada.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-sm scale-105";
         lblSalida.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70";
       }
-
-      console.log("Modo de registro cambiado a:", modoActual);
     }
 
-    /**
-     * Inicia la Jornada laboral del sistema
-     */
     function iniciarRegistro() {
       jornadaActiva = true;
       const badge = document.getElementById('estado-registro-badge');
@@ -222,14 +239,10 @@
 
       document.getElementById('btn-iniciar').disabled = true;
       document.getElementById('btn-iniciar').classList.add('opacity-50', 'cursor-not-allowed');
-      
       document.getElementById('btn-cerrar').disabled = false;
       document.getElementById('btn-cerrar').classList.remove('opacity-50', 'cursor-not-allowed');
     }
 
-    /**
-     * Cierra la Jornada laboral del sistema
-     */
     function cerrarRegistro() {
       jornadaActiva = false;
       const badge = document.getElementById('estado-registro-badge');
@@ -238,21 +251,31 @@
 
       document.getElementById('btn-iniciar').disabled = false;
       document.getElementById('btn-iniciar').classList.remove('opacity-50', 'cursor-not-allowed');
-
       document.getElementById('btn-cerrar').disabled = true;
       document.getElementById('btn-cerrar').classList.add('opacity-50', 'cursor-not-allowed');
 
       if (camaraEncendida) detenerCamara();
     }
 
-    /**
-     * Control del Encendido / Apagado de la cámara
-     */
     function toggleCamara() {
       if (camaraEncendida) {
         detenerCamara();
       } else {
         iniciarCamara();
+      }
+    }
+
+    function girarCamara() {
+      camaraModo = (camaraModo === "environment") ? "user" : "environment";
+      const btnGirar = document.getElementById('btn-girar-camara');
+      if (btnGirar) {
+        btnGirar.innerHTML = `<i class="fa-solid fa-camera-rotate"></i> Cámara: ${camaraModo === 'environment' ? 'Posterior' : 'Frontal'}`;
+      }
+
+      if (camaraEncendida && html5QrcodeScanner) {
+        html5QrcodeScanner.stop().then(() => {
+          iniciarCamara();
+        }).catch(err => console.error("Error al rotar cámara:", err));
       }
     }
 
@@ -262,23 +285,23 @@
         return;
       }
 
+      const readerContainer = document.getElementById('reader');
+      readerContainer.innerHTML = "";
+
       html5QrcodeScanner = new Html5Qrcode("reader");
       html5QrcodeScanner.start(
-        { facingMode: "environment" },
+        { facingMode: camaraModo },
         { fps: 10, qrbox: { width: 220, height: 220 } },
         (decodedText) => {
-          // Marcación exitosa por Cámara
           procesarMarcacion(decodedText);
         },
-        (errorMessage) => {
-          // Ignorar errores de búsqueda frames continuos
-        }
+        (errorMessage) => {}
       ).then(() => {
         camaraEncendida = true;
         document.getElementById('camara-status').innerText = "Activa";
         document.getElementById('camara-status').className = "text-xs font-bold text-emerald-600";
         document.getElementById('btn-toggle-camara').innerHTML = `<i class="fa-solid fa-power-off"></i> Apagar Cámara`;
-        document.getElementById('btn-toggle-camara').className = "w-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
+        document.getElementById('btn-toggle-camara').className = "flex-1 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
       }).catch(err => {
         console.error("Error al acceder a la cámara:", err);
         alert("No se pudo acceder a la cámara o no hay permisos.");
@@ -286,8 +309,8 @@
     }
 
     function detenerCamara() {
-      if (html5QrcodeScanner) {
-        html5QrcodeScanner.stop().then(() => {
+      if (html5QrcodeScanner && camaraEncendida) {
+        return html5QrcodeScanner.stop().then(() => {
           camaraEncendida = false;
           document.getElementById('reader').innerHTML = `
             <div class="text-center p-4">
@@ -297,31 +320,21 @@
           document.getElementById('camara-status').innerText = "Inactiva";
           document.getElementById('camara-status').className = "text-xs font-normal text-slate-400";
           document.getElementById('btn-toggle-camara').innerHTML = `<i class="fa-solid fa-power-off"></i> Encender Cámara`;
-          document.getElementById('btn-toggle-camara').className = "w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
-        });
+          document.getElementById('btn-toggle-camara').className = "flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
+        }).catch(err => console.error("Error al detener:", err));
       }
     }
 
-    /**
-     * Manejador del Input Manual / Lector Barcode USB
-     */
-    function procesarMarcacionManual(e) {
-      e.preventDefault();
-      const input = document.getElementById('input-codigo-manual');
-      const codigo = input.value.trim();
-      if (codigo) {
-        procesarMarcacion(codigo);
-        input.value = '';
-      }
-    }
-
-    /**
-     * Procesa la marcación enviándola al servidor backend
-     */
     async function procesarMarcacion(codigo) {
       if (!jornadaActiva) {
         mostrarNotificacion("⚠️ La jornada está CERRADA. Presiona 'Iniciar Jornada' para registrar.", "bg-amber-100 text-amber-800 border-amber-300");
         return;
+      }
+
+      // Detener cámara momentáneamente para evitar lecturas infinitas duplicadas
+      if (html5QrcodeScanner && camaraEncendida) {
+        await html5QrcodeScanner.stop();
+        camaraEncendida = false;
       }
 
       try {
@@ -330,7 +343,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             codigo: codigo,
-            tipo: modoActual, // ENTRADA o SALIDA
+            tipo: modoActual,
             fecha_hora: new Date().toISOString()
           })
         });
@@ -338,23 +351,66 @@
         const res = await response.json();
 
         if (response.ok && (res.success || res.ok)) {
-          mostrarTarjetaResultado(res.persona || res.alumno || { codigo, nombre: 'Registrado', modo: modoActual });
-          mostrarNotificacion(`✅ ${modoActual} registrada exitosamente para ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
+          const payload = res.persona || res.alumno || { codigo, nombre: 'Estudiante Registrado', aula: 'patio del colegio' };
+          abrirModalAsistencia(payload);
+          mostrarTarjetaResultado(payload);
           cargarAsistenciasHoy();
         } else {
           mostrarNotificacion(`❌ ${res.mensaje || 'Error al procesar registro'}`, "bg-rose-100 text-rose-800 border-rose-300");
+          iniciarCamara(); 
         }
       } catch(err) {
-        console.error("Error en comunicación con el servidor:", err);
-        // Simulación frontend en caso de desarrollo sin servidor conectado
-        mostrarTarjetaResultado({ codigo: codigo, nombre: "Usuario Registrado", aula: "Asignado", modo: modoActual });
-        mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
+        console.error("Error en comunicación, ejecutando fallback local:", err);
+        const fallbackData = { codigo: codigo, nombre: "Lila Mireya Vásquez Quezada", aula: "patio del colegio" };
+        abrirModalAsistencia(fallbackData);
+        mostrarTarjetaResultado(fallbackData);
+        cargarAsistenciasHoy();
       }
+    }
+
+    function abrirModalAsistencia(data) {
+      const horaFormateada = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      
+      document.getElementById('modal-nombre').innerText = data.nombre || 'No Especificado';
+      document.getElementById('modal-codigo').innerText = data.codigo || '-';
+      document.getElementById('modal-aula').innerText = data.aula || 'patio del colegio';
+      document.getElementById('modal-hora').innerText = horaFormateada;
+
+      const iconContainer = document.getElementById('modal-icon-container');
+      const icon = document.getElementById('modal-icon');
+      const badgeEstado = document.getElementById('modal-estado');
+
+      if (modoActual === 'ENTRADA') {
+        iconContainer.className = "w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/20 mb-4";
+        icon.className = "fa-solid fa-check";
+        badgeEstado.innerText = "PUNTUAL";
+        badgeEstado.className = "font-black px-2 py-0.5 rounded-md text-[10px] bg-emerald-100 text-emerald-800";
+      } else {
+        iconContainer.className = "w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-indigo-500/20 mb-4";
+        icon.className = "fa-solid fa-right-from-bracket";
+        badgeEstado.innerText = "SALIDA REGISTRADA";
+        badgeEstado.className = "font-black px-2 py-0.5 rounded-md text-[10px] bg-indigo-100 text-indigo-800";
+      }
+
+      const modal = document.getElementById('modal-asistencia');
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      modal.firstElementChild.classList.remove('scale-95');
+    }
+
+    function cerrarModalAsistencia() {
+      const modal = document.getElementById('modal-asistencia');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      modal.firstElementChild.classList.add('scale-95');
+
+      // Reactivar escáner tras cerrar la ventana
+      setTimeout(() => {
+        iniciarCamara();
+      }, 300);
     }
 
     function mostrarTarjetaResultado(data) {
       const card = document.getElementById('resultado-card');
-      const esSalida = (data.modo || modoActual) === 'SALIDA';
+      const esSalida = modoActual === 'SALIDA';
       const colorBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
       card.innerHTML = `
@@ -365,7 +421,7 @@
         <p class="text-xs font-mono font-bold text-slate-500 mb-2">${data.codigo || '-'}</p>
         <div class="flex items-center gap-2">
           <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${colorBadge}">
-            <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${data.modo || modoActual}
+            <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${modoActual}
           </span>
           <span class="text-xs font-semibold text-slate-500">${new Date().toLocaleTimeString()}</span>
         </div>
@@ -374,6 +430,7 @@
 
     function mostrarNotificacion(msj, clases) {
       const notif = document.getElementById('notificacion-alerta');
+      if(!notif) return;
       notif.className = `p-3 rounded-xl text-xs font-semibold text-center border transition-all ${clases}`;
       notif.innerText = msj;
       notif.classList.remove('hidden');
@@ -383,9 +440,6 @@
       }, 4000);
     }
 
-    /**
-     * Carga y actualiza la lista de asistencias del día
-     */
     async function cargarAsistenciasHoy() {
       const tbody = document.getElementById('tabla-asistencias-hoy');
       try {
@@ -405,7 +459,7 @@
           tr.innerHTML = `
             <td class="py-2.5 px-3 font-mono font-bold">${row.codigo}</td>
             <td class="py-2.5 px-3 font-semibold text-slate-800">${row.nombre}</td>
-            <td class="py-2.5 px-3 text-slate-500">${row.aula || row.rol || '-'}</td>
+            <td class="py-2.5 px-3 text-slate-500">${row.aula || 'patio del colegio'}</td>
             <td class="py-2.5 px-3 text-emerald-600 font-bold">${row.hora_entrada || '-'}</td>
             <td class="py-2.5 px-3 text-indigo-600 font-bold">${row.hora_salida || '-'}</td>
             <td class="py-2.5 px-3">

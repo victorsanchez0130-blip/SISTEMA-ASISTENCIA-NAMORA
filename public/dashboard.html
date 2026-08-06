@@ -43,14 +43,14 @@
           <span>Inicio</span>
         </a>
 
-        <!-- Control y Reportes -->
-        <a href="reportes.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+        <!-- Control y Reportes (Oculto para Docentes) -->
+        <a href="reportes.html" id="nav-reportes" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
           <i class="fa-solid fa-folder-open w-5 text-center text-base text-emerald-400"></i>
           <span>Control y Reportes</span>
         </a>
 
-        <!-- Rankings y Puntos -->
-        <a href="rankings.html" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
+        <!-- Rankings y Puntos (Oculto para Docentes) -->
+        <a href="rankings.html" id="nav-rankings" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
           <i class="fa-solid fa-trophy w-5 text-center text-base text-amber-400"></i>
           <span>Rankings y Puntos</span>
         </a>
@@ -161,7 +161,8 @@
             <h2 class="text-base sm:text-lg font-bold text-slate-800">Cronograma de Asistencia Diaria</h2>
             <p class="text-xs text-slate-500 font-medium">Últimos registros reportados por el escáner hoy</p>
           </div>
-          <a href="reportes.html" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors">
+          <!-- ID agregado para poder ocultarlo selectivamente en JS -->
+          <a href="reportes.html" id="link-ver-reportes-completo" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors">
             Ver reporte completo <i class="fa-solid fa-arrow-right text-[10px]"></i>
           </a>
         </div>
@@ -200,7 +201,7 @@
               <span class="flex items-center gap-2.5"><i class="fa-solid fa-user-plus text-slate-400 group-hover:text-blue-600"></i> Inscribir / CRUD</span>
               <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-600"></i>
             </a>
-            <a href="rankings.html" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
+            <a href="rankings.html" id="link-rankings-panel" class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 transition-all border border-slate-200 text-xs font-bold text-slate-700 group">
               <span class="flex items-center gap-2.5"><i class="fa-solid fa-star text-slate-400 group-hover:text-blue-600"></i> Rankings y Puntos</span>
               <i class="fa-solid fa-chevron-right text-slate-300 group-hover:text-blue-600"></i>
             </a>
@@ -236,7 +237,7 @@
       }
 
       const sessionData = JSON.parse(sessionRaw || '{}');
-      const rol = (sessionData.rol || '').toLowerCase();
+      const rol = (sessionData.rol || '').toLowerCase().trim();
 
       // Actualizar datos del usuario en la interfaz
       if (sessionData.nombre) {
@@ -253,19 +254,41 @@
         if (elemAvatar) elemAvatar.innerText = sessionData.nombre.charAt(0).toUpperCase();
       }
 
-      // Restricción de Menú para Inscribir/CRUD (Solo para Admin/Director)
+      // --- VERIFICACIÓN DE PRIVILEGIOS CRÍTICA ---
+      
       const esAdminDirectivo = ['admin', 'director', 'directivo'].includes(rol);
+
       if (!esAdminDirectivo) {
+        // Bloquear módulos de mutación para roles inferiores
         const navCrud = document.getElementById('nav-crud');
         if (navCrud) navCrud.style.display = 'none';
 
         const linkCrudPanel = document.getElementById('link-crud-panel');
         if (linkCrudPanel) linkCrudPanel.style.display = 'none';
         
-        // Ocultar cualquier botón con la clase o id de edición/eliminación que exista
-         document.querySelectorAll('.btn-editar, .btn-eliminar, .btn-modificar, .acciones-crud').forEach(el => {
-         el.style.display = 'none';
-         });
+        // Bloquear acciones de edición remanentes en las vistas comunes
+        document.querySelectorAll('.btn-editar, .btn-eliminar, .btn-modificar, .acciones-crud').forEach(el => {
+          el.style.display = 'none';
+        });
+      }
+
+      // Aplicar restricciones estrictas para el rol "Docente" (Modo Lectura en Dashboard ÚNICAMENTE)
+      if (rol === 'docente') {
+        // 1. Quitar acceso en Sidebar a Reportes y Rankings
+        const navReportes = document.getElementById('nav-reportes');
+        if (navReportes) navReportes.style.display = 'none';
+
+        const navRankings = document.getElementById('nav-rankings');
+        if (navRankings) navRankings.style.display = 'none';
+
+        // 2. Quitar accesos en la sección de "Accesos Directos" y enlaces alternos
+        const linkRankingsPanel = document.getElementById('link-rankings-panel');
+        if (linkRankingsPanel) linkRankingsPanel.style.display = 'none';
+
+        const linkVerReportesCompleto = document.getElementById('link-ver-reportes-completo');
+        if (linkVerReportesCompleto) linkVerReportesCompleto.style.display = 'none';
+
+        console.log("🔒 Modo de lectura estricto asignado al Docente.");
       }
 
       // Ocultar acceso directo al Escáner para Docentes y Alumnos
@@ -282,8 +305,6 @@
         });
       }
 
-      
-      
       cargarMetricasDashboard();
     });
 
