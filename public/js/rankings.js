@@ -74,7 +74,17 @@ function agregarMembreteInstitucional(doc, titulo) {
   doc.line(14, 26, 196, 26);
 }
 
-function imprimirRankingDocentesPDF() {
+// Función compartida interna para precargar imagen en Rankings
+function preCargarLogoRankings(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = url;
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null); // Retorna nulo pacíficamente si falla
+  });
+}
+
+async function imprimirRankingDocentesPDF() {
   if (listaDocentes.length === 0) {
     alert("No hay datos cargados para generar el ranking.");
     return;
@@ -82,6 +92,9 @@ function imprimirRankingDocentesPDF() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+
+  // Precargar Logo
+  const imgLogo = await preCargarLogoRankings('img/logo.png');
 
   agregarMembreteInstitucional(doc, "RANKING OFICIAL DE MÉRITOS - DOCENTES");
 
@@ -98,13 +111,21 @@ function imprimirRankingDocentesPDF() {
     body: bodyData,
     theme: 'grid',
     headStyles: { fillColor: [14, 42, 71], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 8 }
+    styles: { 
+      fontSize: 8,
+      fillColor: false // Permite ver el logo de fondo
+    },
+    didDrawPage: function (data) {
+      if (imgLogo) {
+        doc.addImage(imgLogo, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+      }
+    }
   });
 
   doc.save('Ranking_Docentes_Santa_Rosa.pdf');
 }
 
-function imprimirRankingAlumnosPDF() {
+async function imprimirRankingAlumnosPDF() {
   if (listaAlumnos.length === 0) {
     alert("No hay datos cargados para generar el ranking.");
     return;
@@ -112,6 +133,9 @@ function imprimirRankingAlumnosPDF() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+
+  // Precargar Logo
+  const imgLogo = await preCargarLogoRankings('img/logo.png');
 
   agregarMembreteInstitucional(doc, "RANKING OFICIAL DE MÉRITOS - ALUMNOS");
 
@@ -128,21 +152,15 @@ function imprimirRankingAlumnosPDF() {
     body: bodyData,
     theme: 'grid',
     headStyles: { fillColor: [0, 102, 51], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 8 },
-    
-    // ===================================================
-    // GANCHO PARA DIBUJAR LA MARCA DE AGUA EN CADA PÁGINA
-    // ===================================================
+    styles: { 
+      fontSize: 8,
+      fillColor: false // Permite ver el logo de fondo
+    },
     didDrawPage: function (data) {
-      try {
-        const rutaLogoBajoFondo = 'img/logo-marca-agua.png';
-        // Centrado en la página A4 (Ancho: 210mm, Alto: 297mm)
-        doc.addImage(rutaLogoBajoFondo, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
-      } catch (imgErr) {
-        console.warn("No se pudo cargar la marca de agua en esta página del ranking:", imgErr);
+      if (imgLogo) {
+        doc.addImage(imgLogo, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
       }
     }
-    // ===================================================
   });
 
   doc.save('Ranking_Alumnos_Santa_Rosa.pdf');

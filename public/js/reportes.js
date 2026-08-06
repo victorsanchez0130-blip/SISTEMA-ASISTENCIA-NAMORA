@@ -192,7 +192,6 @@ function obtenerAlumnosPorAula() {
     if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) return false;
     if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
 
-    // CORREGIDO: Comparación robusta para identificar la sección en la cadena de texto
     if (seccion !== 'Todos') {
       const seccionNormalizada = seccion.toUpperCase();
       if (!aulaStr.includes(seccionNormalizada)) {
@@ -220,7 +219,6 @@ function actualizarOpcionesAlumnosSegunAula() {
     selectAlumno.appendChild(option);
   });
 
-  // CORREGIDO: Se resolvió el error de sintaxis 'valorSeleccionativePrevio' -> 'valorSeleccionadoPrevio'
   if (valorSeleccionadoPrevio && Array.from(selectAlumno.options).some(o => o.value === valorSeleccionadoPrevio)) {
     selectAlumno.value = valorSeleccionadoPrevio;
   } else {
@@ -394,7 +392,7 @@ async function guardarEdicionAsistencia(event) {
 }
 
 // ----------------------------------------------------
-// GENERACIÓN DE REPORTES EN PDF
+// GENERACIÓN DE REPORTES EN PDF (CON MARCA DE AGUA CORREGIDA)
 // ----------------------------------------------------
 
 function obtenerInstanciaPDF() {
@@ -421,6 +419,16 @@ function obtenerObservacionEstado(estado) {
   return 'Registro de marcación';
 }
 
+// Función auxiliar para precargar la imagen en un objeto Image de JS
+function cargarImagenLogoAsync(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = url;
+    img.onload = () => resolve(img);
+    img.onerror = (err) => reject(err);
+  });
+}
+
 async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, periodo, metricas, historial, nombreArchivo }) {
   const jsPDFClass = obtenerInstanciaPDF();
   if (!jsPDFClass) {
@@ -430,19 +438,23 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   const doc = new jsPDFClass();
 
-  // ===================================================
-  // AGREGAR LOGO COMO MARCA DE AGUA (FONDO)
-  // ===================================================
+  // Precargar el logo antes de empezar a renderizar nada
+  let imgLogoLoaded = null;
   try {
-    // Ruta de tu logo (se recomienda que el archivo 'logo-marca-agua.png' ya tenga opacidad baja)
-    const rutaLogoBajoFondo = 'img/logo.png'; 
-    
-    // Posicionamiento centrado en la página A4 (Ancho: 210mm, Alto: 297mm)
-    // Parámetros: image, x, y, ancho, alto, alias, ración, rotación
-    doc.addImage(rutaLogoBajoFondo, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+    imgLogoLoaded = await cargarImagenLogoAsync('img/logo.png');
   } catch (imgErr) {
-    console.warn("No se pudo cargar la marca de agua, continuando sin ella:", imgErr);
+    console.warn("No se pudo precargar la marca de agua:", imgErr);
   }
+
+  // Definimos la función de pintado reutilizable
+  const pintarFondoMarcaAgua = () => {
+    if (imgLogoLoaded) {
+      doc.addImage(imgLogoLoaded, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+    }
+  };
+
+  // Dibujar marca en la primera hoja preliminar
+  pintarFondoMarcaAgua();
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
@@ -472,7 +484,8 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       cellPadding: 4,
       lineColor: [203, 213, 225],
       lineWidth: 0.5,
-      textColor: [51, 65, 85]
+      textColor: [51, 65, 85],
+      fillColor: false // Transparente para no tapar la marca de agua
     },
     columnStyles: {
       0: { cellWidth: 85 },
@@ -509,7 +522,8 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       halign: 'center',
       fontSize: 10,
       fontStyle: 'bold',
-      textColor: [15, 23, 42]
+      textColor: [15, 23, 42],
+      fillColor: false // Transparente
     }
   });
 
@@ -518,7 +532,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setTextColor(30, 41, 59);
   doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
 
-  // NUEVA ESTRUCTURA: Agregada columna "H. SALIDA"
   const headersHistorial = [["FECHA", "DÍA", "H. ENTRADA", "H. SALIDA", "ESTADO", "OBSERVACIÓN"]];
   
   const rowsHistorial = historial.map(h => {
@@ -526,7 +539,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     let entradaDisplay = h.hora || h.hora_entrada || '-';
     let salidaDisplay = h.hora_salida || h.salida || '-';
 
-    // REGLA LÓGICA REQUERIDA: Si no tiene un ingreso real válido o figura como FALTA
     if (estadoLimpio === 'FALTA' || estadoLimpio === 'INJUSTIFICADA' || entradaDisplay === '-' || entradaDisplay === '00:00:00') {
       entradaDisplay = 'FALTA';
       salidaDisplay = 'FALTA';
@@ -558,17 +570,22 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       fontSize: 8,
       halign: 'center'
     },
-    bodyStyles: {
+    styles: {
       fontSize: 8,
-      textColor: [51, 65, 85]
+      textColor: [51, 65, 85],
+      fillColor: false // HACE TRANSPARENTE LAS FILAS PARA QUE SE VEA EL LOGO DETRÁS
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 25 }, // Fecha
-      1: { halign: 'center', cellWidth: 22 }, // Día
-      2: { halign: 'center', cellWidth: 26 }, // H. Entrada
-      3: { halign: 'center', cellWidth: 26 }, // H. Salida
-      4: { halign: 'center', cellWidth: 26 }, // Estado
-      5: { cellWidth: 55 }                  // Observación
+      0: { halign: 'center', cellWidth: 25 }, 
+      1: { halign: 'center', cellWidth: 22 }, 
+      2: { halign: 'center', cellWidth: 26 }, 
+      3: { halign: 'center', cellWidth: 26 }, 
+      4: { halign: 'center', cellWidth: 26 }, 
+      5: { cellWidth: 55 }                  
+    },
+    // Si la tabla del historial se divide en múltiples hojas, dibuja el fondo en cada una
+    didDrawPage: function (data) {
+      pintarFondoMarcaAgua();
     }
   });
 
@@ -597,7 +614,6 @@ async function generarFichaAlumnoPDF() {
     return;
   }
 
-  // CORREGIDO: Búsqueda tolerante a variaciones de mayúsculas/minúsculas y espacios
   const alumno = datosReporteGlobal.find(d => String(d.codigo).trim().toUpperCase() === String(selectAlumno).trim().toUpperCase());
   if (!alumno) {
     alert("No se encontraron los datos del alumno seleccionado.");
