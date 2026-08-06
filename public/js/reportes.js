@@ -222,7 +222,7 @@ function actualizarOpcionesAlumnosSegunAula() {
     selectAlumno.appendChild(option);
   });
 
-  if (valorSeleccionadoPrevio && Array.from(selectAlumno.options).some(o => o.value === valorSeleccionadoPrevio)) {
+  if (valorSeleccionadoPrevio && Array.from(selectAlumno.options).some(o => o.value === valorSeleccionativePrevio)) {
     selectAlumno.value = valorSeleccionadoPrevio;
   } else {
     selectAlumno.value = 'todos';
@@ -505,30 +505,32 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setTextColor(30, 41, 59);
   doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
 
-  const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN", "DOCENTE"]];
+  // NUEVA ESTRUCTURA: Agregada columna "H. SALIDA"
+  const headersHistorial = [["FECHA", "DÍA", "H. ENTRADA", "H. SALIDA", "ESTADO", "OBSERVACIÓN"]];
   
   const rowsHistorial = historial.map(h => {
-    const nombreDocente = h.docente_nombre 
-      || h.nombre_docente 
-      || h.docente 
-      || h.profesor 
-      || h.profesor_nombre 
-      || h.nombre 
-      || h.docente_completo 
-      || '-';
+    const estadoLimpio = (h.estado || '').toUpperCase();
+    let entradaDisplay = h.hora || h.hora_entrada || '-';
+    let salidaDisplay = h.hora_salida || h.salida || '-';
+
+    // REGLA LÓGICA REQUERIDA: Si no tiene un ingreso real válido o figura como FALTA
+    if (estadoLimpio === 'FALTA' || estadoLimpio === 'INJUSTIFICADA' || entradaDisplay === '-' || entradaDisplay === '00:00:00') {
+      entradaDisplay = 'FALTA';
+      salidaDisplay = 'FALTA';
+    }
 
     return [
       h.fecha || '-',
       obtenerNombreDia(h.fecha),
-      h.hora || '-',
-      (h.estado || '-').toUpperCase(),
-      obtenerObservacionEstado(h.estado),
-      nombreDocente
+      entradaDisplay,
+      salidaDisplay,
+      estadoLimpio,
+      obtenerObservacionEstado(h.estado)
     ];
   });
 
   if (rowsHistorial.length === 0) {
-    rowsHistorial.push(["-", "-", "-", "SIN REGISTROS", "No existen registros de marcación en el periodo", "-"]);
+    rowsHistorial.push(["-", "-", "FALTA", "FALTA", "SIN REGISTROS", "No existen registros en el periodo"]);
   }
 
   doc.autoTable({
@@ -548,12 +550,12 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       textColor: [51, 65, 85]
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 22 },
-      1: { halign: 'center', cellWidth: 20 },
-      2: { halign: 'center', cellWidth: 24 },
-      3: { halign: 'center', cellWidth: 22 },
-      4: { cellWidth: 52 },
-      5: { cellWidth: 40 }
+      0: { halign: 'center', cellWidth: 25 }, // Fecha
+      1: { halign: 'center', cellWidth: 22 }, // Día
+      2: { halign: 'center', cellWidth: 26 }, // H. Entrada
+      3: { halign: 'center', cellWidth: 26 }, // H. Salida
+      4: { halign: 'center', cellWidth: 26 }, // Estado
+      5: { cellWidth: 55 }                  // Observación
     }
   });
 

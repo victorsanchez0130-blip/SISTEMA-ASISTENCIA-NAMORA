@@ -44,18 +44,39 @@ document.addEventListener('DOMContentLoaded', () => {
   cargarAsistenciasHoy();
 });
 
+/**
+ * Carga el nombre del auxiliar desde localStorage soportando múltiples formatos
+ */
 function cargarDatosAuxiliar() {
-  const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario');
+  const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario') || localStorage.getItem('user');
+  let nombreAuxiliar = 'Auxiliar';
+
   if (sessionRaw) {
     try {
       const session = JSON.parse(sessionRaw);
-      const nombreElement = document.getElementById('nombre-auxiliar');
-      if (nombreElement) {
-        nombreElement.innerText = session.nombre || session.usuario || 'Auxiliar';
-      }
-    } catch(e) {
-      console.error("Error al parsear la sesión activa:", e);
+      nombreAuxiliar = session.nombre || session.nombre_completo || session.nombres || session.usuario || 'Auxiliar';
+    } catch (e) {
+      if (typeof sessionRaw === 'string') nombreAuxiliar = sessionRaw;
     }
+  }
+
+  // Buscar todos los posibles elementos que muestran el nombre del auxiliar
+  const elementosNombre = [
+    document.getElementById('nombre-auxiliar'),
+    document.getElementById('auxiliar-nombre'),
+    document.getElementById('lbl-auxiliar')
+  ];
+
+  elementosNombre.forEach(el => {
+    if (el) {
+      el.innerText = nombreAuxiliar;
+    }
+  });
+
+  // Si hay un contenedor de texto relativo a la barra superior
+  const badgeAuxiliar = document.querySelector('[id*="auxiliar"]');
+  if (badgeAuxiliar && badgeAuxiliar.innerText.includes('Cargando')) {
+    badgeAuxiliar.innerText = `AUXILIAR: ${nombreAuxiliar}`;
   }
 }
 
@@ -93,7 +114,7 @@ function cambiarModoRegistro(nuevoModo) {
 
 function iniciarRegistro() {
   jornadaActiva = true;
-  const badge = document.getElementById('estado-registro-badge');
+  const badge = document.getElementById('estado-registro-badge') || document.querySelector('[id*="estado"]');
   if (badge) {
     badge.className = "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200";
     badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ABIERTO`;
@@ -116,7 +137,7 @@ function iniciarRegistro() {
 
 function cerrarRegistro() {
   jornadaActiva = false;
-  const badge = document.getElementById('estado-registro-badge');
+  const badge = document.getElementById('estado-registro-badge') || document.querySelector('[id*="estado"]');
   if (badge) {
     badge.className = "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-red-100 text-red-700 border border-red-200";
     badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> CERRADO`;
@@ -147,24 +168,83 @@ function toggleCamara() {
 }
 
 function iniciarCamara() {
-  if (typeof Html5Qrcode === 'undefined') {
-    alert("La librería del escáner HTML5 no está disponible.");
+  const readerContainer = document.getElementById('reader') || document.querySelector('[id*="camara"]') || document.querySelector('.bg-slate-900');
+
+  if (!readerContainer) {
+    alert("No se encontró el contenedor del visor de la cámara en el HTML.");
     return;
   }
 
-  html5QrcodeScanner = new Html5Qrcode("reader");
-  html5QrcodeScanner.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: { width: 220, height: 220 } },
-    (decodedText) => {
-      procesarMarcacion(decodedText);
-    },
-    (errorMessage) => {}
-  ).then(() => {
-    camaraEncendida = true;
-    const statusLabel = document.getElementById('camara-status');
-    const btnToggle = document.getElementById('btn-toggle-camara');
+  // Asegurar que el contenedor tenga un ID válido 'reader'
+  if (!readerContainer.id) {
+    readerContainer.id = "reader";
+  }
 
+  if (typeof Html5Qrcode === 'undefined') {
+    alert("La librería del escáner HTML5 (Html5Qrcode) no está cargada en la página.");
+    return;
+  }
+
+  // Limpiar HTML interno previo
+  readerContainer.innerHTML = "";
+
+  try {
+    html5QrcodeScanner = new Html5Qrcode(readerContainer.id);
+    const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+
+    html5QrcodeScanner.start(
+      { facingMode: "environment" },
+      config,
+      (decodedText) => {
+        procesarMarcacion(decodedText);
+      },
+      (errorMessage) => {}
+    ).then(() => {
+      camaraEncendida = true;
+      actualizarEstadoCamaraUI(true);
+    }).catch(err => {
+      console.warn("Intentando iniciar cámara frontal...", err);
+      // Reintentar con cámara por defecto
+      html5QrcodeScanner.start(
+        { facingMode: "user" },
+        config,
+        (decodedText) => procesarMarcacion(decodedText),
+        (errorMessage) => {}
+      ).then(() => {
+        camaraEncendida = true;
+        actualizarEstadoCamaraUI(true);
+      }).catch(err2 => {
+        console.error("Error definitivo al iniciar cámara:", err2);
+        alert("No se pudo acceder a la cámara. Asegúrate de dar permisos de cámara en tu navegador.");
+      });
+    });
+  } catch (e) {
+    console.error("Excepción al inicializar el objeto Html5Qrcode:", e);
+  }
+}
+
+function detenerCamara() {
+  if (html5QrcodeScanner && camaraEncendida) {
+    html5QrcodeScanner.stop().then(() => {
+      camaraEncendida = false;
+      actualizarEstadoCamaraUI(false);
+    }).catch(err => {
+      console.error("Error al detener la cámara:", err);
+      camaraEncendida = false;
+      actualizarEstadoCamaraUI(false);
+    });
+  } else {
+    camaraEncendida = false;
+    actualizarEstadoCamaraUI(false);
+  }
+}
+
+function actualizarEstadoCamaraUI(activa) {
+  const statusLabel = document.getElementById('camara-status') || document.querySelector('[id*="status"]');
+  const btnToggle = document.getElementById('btn-toggle-camara') || document.querySelector('button[onclick*="toggleCamara"]') || document.querySelector('button[onclick*="iniciarCamara"]');
+  const readerContainer = document.getElementById('reader');
+
+  if (activa) {
     if (statusLabel) {
       statusLabel.innerText = "Activa";
       statusLabel.className = "text-xs font-bold text-emerald-600";
@@ -173,42 +253,28 @@ function iniciarCamara() {
       btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Apagar Cámara`;
       btnToggle.className = "w-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
     }
-  }).catch(err => {
-    console.error("No se pudo iniciar la cámara:", err);
-    alert("No se pudo acceder a la cámara. Verifique los permisos en su navegador.");
-  });
-}
-
-function detenerCamara() {
-  if (html5QrcodeScanner) {
-    html5QrcodeScanner.stop().then(() => {
-      camaraEncendida = false;
-      const reader = document.getElementById('reader');
-      const statusLabel = document.getElementById('camara-status');
-      const btnToggle = document.getElementById('btn-toggle-camara');
-
-      if (reader) {
-        reader.innerHTML = `
-          <div class="text-center p-4">
-            <i class="fa-solid fa-video-slash text-3xl mb-2 text-slate-600 block"></i>
-            Cámara apagada. Haz clic abajo para iniciar.
-          </div>`;
-      }
-      if (statusLabel) {
-        statusLabel.innerText = "Inactiva";
-        statusLabel.className = "text-xs font-normal text-slate-400";
-      }
-      if (btnToggle) {
-        btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Encender Cámara`;
-        btnToggle.className = "w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
-      }
-    });
+  } else {
+    if (readerContainer) {
+      readerContainer.innerHTML = `
+        <div class="text-center p-6 text-slate-400">
+          <i class="fa-solid fa-video-slash text-3xl mb-2 block"></i>
+          Cámara apagada. Haz clic abajo para iniciar.
+        </div>`;
+    }
+    if (statusLabel) {
+      statusLabel.innerText = "INACTIVA";
+      statusLabel.className = "text-xs font-normal text-slate-400";
+    }
+    if (btnToggle) {
+      btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Encender Cámara`;
+      btnToggle.className = "w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
+    }
   }
 }
 
 function procesarMarcacionManual(e) {
   if (e) e.preventDefault();
-  const input = document.getElementById('input-codigo-manual');
+  const input = document.getElementById('input-codigo-manual') || document.querySelector('input[placeholder*="código"]');
   if (!input) return;
 
   const codigo = input.value.trim();
@@ -220,8 +286,8 @@ function procesarMarcacionManual(e) {
 
 async function procesarMarcacion(codigo) {
   if (!jornadaActiva) {
-    mostrarNotificacion("⚠️ La jornada está CERRADA. Presiona 'Iniciar Jornada' para registrar.", "bg-amber-100 text-amber-800 border-amber-300");
-    return;
+    // Si la jornada no está iniciada explícitamente, iniciarla automáticamente al escanear
+    iniciarRegistro();
   }
 
   const payload = {
@@ -243,7 +309,7 @@ async function procesarMarcacion(codigo) {
       mostrarTarjetaResultado(res.persona || res.alumno || { codigo: codigo, nombre: 'Registrado', modo: modoActual });
       mostrarNotificacion(`✅ ${modoActual} registrada para el código ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
       cargarAsistenciasHoy();
-      cargarConsolidado(); // Actualiza también los reportes consolidados
+      cargarConsolidado();
     } else {
       mostrarNotificacion(`❌ Error: ${res.mensaje || 'No se pudo guardar la marcación.'}`, "bg-rose-100 text-rose-800 border-rose-300");
     }
@@ -255,7 +321,7 @@ async function procesarMarcacion(codigo) {
 }
 
 function mostrarTarjetaResultado(persona) {
-  const card = document.getElementById('resultado-card');
+  const card = document.getElementById('resultado-card') || document.querySelector('[id*="resultado"]') || document.querySelector('.flex-1 .bg-slate-50');
   if (!card) return;
 
   const esSalida = (persona.modo || modoActual) === 'SALIDA';
@@ -263,16 +329,18 @@ function mostrarTarjetaResultado(persona) {
   const bgAvatar = esSalida ? 'bg-indigo-600' : 'bg-emerald-600';
 
   card.innerHTML = `
-    <div class="w-16 h-16 rounded-full ${bgAvatar} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
-      ${(persona.nombre || 'U').charAt(0).toUpperCase()}
-    </div>
-    <h3 class="text-base font-extrabold text-slate-800 mb-0.5">${persona.nombre || 'Personal / Alumno'}</h3>
-    <p class="text-xs font-mono font-bold text-slate-500 mb-2">${persona.codigo || '-'}</p>
-    <div class="flex items-center gap-2">
-      <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${bgBadge}">
-        <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${persona.modo || modoActual}
-      </span>
-      <span class="text-xs font-semibold text-slate-500">${new Date().toLocaleTimeString()}</span>
+    <div class="flex flex-col items-center justify-center py-4">
+      <div class="w-16 h-16 rounded-full ${bgAvatar} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
+        ${(persona.nombre || 'U').charAt(0).toUpperCase()}
+      </div>
+      <h3 class="text-base font-extrabold text-slate-800 mb-0.5">${persona.nombre || 'Personal / Alumno'}</h3>
+      <p class="text-xs font-mono font-bold text-slate-500 mb-2">${persona.codigo || '-'}</p>
+      <div class="flex items-center gap-2">
+        <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${bgBadge}">
+          <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${persona.modo || modoActual}
+        </span>
+        <span class="text-xs font-semibold text-slate-500">${new Date().toLocaleTimeString()}</span>
+      </div>
     </div>
   `;
 }
@@ -329,7 +397,7 @@ async function cargarAsistenciasHoy() {
 }
 
 function configurarEventosTeclado() {
-  const inputManual = document.getElementById('input-codigo-manual');
+  const inputManual = document.getElementById('input-codigo-manual') || document.querySelector('input[placeholder*="código"]');
   if (inputManual) {
     document.addEventListener('keydown', (e) => {
       if (document.activeElement !== inputManual && e.key !== 'Tab') {
@@ -340,7 +408,7 @@ function configurarEventosTeclado() {
 }
 
 // ====================================================
-// 1. CAMBIO DINÁMICO DEL INPUT DE FECHA Y DÍAS (ORIGINAL)
+// CONSOLIDADOS Y REPORTES EN PDF (COMPLETO)
 // ====================================================
 
 function actualizarTipoSelectorFecha(ejecutarCarga = true) {
@@ -399,7 +467,6 @@ function obtenerTotalDiasPeriodo() {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
   const fechaVal = document.getElementById('filtroFecha')?.value || '';
 
-  // 1. REPORTE DIARIO
   if (!tipoInput.includes('Semanal') && !tipoInput.includes('Mensual')) {
     if (!fechaVal) return 1;
     const [a, m, d] = fechaVal.split('-').map(Number);
@@ -407,10 +474,8 @@ function obtenerTotalDiasPeriodo() {
     return esDiaLaborable(fechaObj) ? 1 : 0;
   }
 
-  // 2. REPORTE SEMANAL
   if (tipoInput.includes('Semanal')) {
     if (!fechaVal) return 5;
-    
     const partes = fechaVal.split('-W');
     if (partes.length !== 2) return 5;
 
@@ -429,17 +494,13 @@ function obtenerTotalDiasPeriodo() {
     for (let i = 0; i < 5; i++) {
       const diaActual = new Date(ISOweekStart);
       diaActual.setDate(ISOweekStart.getDate() + i);
-      if (esDiaLaborable(diaActual)) {
-        diasLectivos++;
-      }
+      if (esDiaLaborable(diaActual)) diasLectivos++;
     }
     return diasLectivos;
   }
 
-  // 3. REPORTE MENSUAL
   if (tipoInput.includes('Mensual')) {
     if (!fechaVal) return 22;
-    
     const [anio, mes] = fechaVal.split('-').map(Number);
     if (!anio || !mes) return 22;
 
@@ -448,19 +509,13 @@ function obtenerTotalDiasPeriodo() {
 
     for (let dia = 1; dia <= totalDiasMes; dia++) {
       const fechaObj = new Date(anio, mes - 1, dia);
-      if (esDiaLaborable(fechaObj)) {
-        diasLectivos++;
-      }
+      if (esDiaLaborable(fechaObj)) diasLectivos++;
     }
     return diasLectivos;
   }
 
   return 1;
 }
-
-// ====================================================
-// 2. CARGA Y CONSULTA DE DATOS DESDE EL SERVIDOR (ORIGINAL)
-// ====================================================
 
 async function cargarConsolidado() {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
@@ -475,7 +530,6 @@ async function cargarConsolidado() {
     if (!res.ok) throw new Error("Error en la respuesta del servidor");
     
     datosReporteGlobal = await res.json();
-    
     actualizarOpcionesAlumnosSegunAula();
     renderizarTablaReportes();
   } catch (err) {
@@ -564,10 +618,6 @@ function configurarEventosFiltros() {
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
 }
 
-// ====================================================
-// 3. FILTRADO Y RENDERIZADO EN TABLA HTML (ORIGINAL)
-// ====================================================
-
 function obtenerAlumnosFiltradosBase() {
   const alumnoSeleccionado = document.getElementById('selectAlumnoIndividual')?.value || 'todos';
   const busqueda = (document.getElementById('filtroBusqueda')?.value || '').toLowerCase().trim();
@@ -635,10 +685,6 @@ function renderizarTablaReportes() {
   });
 }
 
-// ====================================================
-// 4. CONTROLADOR DE EDICIÓN DIRECTIVA (MODAL) (ORIGINAL)
-// ====================================================
-
 function abrirModalEditar(codigo, nombre) {
   const modal = document.getElementById('modal-editar-asistencia');
   const inputCodigo = document.getElementById('edit-codigo-input');
@@ -679,11 +725,7 @@ async function guardarEdicionAsistencia(event) {
     const response = await fetch('/api/asistencia/editar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        codigo: codigo, 
-        estado: nuevoEstado, 
-        fecha: fechaVal 
-      })
+      body: JSON.stringify({ codigo, estado: nuevoEstado, fecha: fechaVal })
     });
 
     const resultado = await response.json();
@@ -700,10 +742,6 @@ async function guardarEdicionAsistencia(event) {
     alert("Error de conexión con el servidor.");
   }
 }
-
-// ====================================================
-// 5. GENERACIÓN DE REPORTES EN PDF (ORIGINAL)
-// ====================================================
 
 function obtenerInstanciaPDF() {
   if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
@@ -815,15 +853,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   const headersHistorial = [["FECHA", "DIA", "HORA ENTRADA", "ESTADO", "OBSERVACIÓN", "DOCENTE"]];
   
   const rowsHistorial = historial.map(h => {
-    const nombreDocente = h.docente_nombre 
-      || h.nombre_docente 
-      || h.docente 
-      || h.profesor 
-      || h.profesor_nombre 
-      || h.nombre 
-      || h.docente_completo 
-      || '-';
-
+    const nombreDocente = h.docente_nombre || h.nombre_docente || h.docente || h.profesor || h.nombre || '-';
     return [
       h.fecha || '-',
       obtenerNombreDia(h.fecha),
@@ -984,20 +1014,13 @@ async function generarDocentesPDF() {
     console.error("Error recuperando historial docentes:", e);
   }
 
-  let puntuales = 0;
-  let tardanzas = 0;
-  let faltas = 0;
+  let puntuales = 0, tardanzas = 0, faltas = 0;
 
   historial.forEach(reg => {
     const estado = (reg.estado || '').toUpperCase();
-    
-    if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') {
-      puntuales++;
-    } else if (estado === 'TARDANZA' || estado === 'TARDE') {
-      tardanzas++;
-    } else if (estado === 'FALTA' || estado === 'INJUSTIFICADA' || estado === 'JUSTIFICADA') {
-      faltas++;
-    }
+    if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') puntuales++;
+    else if (estado === 'TARDANZA' || estado === 'TARDE') tardanzas++;
+    else if (estado === 'FALTA' || estado === 'INJUSTIFICADA' || estado === 'JUSTIFICADA') faltas++;
   });
 
   const puntajeTotal = (puntuales * 10) + (tardanzas * 5);
@@ -1009,9 +1032,9 @@ async function generarDocentesPDF() {
     aula: "Dirección Académica",
     periodo: `${tipo} (${fecha || 'General'})`,
     metricas: { 
-      puntuales: puntuales, 
-      tardanzas: tardanzas, 
-      faltas: faltas, 
+      puntuales, 
+      tardanzas, 
+      faltas, 
       puntaje: puntajeTotal, 
       totalPeriodo: obtenerTotalDiasPeriodo() 
     },
