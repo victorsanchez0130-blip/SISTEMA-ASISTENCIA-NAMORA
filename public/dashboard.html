@@ -265,11 +265,6 @@
 
         const linkCrudPanel = document.getElementById('link-crud-panel');
         if (linkCrudPanel) linkCrudPanel.style.display = 'none';
-        
-        // Bloquear acciones de edición solo si es un rol sin permisos
-        document.querySelectorAll('.btn-editar, .btn-eliminar, .btn-modificar, .acciones-crud').forEach(el => {
-          el.style.display = 'none';
-        });
       }
 
       // Aplicar restricciones estrictas para el rol "Docente" (Modo Lectura en Dashboard ÚNICAMENTE)
