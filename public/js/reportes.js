@@ -26,6 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Se envía 'false' para evitar ejecuciones innecesarias al inicializar
   actualizarTipoSelectorFecha(false);
   cargarConsolidado();
+
+  // Escuchar el envío del formulario del modal si existe
+  const formEditar = document.getElementById('form-editar-asistencia') || document.querySelector('#modal-editar-asistencia form');
+  if (formEditar) {
+    formEditar.addEventListener('submit', guardarEdicionAsistencia);
+  }
 });
 
 // ----------------------------------------------------
@@ -255,6 +261,9 @@ function configurarEventosFiltros() {
   document.getElementById('btnFichaAlumno')?.addEventListener('click', generarFichaAlumnoPDF);
   document.getElementById('btnReporteGrado')?.addEventListener('click', generarGradoPDF);
   document.getElementById('btnReporteDocentes')?.addEventListener('click', generarDocentesPDF);
+
+  // Evento para adjuntar acción al botón de enviar del modal si es nativo
+  document.getElementById('btn-guardar-edicion')?.addEventListener('click', guardarEdicionAsistencia);
 }
 
 // ----------------------------------------------------
@@ -332,9 +341,10 @@ function renderizarTablaReportes() {
 // ----------------------------------------------------
 
 function abrirModalEditar(codigo, nombre) {
+  // Maneja tanto el ID original del código como el de tus selectores gráficos
   const modal = document.getElementById('modal-editar-asistencia');
   const inputCodigo = document.getElementById('edit-codigo-input');
-  const spanNombre = document.getElementById('edit-nombre-alumno');
+  const spanNombre = document.getElementById('edit-nombre-alumno') || document.querySelector('.modal text-slate-800');
   const spanCodigo = document.getElementById('edit-codigo-alumno');
 
   if (inputCodigo) inputCodigo.value = codigo;
@@ -343,6 +353,7 @@ function abrirModalEditar(codigo, nombre) {
 
   if (modal) {
     modal.style.display = 'flex';
+    modal.classList.remove('hidden'); // Por si usas clases utilitarias de Tailwind
   }
 }
 
@@ -350,14 +361,16 @@ function cerrarModalEditar() {
   const modal = document.getElementById('modal-editar-asistencia');
   if (modal) {
     modal.style.display = 'none';
+    modal.classList.add('hidden');
   }
 }
 
 async function guardarEdicionAsistencia(event) {
-  event.preventDefault();
+  if (event) event.preventDefault();
 
+  // Asegura capturar los IDs dinámicos o mapeados del HTML
   const codigo = document.getElementById('edit-codigo-input')?.value;
-  const nuevoEstado = document.getElementById('edit-estado-select')?.value;
+  const nuevoEstado = document.getElementById('edit-estado-select')?.value || document.querySelector('#modal-editar-asistencia select')?.value;
   const fechaVal = document.getElementById('filtroFecha')?.value || obtenerFechaHoy();
 
   if (!codigo || !nuevoEstado) {
@@ -366,9 +379,14 @@ async function guardarEdicionAsistencia(event) {
   }
 
   try {
-    const response = await fetch('/api/asistencia/editar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    // CAMBIO CLAVE: Cambiado de '/api/asistencia/editar' a rutas relativas estandarizadas universales
+    // Si tu backend espera un PUT a una ruta con id o código, cambia a: `/api/asistencia/actualizar/${codigo}`
+    const response = await fetch('/api/asistencia/actualizar', {
+      method: 'POST', // Cambiar por 'PUT' si el endpoint en Node lo requiere
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ 
         codigo: codigo, 
         estado: nuevoEstado, 
@@ -376,18 +394,23 @@ async function guardarEdicionAsistencia(event) {
       })
     });
 
+    // Validar caída del servidor antes de parsear JSON
+    if (!response.ok) {
+      throw new Error(`Código de respuesta de error del servidor: ${response.status}`);
+    }
+
     const resultado = await response.json();
 
-    if (response.ok && (resultado.success || resultado.ok)) {
+    if (resultado.success || resultado.ok) {
       alert("¡Asistencia actualizada correctamente!");
       cerrarModalEditar();
       cargarConsolidado();
     } else {
-      alert("Error al actualizar: " + (resultado.mensaje || resultado.error || "No se pudo completar la acción."));
+      alert("Error al actualizar: " + (resultado.mensaje || resultado.error || "No se pudo completar la acción en la base de datos."));
     }
   } catch (error) {
-    console.error("Error de red al guardar la edición de asistencia:", error);
-    alert("Error de conexión con el servidor.");
+    console.error("Error crítico de red/conexión al guardar asistencia:", error);
+    alert("Error de conexión con el servidor. Por favor, asegúrate de que el backend en Railway esté encendido y use rutas relativas.");
   }
 }
 
@@ -419,7 +442,6 @@ function obtenerObservacionEstado(estado) {
   return 'Registro de marcación';
 }
 
-// Función auxiliar para precargar la imagen en un objeto Image de JS
 function cargarImagenLogoAsync(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -438,7 +460,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   const doc = new jsPDFClass();
 
-  // Precargar el logo antes de empezar a renderizar nada
   let imgLogoLoaded = null;
   try {
     imgLogoLoaded = await cargarImagenLogoAsync('img/logo.png');
@@ -446,7 +467,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     console.warn("No se pudo precargar la marca de agua:", imgErr);
   }
 
-  // Definimos la función de pintado reutilizable con opacidad nativa del 10%
   const pintarFondoMarcaAgua = () => {
     if (imgLogoLoaded) {
       doc.saveGraphicsState();
@@ -459,7 +479,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   };
 
-  // Dibujar marca en la primera hoja preliminar
   pintarFondoMarcaAgua();
 
   doc.setFont("helvetica", "bold");
@@ -491,7 +510,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       lineColor: [203, 213, 225],
       lineWidth: 0.5,
       textColor: [51, 65, 85],
-      fillColor: false // Transparente para no tapar la marca de agua
+      fillColor: false
     },
     columnStyles: {
       0: { cellWidth: 85 },
@@ -529,7 +548,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       fontSize: 10,
       fontStyle: 'bold',
       textColor: [15, 23, 42],
-      fillColor: false // Transparente
+      fillColor: false
     }
   });
 
@@ -579,7 +598,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     styles: {
       fontSize: 8,
       textColor: [51, 65, 85],
-      fillColor: false // HACE TRANSPARENTE LAS FILAS PARA QUE SE VEA EL LOGO DETRÁS
+      fillColor: false
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 25 }, 
@@ -589,7 +608,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       4: { halign: 'center', cellWidth: 26 }, 
       5: { cellWidth: 55 }                  
     },
-    // Si la tabla del historial se divide en múltiples hojas, dibuja el fondo en cada una
     didDrawPage: function (data) {
       pintarFondoMarcaAgua();
     }
@@ -641,7 +659,7 @@ async function generarFichaAlumnoPDF() {
     puntuales: alumno.asistencias || 0,
     tardanzas: alumno.tardanzas || 0,
     faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
-    puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
+    textPuntos: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
     totalPeriodo: obtenerTotalDiasPeriodo()
   };
 
@@ -674,7 +692,7 @@ async function generarGradoPDF() {
     totPuntual += (a.asistencias || 0);
     totTardanza += (a.tardanzas || 0);
     totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
-    totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
+    totPuntos += (a.textPuntos !== undefined ? a.textPuntos : 0);
   });
 
   let historial = [];
