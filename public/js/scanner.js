@@ -10,20 +10,26 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ----------------------------------------------------
-// VERIFICACIÓN DE SESIÓN
+// VERIFICACIÓN DE SESIÓN Y NOMBRE DE AUXILIAR
 // ----------------------------------------------------
 function verificarSesion() {
   const usuarioGuardado = localStorage.getItem('usuario');
+  
   if (usuarioGuardado) {
     try {
       const user = JSON.parse(usuarioGuardado);
-      const elUsuario = document.getElementById('usuario-login');
-      if (elUsuario) {
-        elUsuario.innerHTML = `<i class="fa-solid fa-user-gear mr-1"></i> ${user.nombre || 'Operador'}`;
+      const elNombreAuxiliar = document.getElementById('nombre-auxiliar');
+      
+      if (elNombreAuxiliar) {
+        // Asigna el nombre almacenado en el login o un valor por defecto
+        elNombreAuxiliar.innerText = user.nombre || 'Auxiliar General';
       }
     } catch (e) {
-      console.error('Error al leer datos de sesión');
+      console.error('Error al leer los datos del usuario en sesión:', e);
     }
+  } else {
+    // Si no hay sesión activa, redirige al login
+    window.location.href = 'index.html';
   }
 }
 
@@ -43,8 +49,10 @@ async function iniciarRegistro() {
     if (data.success) {
       actualizarUIEstadoRegistro(true);
       mostrarNotificacion('Registro de asistencia iniciado con éxito.', 'exito');
+      reproducirSonido('exito');
     } else {
       mostrarNotificacion(data.mensaje || 'No se pudo iniciar el registro.', 'error');
+      reproducirSonido('error');
     }
   } catch (err) {
     console.error(err);
@@ -77,6 +85,8 @@ function actualizarUIEstadoRegistro(activo) {
   const badge = document.getElementById('estado-registro-badge');
   const btnIniciar = document.getElementById('btn-iniciar');
   const btnCerrar = document.getElementById('btn-cerrar');
+
+  if (!badge || !btnIniciar || !btnCerrar) return;
 
   if (activo) {
     badge.className = 'inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200';
@@ -115,7 +125,7 @@ function encenderCamara() {
     html5QrCode = new Html5Qrcode("reader");
   }
 
-  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+  const config = { fps: 10, qrbox: { width: 220, height: 220 } };
 
   html5QrCode.start(
     { facingMode: "environment" },
@@ -124,15 +134,20 @@ function encenderCamara() {
     onScanFailure
   ).then(() => {
     camaraEncendida = true;
-    document.getElementById('camara-status').innerText = 'Activa';
-    document.getElementById('camara-status').className = 'text-xs font-semibold text-emerald-600';
+    const statusEl = document.getElementById('camara-status');
+    if (statusEl) {
+      statusEl.innerText = 'Activa';
+      statusEl.className = 'text-xs font-semibold text-emerald-600';
+    }
     
     const btn = document.getElementById('btn-toggle-camara');
-    btn.innerHTML = '<i class="fa-solid fa-power-off mr-1"></i> Apagar Cámara';
-    btn.className = 'w-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm';
+    if (btn) {
+      btn.innerHTML = '<i class="fa-solid fa-power-off mr-1"></i> Apagar Cámara';
+      btn.className = 'w-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm';
+    }
   }).catch(err => {
     console.error("Error al iniciar cámara:", err);
-    mostrarNotificacion('No se pudo acceder a la cámara.', 'error');
+    mostrarNotificacion('No se pudo acceder a la cámara. Verifique los permisos.', 'error');
   });
 }
 
@@ -140,12 +155,17 @@ function detenerCamara() {
   if (html5QrCode && camaraEncendida) {
     html5QrCode.stop().then(() => {
       camaraEncendida = false;
-      document.getElementById('camara-status').innerText = 'Inactiva';
-      document.getElementById('camara-status').className = 'text-xs font-normal text-slate-400';
+      const statusEl = document.getElementById('camara-status');
+      if (statusEl) {
+        statusEl.innerText = 'Inactiva';
+        statusEl.className = 'text-xs font-normal text-slate-400';
+      }
 
       const btn = document.getElementById('btn-toggle-camara');
-      btn.innerHTML = '<i class="fa-solid fa-power-off mr-1"></i> Encender Cámara';
-      btn.className = 'w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm';
+      if (btn) {
+        btn.innerHTML = '<i class="fa-solid fa-power-off mr-1"></i> Encender Cámara';
+        btn.className = 'w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm';
+      }
     }).catch(err => console.error("Error al detener cámara:", err));
   }
 }
@@ -154,19 +174,19 @@ function detenerCamara() {
 // PROCESAMIENTO DE ESCANEO QR
 // ----------------------------------------------------
 function onScanSuccess(decodedText, decodedResult) {
-  if (procesandoEscaneo) return; // Evitar múltiples peticiones por el mismo encuadre
+  if (procesandoEscaneo) return; // Bloquear procesamiento mientras se atiende un escaneo anterior
   procesandoEscaneo = true;
 
-  enviarMarcacionQR(decodedText);
+  enviarMarcacionQR(decodedText.trim());
 
-  // Pausa de 2.5 segundos antes de permitir leer otro código
+  // Pausa de 2.5 segundos para evitar lecturas continuas del mismo QR
   setTimeout(() => {
     procesandoEscaneo = false;
   }, 2500);
 }
 
 function onScanFailure(error) {
-  // Ignorar errores continuos de búsqueda de frame QR
+  // Búsqueda continua de marcos sin QR (silencioso)
 }
 
 async function enviarMarcacionQR(codigoQR) {
@@ -182,12 +202,15 @@ async function enviarMarcacionQR(codigoQR) {
     if (res.ok && data.success) {
       renderizarTarjetaResultado(data.usuario, data.estado, data.hora, false);
       mostrarNotificacion(data.mensaje, 'exito');
+      reproducirSonido('exito');
       cargarAsistenciasHoy();
     } else if (data.duplicado) {
       renderizarTarjetaResultado(data.usuario, 'DUPLICADO', data.horaAnterior, true);
       mostrarNotificacion(data.mensaje, 'alerta');
+      reproducirSonido('alerta');
     } else {
-      mostrarNotificacion(data.mensaje || 'Error al procesar el código.', 'error');
+      mostrarNotificacion(data.mensaje || 'Código QR no registrado o invalido.', 'error');
+      reproducirSonido('error');
     }
   } catch (err) {
     console.error(err);
@@ -196,7 +219,7 @@ async function enviarMarcacionQR(codigoQR) {
 }
 
 // ----------------------------------------------------
-// REPORTE DE ULTIMA MARCACIÓN Y TABLA
+// RENDERIZADO Y TABLA DE ASISTENCIAS
 // ----------------------------------------------------
 function renderizarTarjetaResultado(usuario, estado, hora, esDuplicado) {
   const card = document.getElementById('resultado-card');
@@ -206,9 +229,9 @@ function renderizarTarjetaResultado(usuario, estado, hora, esDuplicado) {
   if (estado === 'TARDANZA') badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
   if (esDuplicado) badgeColor = 'bg-blue-100 text-blue-800 border-blue-300';
 
-  card.className = "bg-white border border-slate-200 rounded-xl p-5 shadow-sm text-center flex flex-col items-center justify-center w-full";
+  card.className = "bg-white border border-slate-200 rounded-xl p-5 shadow-sm text-center flex flex-col items-center justify-center w-full min-h-[220px]";
   card.innerHTML = `
-    <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold mb-3 border border-indigo-100">
+    <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold mb-3 border border-indigo-100 shadow-inner">
       ${usuario.nombre ? usuario.nombre.charAt(0) : 'U'}
     </div>
     <h3 class="text-base font-bold text-slate-800">${usuario.nombre}</h3>
@@ -249,7 +272,7 @@ async function cargarAsistenciasHoy() {
       if (m.estado === 'JUSTIFICADA') badgeClase = 'bg-blue-100 text-blue-700';
 
       return `
-        <tr class="hover:bg-slate-50 transition-colors">
+        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
           <td class="py-3 px-3 font-mono text-slate-600 font-bold">${m.codigo}</td>
           <td class="py-3 px-3 font-semibold text-slate-800">${m.nombre}</td>
           <td class="py-3 px-3 text-slate-500">${m.rol}</td>
@@ -273,7 +296,7 @@ async function cargarAsistenciasHoy() {
 }
 
 // ----------------------------------------------------
-// SISTEMA DE NOTIFICACIONES
+// NOTIFICACIONES Y SONIDOS DE FEEDBACK
 // ----------------------------------------------------
 function mostrarNotificacion(mensaje, tipo) {
   const notif = document.getElementById('notificacion-alerta');
@@ -294,4 +317,34 @@ function mostrarNotificacion(mensaje, tipo) {
   setTimeout(() => {
     notif.classList.add('hidden');
   }, 4000);
+}
+
+function reproducirSonido(tipo) {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (tipo === 'exito') {
+      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.15);
+    } else if (tipo === 'alerta') {
+      osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+    } else {
+      osc.frequency.setValueAtTime(250, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.3);
+    }
+  } catch (e) {
+    // Si el navegador bloquea AudioContext por interacción previa, ignorar silenciosamente
+  }
 }

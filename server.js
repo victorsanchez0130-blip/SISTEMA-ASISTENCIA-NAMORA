@@ -36,6 +36,7 @@ function getHoraPeru() {
   return new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour12: false });
 }
 
+// Inicialización de esquema y datos base
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -66,7 +67,7 @@ db.serialize(() => {
     SET rol = 'Director', nombre = 'Director Manuel Asencio Málaga', materia_aula = 'Dirección General'
     WHERE codigo = 'DIR-SRN-001'
   `, (err) => {
-    if (err) console.error("Error al corregir el rol del Director:", err.message);
+    if (err) console.error("Error al verificar el rol del Director:", err.message);
     else console.log("Rol de Director verificado y actualizado correctamente.");
   });
 });
@@ -81,7 +82,7 @@ app.post('/api/asistencia/iniciar', (req, res) => {
   res.json({ success: true, mensaje: 'Registro de asistencia iniciado con éxito.' });
 });
 
-// Endpoint para cerrar asistencia y registrar FALTAS automáticas
+// Endpoint para cerrar asistencia y registrar FALTAS automáticas optimizado
 app.post('/api/asistencia/cerrar', (req, res) => {
   if (!registroActivo) {
     return res.status(400).json({ success: false, mensaje: 'El proceso de registro no se encuentra activo.' });
@@ -91,7 +92,7 @@ app.post('/api/asistencia/cerrar', (req, res) => {
   const hoy = getFechaPeru();
 
   // 1. Obtener a todos los alumnos y docentes registrados
-  db.all("SELECT codigo, nombre FROM usuarios WHERE LOWER(rol) IN ('alumno', 'docente')", [], (err, usuarios) => {
+  db.all("SELECT codigo FROM usuarios WHERE LOWER(rol) IN ('alumno', 'docente')", [], (err, usuarios) => {
     if (err) {
       return res.status(500).json({ success: false, mensaje: 'Error al consultar la lista de usuarios.' });
     }
@@ -99,11 +100,10 @@ app.post('/api/asistencia/cerrar', (req, res) => {
     // 2. Consultar las marcaciones realizadas el día de hoy
     db.all("SELECT usuario_codigo FROM asistencias WHERE fecha = ?", [hoy], (err, marcaciones) => {
       if (err) {
-        return res.status(500).json({ success: false, mensaje: 'Error al validar las marcaciones de hoy.' });
+        return res.status(500).json({ success: false, mensaje: 'Error al validar marcaciones.' });
       }
 
       const marcadosSet = new Set(marcaciones.map(m => m.usuario_codigo));
-      // Filtrar a quienes NO han escaneado su QR
       const ausentes = usuarios.filter(u => !marcadosSet.has(u.codigo));
 
       if (ausentes.length === 0) {
@@ -113,16 +113,22 @@ app.post('/api/asistencia/cerrar', (req, res) => {
         });
       }
 
-      // 3. Registrar como FALTA a todos los ausentes de forma automática
-      const stmt = db.prepare("INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, '00:00:00', 'FALTA')");
-      ausentes.forEach(u => stmt.run(u.codigo, hoy));
-      stmt.finalize((errStmt) => {
-        if (errStmt) {
-          return res.status(500).json({ success: false, mensaje: 'Error al registrar las faltas automáticas.' });
-        }
-        res.json({
-          success: true,
-          mensaje: `Asistencia cerrada. Se han asignado ${ausentes.length} faltas automáticas a quienes no escanearon.`
+      // 3. Inserción masiva optimizada mediante Transacción
+      db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        const stmt = db.prepare("INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, '00:00:00', 'FALTA')");
+        
+        ausentes.forEach(u => stmt.run(u.codigo, hoy));
+        
+        stmt.finalize();
+        db.run('COMMIT', (errCommit) => {
+          if (errCommit) {
+            return res.status(500).json({ success: false, mensaje: 'Error al procesar faltas automáticas.' });
+          }
+          res.json({
+            success: true,
+            mensaje: `Asistencia cerrada. Se han asignado ${ausentes.length} faltas automáticas.`
+          });
         });
       });
     });
@@ -149,10 +155,18 @@ app.post('/api/auth/login', (req, res) => {
     
     const rolNormalizado = (usuario.rol || '').trim();
 
+    // Redirección según matriz de roles
+    let redirectUrl = 'escaner.html';
+    if (rolNormalizado === 'Director' || rolNormalizado === 'Docente') {
+      redirectUrl = 'dashboard.html';
+    } else if (rolNormalizado === 'Auxiliar') {
+      redirectUrl = 'escaner.html';
+    }
+
     res.json({
       success: true,
       mensaje: 'Acceso concedido',
-      redirectUrl: rolNormalizado === 'Director' ? 'dashboard.html' : 'escaner.html',
+      redirectUrl,
       usuario: {
         id: usuario.id,
         codigo: usuario.codigo,
@@ -200,7 +214,7 @@ app.put('/api/usuarios/:id', (req, res) => {
   const { id } = req.params;
   const { nombre, rol, materia_aula } = req.body;
   db.run('UPDATE usuarios SET nombre = ?, rol = ?, materia_aula = ? WHERE id = ?', [nombre, rol, materia_aula, id], (err) => {
-    if (err) return res.status(500).json({ success: false, mensaje: 'Error al actualizar' });
+    if (err) return res.status(500).json({ success: false, mensaje: 'Error al actualizar.' });
     res.json({ success: true });
   });
 });
@@ -224,7 +238,7 @@ app.post('/api/asistencia/marcar', (req, res) => {
   if (!registroActivo) {
     return res.status(400).json({ 
       success: false, 
-      mensaje: 'El registro de asistencia está cerrado. Debes presionar "Iniciar Registro" para permitir marcaciones.' 
+      mensaje: 'El registro de asistencia está cerrado. Inicie la jornada para permitir marcaciones.' 
     });
   }
 
@@ -252,7 +266,7 @@ app.post('/api/asistencia/marcar', (req, res) => {
       const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
 
       db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [usuario.codigo, hoy, horaActual, estado], (err) => {
-        if (err) return res.status(500).json({ success: false, mensaje: 'Error al marcar.' });
+        if (err) return res.status(500).json({ success: false, mensaje: 'Error al registrar marcación.' });
         res.json({ success: true, mensaje: `Marcación [${estado}] registrada para ${usuario.nombre}`, usuario, hora: horaActual, estado });
       });
     });
@@ -340,6 +354,7 @@ app.post('/api/asistencia/manual', (req, res) => {
   });
 });
 
+// Auxiliares de fechas
 function obtenerLunesISO(valorWeek) {
   if (!valorWeek || !valorWeek.includes('-W')) return null;
   const partes = valorWeek.split('-W');
@@ -477,5 +492,5 @@ app.get('/api/reportes/historial-detallado', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo sin errores en el puerto ${PORT}`);
+  console.log(`Servidor optimizado ejecutándose correctamente en el puerto ${PORT}`);
 });
