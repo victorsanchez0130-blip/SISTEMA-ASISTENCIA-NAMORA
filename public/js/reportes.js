@@ -446,10 +446,16 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     console.warn("No se pudo precargar la marca de agua:", imgErr);
   }
 
-  // Definimos la función de pintado reutilizable
+  // Definimos la función de pintado reutilizable con opacidad nativa del 10%
   const pintarFondoMarcaAgua = () => {
     if (imgLogoLoaded) {
+      doc.saveGraphicsState();
+      const opacityState = new doc.GState({ opacity: 0.1 });
+      doc.setGState(opacityState);
+      
       doc.addImage(imgLogoLoaded, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+      
+      doc.restoreGraphicsState();
     }
   };
 

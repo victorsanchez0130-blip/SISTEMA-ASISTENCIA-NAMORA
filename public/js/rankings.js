@@ -117,7 +117,13 @@ async function imprimirRankingDocentesPDF() {
     },
     didDrawPage: function (data) {
       if (imgLogo) {
+        doc.saveGraphicsState();
+        const opacityState = new doc.GState({ opacity: 0.1 });
+        doc.setGState(opacityState);
+        
         doc.addImage(imgLogo, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+        
+        doc.restoreGraphicsState();
       }
     }
   });
@@ -158,7 +164,13 @@ async function imprimirRankingAlumnosPDF() {
     },
     didDrawPage: function (data) {
       if (imgLogo) {
+        doc.saveGraphicsState();
+        const opacityState = new doc.GState({ opacity: 0.1 });
+        doc.setGState(opacityState);
+        
         doc.addImage(imgLogo, 'PNG', 45, 90, 120, 120, undefined, 'FAST');
+        
+        doc.restoreGraphicsState();
       }
     }
   });
