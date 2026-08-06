@@ -52,22 +52,17 @@ function checkAuth(requiredRol = null) {
     return; // Pasa sin restricciones por cualquier archivo .html
   }
 
-  // DOCENTE: ÚNICA Y EXCLUSIVAMENTE dashboard.html (Modo lectura/descargas)
-  if (userRol === 'docente') {
-    if (currentPage !== 'dashboard.html') {
-      alert('Acceso restringido: Los docentes solo tienen acceso de lectura y descargas en el Dashboard.');
-      window.location.href = 'dashboard.html';
-    }
-    else if (currentPage !== 'reportes.html') {
-      alert('Acceso restringido: Los docentes solo tienen acceso de lectura y descargas en el Reporte.');
-      window.location.href = 'reportes .html';
-    }
-    else if (currentPage !== 'rankings.html') {
-      alert('Acceso restringido: Los docentes solo tienen acceso de lectura y descargas en el Rankings.');
-      window.location.href = 'rankings.html';
-    }
+  // DOCENTE: ÚNICA Y EXCLUSIVAMENTE dashboard.html, reportes.html y rankings.html (Modo lectura/descargas)
+if (userRol === 'docente') {
+  const paginasPermitidas = ['dashboard.html', 'reportes.html', 'rankings.html'];
+
+  // Si la página actual NO está en la lista de permitidas, restringe el acceso
+  if (!paginasPermitidas.includes(currentPage)) {
+    alert('Acceso restringido: Los docentes solo tienen acceso de lectura y descargas en el Dashboard, Reportes y Rankings.');
+    window.location.href = 'dashboard.html';
     return;
   }
+}
 
   // AUXILIAR: ÚNICA Y EXCLUSIVAMENTE escaner.html
   if (userRol === 'auxiliar') {
