@@ -256,7 +256,7 @@
 
       // --- VERIFICACIÓN DE PRIVILEGIOS MODIFICADA ---
       
-      const esAdminDirectivo = ['admin', 'director', 'directivo', 'docente'].includes(rol);
+      const esAdminDirectivo = ['admin', 'director', 'directivo'].includes(rol);
 
       if (!esAdminDirectivo) {
         // Bloquear módulos de mutación solo para roles que no sean admin ni docentes (ej. alumnos)
