@@ -17,9 +17,6 @@ let tiempoUltimoEscaneo = 0;    // Marca de tiempo para controlar el intervalo m
 
 /**
  * Lista de feriados nacionales estandarizados en Perú (MM-DD)
- */
-/**
- * Lista de feriados nacionales estandarizados en Perú (MM-DD)
  * Actualizado conforme a la normativa vigente para el año 2026
  */
 const FERIADOS_PERU_MMDD = [
@@ -37,7 +34,7 @@ const FERIADOS_PERU_MMDD = [
   '12-08', // Inmaculada Concepción
   '12-09', // Conmemoración de la Batalla de Ayacucho
   '12-25'  // Navidad
-];A
+];
 
 // ====================================================
 // INICIALIZACIÓN DE EVENTOS
@@ -309,8 +306,13 @@ async function procesarMarcacion(codigo) {
   }
 
   if (html5QrcodeScanner && camaraEncendida) {
-    await html5QrcodeScanner.stop();
-    camaraEncendida = false;
+    try {
+      await html5QrcodeScanner.stop();
+      camaraEncendida = false;
+      actualizarEstadoCamaraUI(false);
+    } catch (e) {
+      console.warn("Fallo al pausar la cámara en el flujo ordinario:", e);
+    }
   }
 
   const payload = {
@@ -329,11 +331,9 @@ async function procesarMarcacion(codigo) {
     const res = await response.json();
 
     if (response.ok && (res.success || res.ok)) {
-      abrirModalAsistencia(res);
       mostrarTarjetaResultado(res);
+      abrirModalAsistencia(res);
       mostrarNotificacion(`✅ ${modoActual} registrada para el código ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
-      cargarAsistenciasHoy();
-      cargarConsolidado();
     } else {
       mostrarNotificacion(`❌ Error: ${res.mensaje || 'No se pudo guardar la marcación.'}`, "bg-rose-100 text-rose-800 border-rose-300");
       iniciarCamara(); 
@@ -348,61 +348,79 @@ async function procesarMarcacion(codigo) {
       modo: modoActual 
     };
 
-    abrirModalAsistencia(fallbackData);
     mostrarTarjetaResultado(fallbackData);
+    abrirModalAsistencia(fallbackData);
     mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
   } finally {
     setTimeout(() => {
       procesandoEscaneoQR = false;
-    }, 3000);
+    }, 2000);
   }
 }
 
 // ====================================================
-// MODALES Y VENTANAS EMERGENTES (CORREGIDO DE MANERA ROBUSTA)
+// MODALES Y VENTANAS EMERGENTES (CORREGIDO Y CONFIGURADO)
 // ====================================================
+
+/**
+ * Busca al alumno localmente en la memoria si el servidor devuelve campos vacíos o genéricos
+ */
+function buscarAlumnoPorCodigoLocal(codigo) {
+  if (!codigo) return null;
+  const codLimpio = codigo.trim().toUpperCase();
+  
+  if (datosReporteGlobal && datosReporteGlobal.length > 0) {
+    const encontrado = datosReporteGlobal.find(item => (item.codigo || '').toUpperCase() === codLimpio);
+    if (encontrado) return encontrado;
+  }
+  return null;
+}
 
 function abrirModalAsistencia(data) {
   const modal = document.getElementById('modal-asistencia');
   if (!modal) return;
 
-  // Extracción jerárquica para soportar anidaciones del backend
   const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data.datos || data;
+  const codigo = entidad.codigo || data.codigo || '-';
 
   // Extracción del Nombre Completo
-  const nombre = entidad.nombre_completo || 
+  let nombre = entidad.nombre_completo || 
                  entidad.nombres_apellidos ||
                  (entidad.nombre && entidad.apellido ? `${entidad.nombre} ${entidad.apellido}` : null) ||
                  entidad.nombre || 
                  entidad.nombres || 
-                 data.nombre || 
-                 'Usuario Registrado';
+                 data.nombre;
 
-  const codigo = entidad.codigo || data.codigo || '-';
+  // Extracción del Grado/Sección o Asignación
+  let aula = entidad.grado_seccion || 
+             (entidad.grado && entidad.seccion ? `${entidad.grado} ${entidad.seccion}` : null) || 
+             entidad.aula || 
+             entidad.materia_aula || 
+             entidad.asignacion || 
+             entidad.cargo || 
+             entidad.rol;
 
-  // Extracción dinámica del Grado/Sección o Asignación Profesional
-  let aula = 'Asignación Regular';
-  if (entidad.grado_seccion) {
-    aula = entidad.grado_seccion;
-  } else if (entidad.grado && entidad.seccion) {
-    aula = `${entidad.grado} ${entidad.seccion}`;
-  } else if (entidad.aula) {
-    aula = entidad.aula;
-  } else if (entidad.materia_aula) {
-    aula = entidad.materia_aula;
-  } else if (entidad.asignacion) {
-    aula = entidad.asignacion;
-  } else if (entidad.cargo || entidad.rol) {
-    aula = entidad.cargo || entidad.rol;
+  // CRUCE INTELIGENTE LOCAL: Si no vino un nombre válido, lo buscamos en el consolidado cargado
+  if (!nombre || nombre === 'Usuario Registrado' || nombre === 'Registro Local / Sincronizando') {
+    const local = buscarAlumnoPorCodigoLocal(codigo);
+    if (local) {
+      nombre = local.nombre || nombre;
+      aula = local.aula || local.materia_aula || aula;
+    }
   }
+
+  if (!nombre) nombre = 'Nombre No Especificado';
+  if (!aula) aula = '---';
 
   const horaFormateada = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
   
-  // Asignación limpia al DOM
+  // Inyección limpia en los elementos de la interfaz
   document.getElementById('modal-nombre').innerText = nombre;
   document.getElementById('modal-codigo').innerText = codigo;
   document.getElementById('modal-aula').innerText = aula;
-  document.getElementById('modal-hora').innerText = horaFormateada;
+  
+  const elHora = document.getElementById('modal-hora') || document.getElementById('indigo-600 font-bold');
+  if (elHora) elHora.innerText = horaFormateada;
 
   const iconContainer = document.getElementById('modal-icon-container');
   const icon = document.getElementById('modal-icon');
@@ -440,7 +458,15 @@ function cerrarModalAsistencia() {
 
   setTimeout(() => {
     modal.classList.add('hidden');
-    iniciarCamara(); 
+    
+    // Refrescar las listas de asistencia
+    cargarAsistenciasHoy();
+    cargarConsolidado();
+    
+    // Reactivar cámara de inmediato
+    if (!camaraEncendida) {
+      iniciarCamara();
+    }
   }, 300);
 }
 
@@ -449,22 +475,31 @@ function mostrarTarjetaResultado(data) {
   if (!card) return;
 
   const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data.datos || data;
+  const codigo = entidad.codigo || data.codigo || '-';
 
-  const nombre = entidad.nombre_completo || 
+  let nombre = entidad.nombre_completo || 
                  (entidad.nombre && entidad.apellido ? `${entidad.nombre} ${entidad.apellido}` : null) ||
                  entidad.nombre || 
                  entidad.nombres || 
-                 data.nombre || 
-                 'Usuario Registrado';
+                 data.nombre;
                  
-  const codigo = entidad.codigo || data.codigo || '-';
-  
-  let aula = 'Asignación Regular';
-  if (entidad.grado_seccion) aula = entidad.grado_seccion;
-  else if (entidad.grado && entidad.seccion) aula = `${entidad.grado} ${entidad.seccion}`;
-  else if (entidad.aula) aula = entidad.aula;
-  else if (entidad.asignacion) aula = entidad.asignacion;
-  else if (entidad.cargo || entidad.rol) aula = entidad.cargo || entidad.rol;
+  let aula = entidad.grado_seccion || 
+             (entidad.grado && entidad.seccion ? `${entidad.grado} ${entidad.seccion}` : null) || 
+             entidad.aula || 
+             entidad.asignacion || 
+             entidad.cargo || 
+             entidad.rol;
+
+  if (!nombre || nombre === 'Usuario Registrado' || nombre === 'Registro Local / Sincronizando') {
+    const local = buscarAlumnoPorCodigoLocal(codigo);
+    if (local) {
+      nombre = local.nombre || nombre;
+      aula = local.aula || local.materia_aula || aula;
+    }
+  }
+
+  if (!nombre) nombre = 'Usuario Registrado';
+  if (!aula) aula = 'Asignación Regular';
 
   const esSalida = modoActual === 'SALIDA';
   const colorBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
