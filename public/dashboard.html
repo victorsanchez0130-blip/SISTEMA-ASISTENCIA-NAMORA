@@ -161,26 +161,26 @@
             <h2 class="text-base sm:text-lg font-bold text-slate-800">Cronograma de Asistencia Diaria</h2>
             <p class="text-xs text-slate-500 font-medium">Últimos registros reportados por el escáner hoy</p>
           </div>
-          <!-- ID agregado para poder ocultarlo selectivamente en JS -->
           <a href="reportes.html" id="link-ver-reportes-completo" class="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors">
             Ver reporte completo <i class="fa-solid fa-arrow-right text-[10px]"></i>
           </a>
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse min-w-[500px]">
+          <table class="w-full text-left border-collapse min-w-[650px]">
             <thead>
               <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50/50">
                 <th class="py-3 px-3">Código</th>
                 <th class="py-3 px-3">Usuario</th>
                 <th class="py-3 px-3">Rol / Asignación</th>
-                <th class="py-3 px-3 text-center">Hora</th>
+                <th class="py-3 px-3 text-center">Hora Entrada</th>
+                <th class="py-3 px-3 text-center">Hora Salida</th>
                 <th class="py-3 px-3 text-center">Estado</th>
               </tr>
             </thead>
             <tbody id="tabla-dashboard-recent" class="text-xs divide-y divide-slate-100 font-medium">
               <tr>
-                <td colspan="5" class="py-8 text-center text-slate-400 font-semibold">Cargando marcaciones recientes...</td>
+                <td colspan="6" class="py-8 text-center text-slate-400 font-semibold">Cargando marcaciones recientes...</td>
               </tr>
             </tbody>
           </table>
@@ -254,12 +254,9 @@
         if (elemAvatar) elemAvatar.innerText = sessionData.nombre.charAt(0).toUpperCase();
       }
 
-      // --- VERIFICACIÓN DE PRIVILEGIOS MODIFICADA ---
-      
       const esAdminDirectivo = ['admin', 'director', 'directivo'].includes(rol);
 
       if (!esAdminDirectivo) {
-        // Bloquear módulos de mutación solo para roles que no sean admin ni docentes (ej. alumnos)
         const navCrud = document.getElementById('nav-crud');
         if (navCrud) navCrud.style.display = 'none';
 
@@ -267,28 +264,22 @@
         if (linkCrudPanel) linkCrudPanel.style.display = 'none';
       }
 
-      // Aplicar restricciones estrictas para el rol "Docente" (Modo Lectura en Dashboard ÚNICAMENTE)
       if (rol === 'docente') {
-        // 2. Quitar accesos en la sección de "Accesos Directos" y enlaces alternos
         const linkRankingsPanel = document.getElementById('link-rankings-panel');
         if (linkRankingsPanel) linkRankingsPanel.style.display = 'none';
 
         const linkVerReportesCompleto = document.getElementById('link-ver-reportes-completo');
         if (linkVerReportesCompleto) linkVerReportesCompleto.style.display = 'none';
-
-        console.log("🔒 Modo de lectura estricto asignado al Docente.");
       }
 
-      // Ocultar acceso directo al Escáner para Docentes y Alumnos
       if (rol === 'docente' || rol === 'alumno') {
         const linkEscanerPanel = document.getElementById('link-escaner-panel');
         if (linkEscanerPanel) linkEscanerPanel.style.display = 'none';
       }
 
-      // Bloquear acciones de edición solo si es un rol sin permisos
-        document.querySelectorAll('.btn-editar, .btn-eliminar, .btn-modificar, .acciones-crud').forEach(el => {
-          el.style.display = 'none';
-        });
+      document.querySelectorAll('.btn-editar, .btn-eliminar, .btn-modificar, .acciones-crud').forEach(el => {
+        el.style.display = 'none';
+      });
         
       // Fecha actual
       const elemFecha = document.getElementById('fecha-actual');
@@ -330,7 +321,7 @@
           if (!Array.isArray(marcaciones) || marcaciones.length === 0) {
             tbody.innerHTML = `
               <tr>
-                <td colspan="5" class="py-8 text-center text-slate-400 font-semibold">No se han registrado marcaciones el día de hoy.</td>
+                <td colspan="6" class="py-8 text-center text-slate-400 font-semibold">No se han registrado marcaciones el día de hoy.</td>
               </tr>
             `;
             document.getElementById('total-asistencias').innerText = '0';
@@ -343,7 +334,7 @@
 
           marcaciones.forEach((item, index) => {
             const estadoUpper = (item.estado || '').toUpperCase();
-            if (estadoUpper === 'PUNTUAL' || estadoUpper === 'REGISTRADO') puntuales++;
+            if (estadoUpper === 'PUNTUAL' || estadoUpper === 'REGISTRADO' || estadoUpper === 'ASISTENCIA') puntuales++;
             if (estadoUpper === 'TARDANZA' || estadoUpper === 'TARDE') tardanzas++;
 
             if (index < 6) {
@@ -355,12 +346,17 @@
                 badge = '<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">FALTA</span>';
               }
 
+              // Se separan la hora de entrada y la hora de salida en celdas distintas
+              const horaEntrada = item.hora || item.hora_entrada || '--:--';
+              const horaSalida = item.hora_salida || '-';
+
               tbody.innerHTML += `
                 <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
                   <td class="py-3 px-3 font-mono font-bold text-slate-700">${item.codigo || item.codigoQR || '-'}</td>
                   <td class="py-3 px-3 font-semibold text-slate-800">${item.nombre || 'Desconocido'}</td>
                   <td class="py-3 px-3 text-slate-500 font-medium">${item.rol || 'General'}</td>
-                  <td class="py-3 px-3 text-center font-mono text-slate-700 font-bold">${item.hora || '--:--'}</td>
+                  <td class="py-3 px-3 text-center font-mono text-emerald-700 font-bold">${horaEntrada}</td>
+                  <td class="py-3 px-3 text-center font-mono text-blue-700 font-bold">${horaSalida}</td>
                   <td class="py-3 px-3 text-center">${badge}</td>
                 </tr>
               `;
