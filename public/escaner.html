@@ -3,251 +3,156 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Estación de Escaneo QR - I.E. Santa Rosa</title>
-
-  <!-- GUARDIA DE SEGURIDAD Y PERMISOS POR ROL -->
-  <script src="js/auth.js"></script>
-
+  <title>Escáner de Asistencia QR - I.E. SANTA ROSA - NAMORA</title>
+  
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="css/styles.css">
+  
+  <!-- FontAwesome Iconos -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <!-- Biblioteca HTML5 QR Code Scanner -->
+  <!-- HTML5 QR Code Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-  
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    body { font-family: 'Inter', sans-serif; }
-    #reader video { border-radius: 1rem; object-fit: cover; width: 100% !important; height: 100% !important; }
-  </style>
 </head>
-<body class="bg-slate-100 text-slate-800 flex flex-col md:flex-row h-screen overflow-hidden">
+<body class="bg-slate-100 min-h-screen text-slate-800 font-sans flex flex-col">
 
-  <!-- HEADER PARA MÓVILES -->
-  <header class="md:hidden bg-slate-900 text-slate-300 p-4 flex justify-between items-center z-30 border-b border-slate-800">
-    <div class="flex items-center gap-3">
-      <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-8 h-8 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'">
-      <h2 class="text-white font-bold text-sm tracking-wider">I.E. SANTA ROSA</h2>
+  <!-- Encabezado / Navbar -->
+  <header class="bg-indigo-900 text-white shadow-lg py-4 px-6">
+    <div class="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-qrcode text-2xl text-indigo-300"></i>
+        <div>
+          <h1 class="text-xl font-bold leading-tight">Control de Asistencia QR</h1>
+          <p class="text-xs text-indigo-200">I.E. SANTA ROSA - NAMORA | CAJAMARCA</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="usuario-login" class="text-xs font-medium bg-indigo-800 px-3 py-1.5 rounded-lg border border-indigo-700 flex items-center gap-1">
+          <i class="fa-solid fa-user-gear mr-1"></i> <span id="label-rol-operador" class="font-bold">OPERADOR:</span> <span id="nombre-auxiliar">Cargando...</span>
+        </span>
+        <button onclick="cerrarSesion()" class="bg-red-500/20 hover:bg-red-500 text-red-200 hover:text-white text-xs font-semibold py-1.5 px-3 rounded-lg border border-red-500/30 transition-all">
+          <i class="fa-solid fa-right-from-bracket mr-1"></i> Salir
+        </button>
+      </div>
     </div>
-    <button id="mobileMenuBtn" class="text-white text-xl focus:outline-none p-1">
-      <i class="fa-solid fa-bars"></i>
-    </button>
   </header>
 
-  <!-- SIDEBAR NAVEGACIÓN DINÁMICO -->
-  <aside id="sidebar" class="fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen transition-transform duration-200 ease-in-out">
-    <div>
-      <div class="flex items-center gap-3 p-4 border-b border-slate-800">
-        <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-12 h-12 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'">
-        <div>
-          <h2 class="text-white font-bold text-sm leading-tight tracking-wider">I.E. SANTA ROSA</h2>
-          <span class="text-[11px] text-slate-400 font-medium">Control Asistencial</span>
-        </div>
-      </div>
+  <!-- Contenido Principal -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 flex flex-col gap-4">
 
-      <nav class="p-3 space-y-2 text-sm font-semibold" id="nav-menu">
-        <a href="dashboard.html" id="nav-inicio" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-          <i class="fa-solid fa-chart-pie w-5 text-center text-base text-cyan-300"></i>
-          <span>Inicio</span>
-        </a>
-
-        <a href="escaner.html" id="nav-escaner" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-indigo-600 text-white shadow-md">
-          <i class="fa-solid fa-qrcode w-5 text-center text-base text-white"></i>
-          <span>Escáner Asistencia</span>
-        </a>
-
-        <a href="reportes.html" id="nav-reportes" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-          <i class="fa-solid fa-folder-open w-5 text-center text-base text-emerald-400"></i>
-          <span>Control y Reportes</span>
-        </a>
-
-        <a href="rankings.html" id="nav-rankings" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-          <i class="fa-solid fa-trophy w-5 text-center text-base text-amber-400"></i>
-          <span>Rankings y Puntos</span>
-        </a>
-
-        <a href="inscripciones.html" id="nav-crud" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-          <i class="fa-solid fa-user-pen w-5 text-center text-base text-purple-400"></i>
-          <span>Inscribir / CRUD</span>
-        </a>
-
-        <button onclick="logout()" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors font-bold text-sm text-left mt-6">
-          <i class="fa-solid fa-right-from-bracket w-5 text-center text-base text-rose-500"></i>
-          <span>Cerrar Sesión</span>
-        </button>
-      </nav>
-    </div>
-
-    <div class="p-4 border-t border-slate-800 bg-slate-950/40">
+    <!-- BARRA DE CONTROL DE ASISTENCIA (Iniciar / Cerrar) -->
+    <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/30" id="user-avatar">
-          A
+        <div class="p-2.5 bg-slate-100 rounded-xl text-slate-600">
+          <i class="fa-solid fa-toggle-on text-xl"></i>
         </div>
-        <div class="overflow-hidden">
-          <p class="text-xs font-bold text-white truncate" id="nombre-auxiliar">Cargando...</p>
-          <span class="inline-block px-2 py-0.5 text-[10px] font-extrabold rounded bg-slate-800 text-cyan-400 tracking-wide uppercase" id="auxiliar-rol">AUXILIAR</span>
+        <div>
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Estado de la Jornada</span>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span id="estado-registro-badge" class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-red-100 text-red-700 border border-red-200">
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> CERRADO
+            </span>
+          </div>
         </div>
       </div>
-    </div>
-  </aside>
 
-  <!-- OVERLAY PARA MÓVIL -->
-  <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-10 hidden md:hidden"></div>
+      <div class="flex items-center gap-2 w-full sm:w-auto">
+        <button id="btn-iniciar" onclick="iniciarRegistro()" class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl shadow-sm transition-all">
+          <i class="fa-solid fa-play"></i> Iniciar Registro
+        </button>
+        <button id="btn-cerrar" onclick="cerrarRegistro()" disabled class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold py-2.5 px-4 rounded-xl shadow-sm transition-all cursor-not-allowed">
+          <i class="fa-solid fa-stop"></i> Cerrar Asistencia
+        </button>
+      </div>
+    </section>
 
-  <!-- CONTENIDO PRINCIPAL -->
-  <main class="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 flex flex-col lg:flex-row gap-6">
-    
-    <!-- SECCIÓN IZQUIERDA: CÁMARA Y CONTROL DE JORNADA -->
-    <div class="w-full lg:w-7/12 flex flex-col gap-4">
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
-        <div class="flex justify-between items-center mb-4">
-          <div class="text-base font-black text-slate-900 flex items-center gap-2">
-            <i class="fa-solid fa-camera text-indigo-600"></i> CONTROL DE FLUJO Y ESCÁNER
-          </div>
-          <div id="estado-registro-badge" class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-red-100 text-red-700 border border-red-200">
-            <span class="w-2 h-2 rounded-full bg-red-500"></span> CERRADO
-          </div>
+    <!-- ENTRADA PARA ESCÁNER FÍSICO / BARRAS USB -->
+    <section class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
+      <form id="formEscanerManual" onsubmit="procesarEscaneoManual(event)" class="flex gap-2">
+        <div class="relative flex-1">
+          <i class="fa-solid fa-barcode absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+          <input type="text" id="input-codigo-manual" autocomplete="off" placeholder="Modo Escáner USB: Haz clic aquí o ingresa código..." 
+                 class="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
         </div>
+        <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all">
+          Marcar
+        </button>
+      </form>
+    </section>
 
-        <!-- Switch de Modos de Registro -->
-        <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-xl mb-4 text-center">
-          <div id="lbl-modo-entrada" onclick="cambiarModoRegistro('ENTRADA')" class="cursor-pointer flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-sm scale-105">
-            <i class="fa-solid fa-right-to-bracket"></i> ENTRADA
-          </div>
-          <div id="lbl-modo-salida" onclick="cambiarModoRegistro('SALIDA')" class="cursor-pointer flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70">
-            <i class="fa-solid fa-right-from-bracket"></i> SALIDA
-          </div>
-        </div>
-
-        <!-- Contenedor del Visor del Video -->
-        <div class="relative bg-slate-900 rounded-2xl aspect-video w-full overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center mb-4">
-          <div id="reader" class="w-full h-full">
-            <div class="text-center p-6 text-slate-400 flex flex-col items-center justify-center h-full">
-              <i class="fa-solid fa-video-slash text-3xl mb-2 block"></i>
-              <span>Cámara apagada. Haz clic abajo para iniciar.</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Controles Operativos -->
-        <div class="flex flex-col sm:flex-row gap-2">
-          <button id="btn-toggle-camara" onclick="toggleCamara()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
-            <i class="fa-solid fa-power-off"></i> Encender Cámara
-          </button>
-          <button id="btn-iniciar" onclick="iniciarRegistro()" class="w-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm">
-            ▶ Iniciar Jornada
-          </button>
-          <button id="btn-cerrar" onclick="cerrarRegistro()" disabled class="w-full bg-slate-200 text-slate-400 text-xs font-bold py-2.5 px-4 rounded-xl cursor-not-allowed transition-all shadow-sm">
-            ⏹ Cerrar Jornada
-          </button>
-        </div>
+    <!-- ÁREA DEL ESCÁNER Y RESULTADOS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      <!-- Lector QR de Cámara -->
+      <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
+        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3 w-full flex items-center justify-between">
+          <span><i class="fa-solid fa-camera mr-2 text-indigo-600"></i>Cámara Escáner</span>
+          <span id="camara-status" class="text-xs font-normal text-slate-400">Inactiva</span>
+        </h2>
         
-        <div id="notificacion-alerta" class="hidden mt-3 p-3 rounded-xl text-xs font-semibold text-center border transition-all"></div>
-      </div>
+        <!-- Contenedor del video html5-qrcode -->
+        <div id="reader" class="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-200 min-h-[260px] flex items-center justify-center"></div>
 
-      <!-- INGRESO MANUAL DE EMERGENCIA -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
-        <form onsubmit="procesarMarcacionManual(event)" class="flex gap-2 items-center">
-          <div class="flex-1 relative">
-            <i class="fa-solid fa-keyboard absolute left-3.5 top-2.5 text-slate-400 text-xs"></i>
-            <input type="text" id="input-codigo-manual" class="w-full rounded-xl border border-slate-300 text-xs pl-9 pr-3 py-2 font-mono font-bold placeholder-slate-400 tracking-wider uppercase focus:outline-none focus:border-indigo-500" placeholder="Código de barras / DNI manual...">
-          </div>
-          <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs py-2 px-4 rounded-xl transition-colors h-full">
-            Registrar
+        <div class="mt-4 w-full flex gap-2">
+          <button id="btn-toggle-camara" onclick="toggleCamara()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm">
+            <i class="fa-solid fa-power-off mr-1"></i> Encender Cámara
           </button>
-        </form>
-      </div>
-    </div>
+        </div>
+      </section>
 
-    <!-- SECCIÓN DERECHA -->
-    <div class="w-full lg:w-5/12 flex flex-col gap-4">
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 flex flex-col justify-center min-h-[160px]">
-        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">ÚLTIMO REGISTRO PROCESADO</div>
-        <div id="resultado-card" class="border border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 flex items-center justify-center">
-          <div class="text-center p-4 text-slate-400 text-xs font-medium">
-            <i class="fa-solid fa-qrcode text-2xl mb-1 block animate-pulse"></i> A la espera de lecturas válidas...
+      <!-- Panel de Último Resultado de Escaneo -->
+      <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+            <i class="fa-solid fa-id-card mr-2 text-indigo-600"></i>Última Marcación
+          </h2>
+
+          <div id="resultado-card" class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-center flex flex-col items-center justify-center min-h-[220px]">
+            <i class="fa-solid fa-qrcode text-4xl text-slate-300 mb-2"></i>
+            <p class="text-sm text-slate-500 font-medium">Escanea un código QR para ver los detalles de asistencia.</p>
           </div>
         </div>
+
+        <!-- Feedback de Notificación rápida -->
+        <div id="notificacion-alerta" class="hidden mt-3 p-3 rounded-xl text-xs font-semibold text-center transition-all"></div>
+      </section>
+
+    </div>
+
+    <!-- TABLA DE MARCACIONES DE HOY -->
+    <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mt-2">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">
+          <i class="fa-solid fa-list-check mr-2 text-indigo-600"></i>Marcaciones del Día
+        </h2>
+        <button onclick="cargarAsistenciasHoy()" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1">
+          <i class="fa-solid fa-rotate-right"></i> Actualizar
+        </button>
       </div>
 
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 flex-1 flex flex-col overflow-hidden">
-        <div class="text-xs font-black text-slate-900 mb-3 flex items-center gap-1.5 uppercase tracking-wide">
-          <span class="w-2 h-2 rounded-full bg-indigo-500"></span> Marcaciones de Hoy
-        </div>
-        <div class="overflow-x-auto flex-1 max-h-[280px] lg:max-h-none overflow-y-auto">
-          <table class="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr class="border-b border-slate-200 font-extrabold text-slate-400 bg-slate-50 text-[10px]">
-                <th class="py-2 px-2.5">CÓDIGO</th>
-                <th class="py-2 px-2.5">NOMBRE</th>
-                <th class="py-2 px-2.5">AULA</th>
-                <th class="py-2 px-2.5 text-emerald-600">ENTRADA</th>
-                <th class="py-2 px-2.5 text-indigo-600">SALIDA</th>
-                <th class="py-2 px-2.5">ESTADO</th>
-              </tr>
-            </thead>
-            <tbody id="tabla-asistencias-hoy" class="divide-y divide-slate-100">
-              <tr>
-                <td colspan="6" class="text-center py-6 text-slate-400 font-medium">Cargando bitácora del día...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="bg-slate-50 text-slate-500 uppercase tracking-wider border-b border-slate-200">
+              <th class="py-3 px-3">Código</th>
+              <th class="py-3 px-3">Nombre</th>
+              <th class="py-3 px-3">Rol / Asignación</th>
+              <th class="py-3 px-3">Hora</th>
+              <th class="py-3 px-3">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-asistencias-hoy" class="divide-y divide-slate-100 text-slate-700">
+            <tr>
+              <td colspan="5" class="text-center py-6 text-slate-400 font-medium">Cargando marcaciones...</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </div>
+    </section>
+
   </main>
 
-  <!-- MODAL DE CONFIRMACIÓN -->
-  <div id="modal-asistencia" class="hidden opacity-0 pointer-events-none fixed inset-0 bg-slate-900/70 backdrop-blur-sm items-center justify-center p-4 z-50 transition-all duration-300">
-    <div class="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-100 text-center transform scale-95 transition-all duration-300">
-      <div class="flex flex-col items-center">
-        <div id="modal-icon-container" class="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/20 mb-4">
-          <i id="modal-icon" class="fa-solid fa-check"></i>
-        </div>
-        <div class="mb-2">
-          <span id="modal-estado" class="font-black px-2 py-0.5 rounded-md text-[10px] bg-emerald-100 text-emerald-800 uppercase tracking-wider">PUNTUAL</span>
-        </div>
-        <h3 id="modal-nombre" class="text-base font-black text-slate-900 leading-tight px-2">-</h3>
-        <p id="modal-codigo" class="text-xs font-mono font-bold text-slate-400 mt-0.5">-</p>
-        
-        <div class="w-full bg-slate-50 rounded-xl border border-slate-200 p-2.5 my-4 text-xs font-semibold text-slate-600 space-y-1 text-left">
-          <p class="flex justify-between"><span>Aula/Asignación:</span> <span id="modal-aula" class="text-slate-900 font-bold">-</span></p>
-          <p class="flex justify-between"><span>Hora de Registro:</span> <span id="modal-hora" class="text-slate-900 font-bold">-</span></p>
-        </div>
-        <button onclick="cerrarModalAsistencia()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-3 rounded-xl shadow-md transition-all uppercase tracking-wider">
-          Aceptar
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- CONTROLADOR PRINCIPAL -->
-  <script src="js/scanner.js"></script>
-
-  <script>
-    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-    const sidebar = document.getElementById('sidebar');
-    const sidebarOverlay = document.getElementById('sidebarOverlay');
-
-    function toggleMenu() {
-      sidebar.classList.toggle('-translate-x-full');
-      sidebarOverlay.classList.toggle('hidden');
-    }
-    if(mobileMenuBtn) mobileMenuBtn.addEventListener('click', toggleMenu);
-    if(sidebarOverlay) sidebarOverlay.addEventListener('click', toggleMenu);
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario');
-      if (!sessionRaw) { window.location.href = 'index.html'; return; }
-      let sessionData = {};
-      try { sessionData = JSON.parse(sessionRaw); } catch(e) {}
-      const rol = (sessionData.rol || '').toLowerCase();
-      if (!['admin', 'director', 'directivo'].includes(rol)) {
-        const navCrud = document.getElementById('nav-crud');
-        if (navCrud) navCrud.style.display = 'none';
-      }
-    });
-  </script>
+  <!-- Ruta del archivo Javascript estandarizada -->
+  <script src="js/escaner.js"></script>
 </body>
 </html>
