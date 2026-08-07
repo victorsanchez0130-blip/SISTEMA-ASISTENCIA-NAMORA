@@ -385,7 +385,7 @@
       
       document.getElementById('modal-nombre').innerText = data.nombre || 'No Especificado';
       document.getElementById('modal-codigo').innerText = data.codigo || '-';
-      document.getElementById('modal-aula').innerText = data.aula || '---';
+      document.getElementById('modal-aula').innerText = data.aula || data.asignacion || '---';
       document.getElementById('modal-hora').innerText = horaFormateada;
 
       const iconContainer = document.getElementById('modal-icon-container');
@@ -404,19 +404,34 @@
         badgeEstado.className = "font-black px-2 py-0.5 rounded-md text-[10px] bg-indigo-100 text-indigo-800";
       }
 
+      // FORZAR APARICIÓN DE LA VENTANA EMERGENTE
       const modal = document.getElementById('modal-asistencia');
-      modal.classList.remove('opacity-0', 'pointer-events-none');
-      modal.firstElementChild.classList.remove('scale-95');
+      if (modal) {
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        modal.classList.add('flex');
+        if (modal.firstElementChild) {
+          modal.firstElementChild.classList.remove('scale-95');
+          modal.firstElementChild.classList.add('scale-100');
+        }
+      }
     }
 
     function cerrarModalAsistencia() {
       const modal = document.getElementById('modal-asistencia');
-      modal.classList.add('opacity-0', 'pointer-events-none');
-      modal.firstElementChild.classList.add('scale-95');
+      if (modal) {
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        modal.classList.remove('flex');
+        if (modal.firstElementChild) {
+          modal.firstElementChild.classList.add('scale-95');
+          modal.firstElementChild.classList.remove('scale-100');
+        }
+      }
 
       // Reactivar escáner tras cerrar la ventana
       setTimeout(() => {
-        iniciarCamara();
+        if (typeof iniciarCamara === 'function') {
+          iniciarCamara();
+        }
       }, 300);
     }
 
