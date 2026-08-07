@@ -131,19 +131,29 @@ function cerrarRegistro() {
 }
 
 // ====================================================
-// CONTROL DE CÁMARA FLUIDA (FRONTAL / POSTERIOR)
+// CONTROL DE CÁMARA (APERTURA Y CIERRE DESDE EL BOTÓN)
 // ====================================================
 function toggleCamara() {
-  if (camaraEncendida) { detenerCamara(); } else { iniciarCamara(); }
+  if (camaraEncendida) { 
+    detenerCamara(); 
+  } else { 
+    iniciarCamara(); 
+  }
 }
 
 function iniciarCamara() {
   const readerContainer = document.getElementById('reader');
-  if (!readerContainer || typeof Html5QrcodeScanner === 'undefined') {
-    alert("Error: Visor o librería HTML5 QR Code no encontrados en el entorno.");
+  if (!readerContainer) {
+    alert("Error: No se encontró el contenedor de la cámara (#reader) en el HTML.");
     return;
   }
 
+  if (typeof Html5QrcodeScanner === 'undefined') {
+    alert("Error: La librería HTML5 QR Code no se encuentra cargada en el entorno.");
+    return;
+  }
+
+  // Limpiar contenedor antes de iniciar la instancia
   readerContainer.innerHTML = "";
   
   html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
@@ -153,12 +163,17 @@ function iniciarCamara() {
   });
 
   html5QrcodeScanner.render(
-    (decodedText) => { procesarMarcacion(decodedText); },
-    (error) => { /* Omitir errores de fotogramas vacíos */ }
+    (decodedText) => { 
+      procesarMarcacion(decodedText); 
+    },
+    (error) => { 
+      /* Omitir errores de fotogramas vacíos mientras busca código */ 
+    }
   );
 
   camaraEncendida = true;
   actualizarEstadoCamaraUI(true);
+  mostrarNotificacion("📷 Cámara encendida correctamente.", "bg-emerald-100 text-emerald-800 border-emerald-300");
 }
 
 function detenerCamara() {
@@ -166,11 +181,15 @@ function detenerCamara() {
     html5QrcodeScanner.clear().then(() => {
       camaraEncendida = false;
       actualizarEstadoCamaraUI(false);
+      mostrarNotificacion("📴 Cámara apagada.", "bg-slate-100 text-slate-800 border-slate-300");
     }).catch(err => {
       console.warn("Advertencia al apagar cámara:", err);
       camaraEncendida = false;
       actualizarEstadoCamaraUI(false);
     });
+  } else {
+    camaraEncendida = false;
+    actualizarEstadoCamaraUI(false);
   }
 }
 
@@ -180,14 +199,25 @@ function actualizarEstadoCamaraUI(activa) {
   const readerContainer = document.getElementById('reader');
 
   if (activa) {
-    if (statusLabel) { statusLabel.innerText = "ACTIVA"; statusLabel.className = "text-xs font-bold text-emerald-600"; }
-    if (btnToggle) btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Apagar Cámara`;
+    if (statusLabel) { 
+      statusLabel.innerText = "ACTIVA"; 
+      statusLabel.className = "text-xs font-bold text-emerald-600"; 
+    }
+    if (btnToggle) {
+      btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Apagar Cámara`;
+      btnToggle.className = btnToggle.className.replace(/bg-emerald-\d+/, 'bg-rose-600').replace(/hover:bg-emerald-\d+/, 'hover:bg-rose-700');
+    }
   } else {
     if (readerContainer) {
       readerContainer.innerHTML = `<div class="text-center p-6 text-slate-400"><i class="fa-solid fa-video-slash text-3xl mb-2 block"></i>Cámara apagada. Pulse encender.</div>`;
     }
-    if (statusLabel) { statusLabel.innerText = "INACTIVA"; statusLabel.className = "text-xs font-normal text-slate-400"; }
-    if (btnToggle) btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Encender Cámara`;
+    if (statusLabel) { 
+      statusLabel.innerText = "INACTIVA"; 
+      statusLabel.className = "text-xs font-normal text-slate-400"; 
+    }
+    if (btnToggle) {
+      btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Encender Cámara`;
+    }
   }
 }
 
