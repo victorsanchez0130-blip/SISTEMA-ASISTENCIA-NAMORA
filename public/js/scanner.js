@@ -18,22 +18,26 @@ let tiempoUltimoEscaneo = 0;    // Marca de tiempo para controlar el intervalo m
 /**
  * Lista de feriados nacionales estandarizados en Perú (MM-DD)
  */
+/**
+ * Lista de feriados nacionales estandarizados en Perú (MM-DD)
+ * Actualizado conforme a la normativa vigente para el año 2026
+ */
 const FERIADOS_PERU_MMDD = [
   '01-01', // Año Nuevo
   '05-01', // Día del Trabajo
   '06-07', // Batalla de Arica y Día de la Bandera
   '06-29', // San Pedro y San Pablo
-  '07-23', // Día de la Fuerza Aérea del Perú
+  '07-23', // Día de la Fuerza Aérea del Perú (Fallas Heroicas de Quiñones)
   '07-28', // Fiestas Patrias
   '07-29', // Fiestas Patrias
-  '08-06', // Batalla de Junín
+  '08-06', // Conmemoración de la Batalla de Junín
   '08-30', // Santa Rosa de Lima
   '10-08', // Combate de Angamos
   '11-01', // Día de Todos los Santos
   '12-08', // Inmaculada Concepción
-  '12-09', // Batalla de Ayacucho
+  '12-09', // Conmemoración de la Batalla de Ayacucho
   '12-25'  // Navidad
-];
+];A
 
 // ====================================================
 // INICIALIZACIÓN DE EVENTOS

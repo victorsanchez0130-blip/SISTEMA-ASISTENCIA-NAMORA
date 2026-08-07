@@ -181,8 +181,8 @@
       <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left text-xs space-y-2.5 mb-5 font-medium text-slate-600">
         <div><span class="text-slate-400 font-normal inline-block w-28">Nombre:</span> <span id="modal-nombre" class="text-slate-800 font-bold">Cargando...</span></div>
         <div><span class="text-slate-400 font-normal inline-block w-28">Código:</span> <span id="modal-codigo" class="text-slate-800">Cargando...</span></div>
-        <div><span class="text-slate-400 font-normal inline-block w-28">Aula/Asignación:</span> <span id="modal-aula" class="text-slate-800 font-bold">Cargando...</span></div>
-        <div><span class="text-slate-400 font-normal inline-block w-28">Hora de Marcación:</span> <span id="modal-hora" class="text-indigo-600 font-bold">Cargando...</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Grado y Sección:</span> <span id="modal-aula" class="text-slate-800 font-bold">Cargando...</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Hora de Marcación:</span> <span id="indigo-600 font-bold" class="text-indigo-600 font-bold">Cargando...</span></div>
         <div><span class="text-slate-400 font-normal inline-block w-28">Estado:</span> <span id="modal-estado" class="font-black px-2 py-0.5 rounded-md text-[10px]">Cargando...</span></div>
       </div>
 
@@ -325,8 +325,40 @@
       }
     }
 
-    // Extracción jerárquica unificada de propiedades (Mapea correctamente al modal y tarjeta)
+    // Procesa y formatea inteligentemente el código leído por el QR para separar campos
     function extraerDatosEntidad(data) {
+      // Si el argumento es texto directo desde el código QR
+      if (typeof data === 'string') {
+        try {
+          // Opción A: ¿Es un JSON estructurado?
+          const datosJSON = JSON.parse(data);
+          const entidad = datosJSON.persona || datosJSON.alumno || datosJSON.datos || datosJSON;
+          return {
+            nombre: entidad.nombre || entidad.nombre_completo || 'Usuario Desconocido',
+            codigo: entidad.codigo || data,
+            aula: entidad.grado_seccion || entidad.aula || 'Asignación Regular'
+          };
+        } catch (e) {
+          // Opción B: Si viene separado por barras verticales o guiones (ej: "20261102|Juan Perez|5to A")
+          if (data.includes('|')) {
+            const partes = data.split('|');
+            return {
+              codigo: partes[0] ? partes[0].trim() : '-',
+              nombre: partes[1] ? partes[1].trim() : 'Usuario QR',
+              aula: partes[2] ? partes[2].trim() : 'Grado Desconocido'
+            };
+          }
+          
+          // Opción C: Si el QR es solo el código/DNI plano suelto
+          return {
+            codigo: data.trim(),
+            nombre: 'Usuario Identificado',
+            aula: 'Grado General'
+          };
+        }
+      }
+
+      // Si el argumento proviene de una respuesta JSON válida del servidor
       const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data.datos || data;
       
       const nombre = entidad.nombre_completo || 
@@ -348,10 +380,6 @@
         aula = entidad.aula;
       } else if (entidad.materia_aula) {
         aula = entidad.materia_aula;
-      } else if (entidad.asignacion) {
-        aula = entidad.asignacion;
-      } else if (entidad.cargo || entidad.rol) {
-        aula = entidad.cargo || entidad.rol;
       }
 
       return { nombre, codigo, aula };
@@ -368,12 +396,15 @@
         camaraEncendida = false;
       }
 
+      // Extrae la información directamente del contenido del código QR de forma inmediata
+      const datosQR = extraerDatosEntidad(codigo);
+
       try {
         const response = await fetch('/api/asistencia/registrar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            codigo: codigo,
+            codigo: datosQR.codigo,
             tipo: modoActual,
             fecha_hora: new Date().toISOString()
           })
@@ -382,25 +413,21 @@
         const res = await response.json();
 
         if (response.ok && (res.success || res.ok)) {
-          abrirModalAsistencia(res);
-          mostrarTarjetaResultado(res);
+          // Prioriza los datos limpios devueltos del servidor si el QR solo traía el DNI plano
+          const datosFinales = res.alumno || res.persona || res.datos ? extraerDatosEntidad(res) : datosQR;
+          abrirModalAsistencia(datosFinales);
+          mostrarTarjetaResultado(datosFinales);
           cargarAsistenciasHoy();
         } else {
           mostrarNotificacion(`❌ ${res.mensaje || 'Error al procesar registro'}`, "bg-rose-100 text-rose-800 border-rose-300");
           iniciarCamara(); 
         }
       } catch(err) {
-        console.error("Error en comunicación, ejecutando fallback local:", err);
+        console.error("Error en comunicación externa, procesando en Modo Local Inteligente:", err);
 
-        // Corregido: Ahora se define un formato genérico limpio para que funcione sin problemas en modo offline
-        const fallbackData = {
-          codigo: codigo,
-          nombre: nombre,
-          aula: materia_aula
-        };
-
-        abrirModalAsistencia(fallbackData);
-        mostrarTarjetaResultado(fallbackData);
+        // Si falla la red, el sistema rescata los datos leídos del QR de forma íntegra
+        abrirModalAsistencia(datosQR);
+        mostrarTarjetaResultado(datosQR);
         cargarAsistenciasHoy();
       }
     }
@@ -409,15 +436,13 @@
       const modal = document.getElementById('modal-asistencia');
       if (!modal) return;
 
-      // Corregido: Se llama correctamente a extraerDatosEntidad
       const datosListos = extraerDatosEntidad(data);
-      
       const horaFormateada = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
       
       document.getElementById('modal-nombre').innerText = datosListos.nombre;
       document.getElementById('modal-codigo').innerText = datosListos.codigo;
       document.getElementById('modal-aula').innerText = datosListos.aula;
-      document.getElementById('modal-hora').innerText = horaFormateada;
+      document.getElementById('indigo-600 font-bold').innerText = horaFormateada;
 
       const iconContainer = document.getElementById('modal-icon-container');
       const icon = document.getElementById('modal-icon');
