@@ -100,7 +100,7 @@ function iniciarRegistro() {
   const badge = document.getElementById('estado-registro-badge');
   if (badge) {
     badge.className = "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200";
-    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ABIERTO`;
+    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ACTIVO`;
   }
 
   const btnIniciar = document.getElementById('btn-iniciar');
@@ -116,8 +116,8 @@ function cerrarRegistro() {
   jornadaActiva = false;
   const badge = document.getElementById('estado-registro-badge');
   if (badge) {
-    badge.className = "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-red-100 text-red-700 border border-red-200";
-    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> CERRADO`;
+    badge.className = "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 border border-amber-200";
+    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> CERRADO`;
   }
 
   const btnIniciar = document.getElementById('btn-iniciar');
@@ -245,8 +245,6 @@ async function procesarMarcacion(codigoLimpio) {
   actualizarTablaMarcacionesHoy();
   mostrarNotificacion(`✅ Marcación Exitosa: ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
 
-  alert(`NOMBRE: ${payload.nombre}\nCODIGO: ${payload.codigo}\nHORA: ${payload.hora}\nESTADO: ${payload.estado}`);
-
   setTimeout(() => { procesandoEscaneoQR = false; }, 2000);
 }
 
@@ -324,7 +322,7 @@ function actualizarTablaMarcacionesHoy() {
 function mostrarNotificacion(msj, clases) {
   const notif = document.getElementById('notificacion-alerta');
   if (!notif) return;
-  notif.className = `mt-3 p-2.5 rounded-xl text-xs font-semibold text-center border transition-all ${clases}`;
+  notif.className = `fixed bottom-4 right-4 z-50 p-3 rounded-xl shadow-lg border text-xs font-bold max-w-sm transition-all ${clases}`;
   notif.innerText = msj;
   notif.classList.remove('hidden');
   setTimeout(() => { notif.classList.add('hidden'); }, 3500);

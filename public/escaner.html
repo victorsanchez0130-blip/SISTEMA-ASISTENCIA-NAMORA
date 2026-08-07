@@ -8,7 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Librería Oficial HTML5 QR Code -->
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen p-4 sm:p-6">
 
@@ -32,9 +32,12 @@
     <!-- Controles de Cámara y Escáner -->
     <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
       <div class="flex justify-between items-center">
-        <span class="text-xs font-black uppercase text-slate-400">Escáner de Fotochecks</span>
-        <div id="estado-registro-badge" class="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ACTIVO
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-black uppercase text-slate-400">Escáner de Fotochecks</span>
+          <span id="camara-status" class="text-xs font-normal text-slate-400">INACTIVA</span>
+        </div>
+        <div id="estado-registro-badge" class="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200">
+          <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> CERRADO
         </div>
       </div>
 
@@ -45,13 +48,10 @@
         </div>
       </div>
 
-      <!-- Botones de Control de Cámara -->
-      <div class="grid grid-cols-2 gap-3 pt-1">
+      <!-- Botón de Control de Cámara -->
+      <div class="grid grid-cols-1 gap-3 pt-1">
         <button id="btn-toggle-camara" type="button" onclick="toggleCamara()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer">
-          <i class="fa-solid fa-power-off"></i> <span id="txt-btn-camara">Apagar Cámara</span>
-        </button>
-        <button id="btn-cambiar-camara" type="button" onclick="cambiarCamara()" class="bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer">
-          <i class="fa-solid fa-camera-rotate"></i> <span id="txt-camara-tipo">Cámara: Posterior</span>
+          <i class="fa-solid fa-power-off"></i> Encender Cámara
         </button>
       </div>
     </div>
@@ -67,12 +67,11 @@
         </div>
         <div>
           <h3 class="text-base font-extrabold text-slate-900">Usuario Identificado</h3>
-          <p class="text-xs font-mono font-bold text-slate-500 mt-0.5">ALU-SRN-5111</p>
-          <p class="text-xs font-semibold text-slate-600 mt-0.5">Grado General</p>
+          <p class="text-xs font-mono font-bold text-slate-500 mt-0.5">Esperando escaneo...</p>
         </div>
         <div class="pt-1">
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-lg bg-emerald-100 text-emerald-700 border border-emerald-200 shadow-sm">
-            <i class="fa-solid fa-right-to-bracket text-[10px]"></i> ENTRADA &nbsp;|&nbsp; --:--:--
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-lg bg-slate-100 text-slate-600 border border-slate-200 shadow-sm">
+            <i class="fa-solid fa-clock text-[10px]"></i> --:--:--
           </span>
         </div>
       </div>
@@ -94,14 +93,15 @@
             <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50">
               <th class="py-2.5 px-3">Código</th>
               <th class="py-2.5 px-3">Nombre</th>
-              <th class="py-2.5 px-3">Rol / Asignación</th>
-              <th class="py-2.5 px-3">Hora</th>
+              <th class="py-2.5 px-3">Aula</th>
+              <th class="py-2.5 px-3">Entrada</th>
+              <th class="py-2.5 px-3">Salida</th>
               <th class="py-2.5 px-3">Estado</th>
             </tr>
           </thead>
           <tbody id="tabla-asistencias-hoy" class="text-xs divide-y divide-slate-100 font-medium">
             <tr>
-              <td colspan="5" class="text-center py-6 text-slate-400">Sin marcaciones registradas hoy.</td>
+              <td colspan="6" class="text-center py-6 text-slate-400">Sin marcaciones registradas hoy.</td>
             </tr>
           </tbody>
         </table>
@@ -109,80 +109,8 @@
     </div>
   </div>
 
-  <!-- MODAL 1: MARCACIÓN EXITOSA (1ER REGISTRO) -->
-  <div id="modal-exito" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 space-y-5">
-      <div class="flex flex-col items-center text-center space-y-3">
-        <div class="w-16 h-16 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/30">
-          <i class="fa-solid fa-check"></i>
-        </div>
-        <h3 class="text-xl font-black text-slate-900 tracking-tight">Marcación Registrada</h3>
-      </div>
-
-      <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2.5 text-xs">
-        <div class="flex justify-between border-b border-slate-200/60 pb-2">
-          <span class="text-slate-500 font-medium">Nombre:</span>
-          <span id="modal-exito-nombre" class="font-extrabold text-slate-800 text-right">Nombre No Especificado</span>
-        </div>
-        <div class="flex justify-between border-b border-slate-200/60 pb-2">
-          <span class="text-slate-500 font-medium">Código:</span>
-          <span id="modal-exito-codigo" class="font-mono font-bold text-slate-800">ALU-SRN-3808</span>
-        </div>
-        <div class="flex justify-between border-b border-slate-200/60 pb-2">
-          <span class="text-slate-500 font-medium">Aula/Asignación:</span>
-          <span id="modal-exito-aula" class="font-bold text-slate-800">---</span>
-        </div>
-        <div class="flex justify-between border-b border-slate-200/60 pb-2">
-          <span class="text-slate-500 font-medium">Hora de Marcación:</span>
-          <span id="modal-exito-hora" class="font-mono font-bold text-indigo-600">--:--:--</span>
-        </div>
-        <div class="flex justify-between items-center pt-0.5">
-          <span class="text-slate-500 font-medium">Estado:</span>
-          <span id="modal-exito-estado" class="px-2.5 py-0.5 text-[11px] font-black rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">PUNTUAL</span>
-        </div>
-      </div>
-
-      <button type="button" onclick="cerrarModalExito()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm py-3 rounded-2xl transition-all shadow-lg shadow-blue-600/30 cursor-pointer">
-        Aceptar
-      </button>
-    </div>
-  </div>
-
-  <!-- MODAL 2: YA REGISTRÓ ASISTENCIA (2DO REGISTRO / DUPLICADO) -->
-  <div id="modal-duplicado" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 space-y-5">
-      <div class="flex flex-col items-center text-center space-y-2">
-        <div class="w-16 h-16 rounded-2xl bg-amber-400 text-white flex items-center justify-center text-3xl shadow-lg shadow-amber-400/30">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-        </div>
-        <h3 class="text-xl font-black text-slate-900 tracking-tight">¡Ya Registró Asistencia!</h3>
-        <p class="text-xs text-slate-500 font-medium">Solo se permite una marcación diaria por usuario.</p>
-      </div>
-
-      <div class="bg-amber-50/70 rounded-2xl p-4 border border-amber-200/80 space-y-2.5 text-xs">
-        <div class="flex justify-between border-b border-amber-200/50 pb-2">
-          <span class="text-slate-600 font-medium">Nombre:</span>
-          <span id="modal-dup-nombre" class="font-extrabold text-slate-900 text-right">---</span>
-        </div>
-        <div class="flex justify-between border-b border-amber-200/50 pb-2">
-          <span class="text-slate-600 font-medium">Código:</span>
-          <span id="modal-dup-codigo" class="font-mono font-bold text-slate-900">---</span>
-        </div>
-        <div class="flex justify-between border-b border-amber-200/50 pb-2">
-          <span class="text-slate-600 font-medium">Aula/Asignación:</span>
-          <span id="modal-dup-aula" class="font-bold text-slate-900">---</span>
-        </div>
-        <div class="flex justify-between items-center pt-0.5">
-          <span class="text-slate-600 font-medium">Hora Registrada:</span>
-          <span id="modal-dup-hora" class="font-mono font-bold text-amber-700">--:--:--</span>
-        </div>
-      </div>
-
-      <button type="button" onclick="cerrarModalDuplicado()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm py-3 rounded-2xl transition-all shadow-lg shadow-amber-500/30 cursor-pointer">
-        Entendido
-      </button>
-    </div>
-  </div>
+  <!-- Notificación flotante -->
+  <div id="notificacion-alerta" class="hidden fixed bottom-4 right-4 z-50 p-3 rounded-xl shadow-lg border text-xs font-bold max-w-sm"></div>
 
   <!-- Script Lógico del Escáner -->
   <script src="js/escaner.js"></script>
