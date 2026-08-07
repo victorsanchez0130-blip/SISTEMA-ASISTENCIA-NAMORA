@@ -1,6 +1,6 @@
 /**
  * Control de Asistencia QR y Consolidados - I.E. SANTA ROSA (NAMORA - CAJAMARCA)
- * Archivo unificado y completo: js/escaner.js
+ * Archivo unificado, depurado y corregido: js/escaner.js
  */
 
 // ====================================================
@@ -13,13 +13,13 @@ let html5QrcodeScanner = null;
 let camaraEncendida = false;
 let procesandoEscaneoQR = false;
 
-// Matriz de Feriados Oficiales del Perú (Mes-Día)[cite: 1]
+// Matriz de Feriados Oficiales del Perú (Mes-Día)
 const FERIADOS_PERU_MMDD = [
   '01-01', '05-01', '06-07', '06-29', '07-23', '07-28', 
   '07-29', '08-06', '08-30', '10-08', '11-01', '12-08', '12-09', '12-25'
 ];
 
-// Control de memoria para evitar el doble escaneo en la sesión actual (Código + Modo)
+// Control de memoria para evitar dobles escaneos en la sesión actual (Código + Modo)
 const registrosProcesadosHoy = new Map();
 
 // ====================================================
@@ -30,15 +30,21 @@ document.addEventListener('DOMContentLoaded', () => {
   actualizarTablaMarcacionesHoy();
   cambiarModoRegistro('ENTRADA');
 
-  // Inicializar eventos de filtros si se encuentran presentes en la interfaz actual
   if (document.getElementById('filtroTipo')) {
     configurarEventosFiltros();
     actualizarTipoSelectorFecha(false);
     cargarConsolidado();
   }
 
-  document.getElementById('form-editar-asistencia')?.addEventListener('submit', guardarEdicionAsistencia);
-  document.getElementById('btn-cerrar-modal-editar')?.addEventListener('click', cerrarModalEditar);
+  const formEditar = document.getElementById('form-editar-asistencia');
+  if (formEditar) {
+    formEditar.addEventListener('submit', guardarEdicionAsistencia);
+  }
+
+  const btnCerrarModal = document.getElementById('btn-cerrar-modal-editar');
+  if (btnCerrarModal) {
+    btnCerrarModal.addEventListener('click', cerrarModalEditar);
+  }
 });
 
 // ====================================================
@@ -59,14 +65,17 @@ function cargarDatosAuxiliar() {
 
   const elNombre = document.getElementById('txt-operador') || document.getElementById('nombre-auxiliar');
   if (elNombre) {
-    elNombre.innerText = `AUXILIAR: ${nombreAuxiliar.toUpperCase()}`;[cite: 1]
+    elNombre.innerText = `AUXILIAR: ${nombreAuxiliar.toUpperCase()}`;
   }
 }
 
 function configurarEventosFiltros() {
-  document.getElementById('filtroTipo')?.addEventListener('change', () => {
-    actualizarTipoSelectorFecha(true);
-  });
+  const filtroTipo = document.getElementById('filtroTipo');
+  if (filtroTipo) {
+    filtroTipo.addEventListener('change', () => {
+      actualizarTipoSelectorFecha(true);
+    });
+  }
 }
 
 // ====================================================
@@ -100,7 +109,7 @@ function iniciarRegistro() {
   if (btnIniciar) { btnIniciar.disabled = true; btnIniciar.classList.add('opacity-50', 'cursor-not-allowed'); }
   if (btnCerrar) { btnCerrar.disabled = false; btnCerrar.classList.remove('opacity-50', 'cursor-not-allowed'); }
 
-  mostrarNotificacion("🟢 Jornada iniciada. Sistema listo.", "bg-emerald-100 text-emerald-800 border-emerald-300");
+  mostrarNotificacion("🟢 Jornada iniciada correctamente.", "bg-emerald-100 text-emerald-800 border-emerald-300");
 }
 
 function cerrarRegistro() {
@@ -131,13 +140,12 @@ function toggleCamara() {
 function iniciarCamara() {
   const readerContainer = document.getElementById('reader');
   if (!readerContainer || typeof Html5QrcodeScanner === 'undefined') {
-    alert("Visor o librería HTML5 QR Code no encontrados.");
+    alert("Error: Visor o librería HTML5 QR Code no encontrados en el entorno.");
     return;
   }
 
   readerContainer.innerHTML = "";
   
-  // Utiliza el escáner nativo que permite alternar entre cámara frontal y posterior
   html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
     fps: 15, 
     qrbox: { width: 220, height: 220 },
@@ -159,7 +167,7 @@ function detenerCamara() {
       camaraEncendida = false;
       actualizarEstadoCamaraUI(false);
     }).catch(err => {
-      console.error(err);
+      console.warn("Advertencia al apagar cámara:", err);
       camaraEncendida = false;
       actualizarEstadoCamaraUI(false);
     });
@@ -187,7 +195,7 @@ function actualizarEstadoCamaraUI(activa) {
 // PROCESAMIENTO Y VALIDACIÓN ANTI-DOBLE ESCANEO
 // ====================================================
 async function procesarMarcacion(codigoLimpio) {
-  const codigo = codigoLimpio.trim();
+  const codigo = codigoLimpio ? codigoLimpio.trim() : "";
   if (!codigo) return;
 
   if (procesandoEscaneoQR) return;
@@ -195,7 +203,6 @@ async function procesarMarcacion(codigoLimpio) {
 
   if (!jornadaActiva) iniciarRegistro();
 
-  // Validación estricta: Evitar que el QR se escanee 2 veces si ya realizó el ingreso o salida[cite: 1]
   const llaveUnica = `${codigo}_${modoActual}`;
   if (registrosProcesadosHoy.has(llaveUnica)) {
     mostrarNotificacion(`⚠️ El código ${codigo} ya cuenta con registro de ${modoActual} hoy.`, "bg-amber-100 text-amber-800 border-amber-300");
@@ -221,26 +228,24 @@ async function procesarMarcacion(codigoLimpio) {
       body: JSON.stringify({ codigo, tipo: modoActual, fecha_hora: new Date().toISOString() })
     });
 
-    const res = await response.json();
-    if (response.ok && (res.success || res.ok)) {
+    if (response.ok) {
+      const res = await response.json();
       payload.nombre = res.nombre || (res.persona ? res.persona.nombre : payload.nombre);
       payload.aula = res.aula || (res.persona ? res.persona.aula : payload.aula);
       payload.estado = res.estado || payload.estado;
     }
   } catch (error) {
-    console.warn("Modo local activo (Sin conexión con backend).");
+    console.warn("Modo local activo (Backend no disponible).");
   }
 
-  // Registrar en memoria para bloquear dobles escaneos
   registrosProcesadosHoy.set(llaveUnica, Date.now());
 
-  // Guardar en persistencia local y actualizar tabla
   guardarEnHistorialLocal(payload);
   actualizarUltimaMarcacionCard(payload);
   actualizarTablaMarcacionesHoy();
   mostrarNotificacion(`✅ Marcación Exitosa: ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
 
-  // VENTANA EMERGENTE ESTRICTAMENTE FORMATADA CON LOS 4 CAMPOS SOLICITADOS[cite: 1]
+  // Ventana emergente con formato estricto solicitado
   alert(`NOMBRE: ${payload.nombre}\nCODIGO: ${payload.codigo}\nHORA: ${payload.hora}\nESTADO: ${payload.estado}`);
 
   setTimeout(() => { procesandoEscaneoQR = false; }, 2000);
@@ -276,7 +281,6 @@ function actualizarUltimaMarcacionCard(data) {
   if (!card) return;
 
   const esSalida = data.modo === 'SALIDA';
-  // En última marcación sale toda la información requerida[cite: 1]
   card.innerHTML = `
     <div class="flex flex-col items-center justify-center py-2 w-full">
       <div class="w-12 h-12 rounded-full ${esSalida ? 'bg-indigo-600' : 'bg-emerald-600'} text-white flex items-center justify-center font-black text-xl mb-2 shadow-sm">
@@ -343,7 +347,11 @@ function actualizarTipoSelectorFecha(ejecutarCarga = true) {
     contenedorFecha.innerHTML = `<input type="date" id="filtroFecha" class="rounded-xl border border-slate-300 p-2 text-xs font-bold" value="${obtenerFechaHoy()}">`;
   }
 
-  document.getElementById('filtroFecha')?.addEventListener('change', cargarConsolidado);
+  const filtroFechaEl = document.getElementById('filtroFecha');
+  if (filtroFechaEl) {
+    filtroFechaEl.addEventListener('change', cargarConsolidado);
+  }
+
   if (ejecutarCarga) cargarConsolidado();
 }
 
@@ -356,7 +364,11 @@ async function cargarConsolidado() {
   const fecha = document.getElementById('filtroFecha')?.value || '';
   try {
     const res = await fetch(`/api/reportes/consolidado?tipo=${tipo}&fecha=${encodeURIComponent(fecha)}`);
-    datosReporteGlobal = await res.json();
+    if (res.ok) {
+      datosReporteGlobal = await res.json();
+    } else {
+      datosReporteGlobal = [];
+    }
     renderizarTablaReportes();
   } catch (e) {
     datosReporteGlobal = [];
@@ -369,7 +381,7 @@ function renderizarTablaReportes() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  if (datosReporteGlobal.length === 0) {
+  if (!datosReporteGlobal || datosReporteGlobal.length === 0) {
     tbody.innerHTML = `<tr><td colspan="8" class="text-center text-slate-400 p-4">Sin registros correlativos.</td></tr>`;
     return;
   }
@@ -377,16 +389,17 @@ function renderizarTablaReportes() {
   datosReporteGlobal.forEach(d => {
     const tr = document.createElement('tr');
     tr.className = "border-b border-slate-100 hover:bg-slate-50 text-xs";
+    const nombreLimpio = (d.nombre || '').replace(/'/g, "\\'");
     tr.innerHTML = `
-      <td class="py-3 px-3"><strong>${d.codigo}</strong></td>
-      <td class="py-3 px-3 font-semibold">${d.nombre}</td>
+      <td class="py-3 px-3"><strong>${d.codigo || ''}</strong></td>
+      <td class="py-3 px-3 font-semibold">${d.nombre || ''}</td>
       <td class="py-3 px-3">${d.aula || 'Regular'}</td>
       <td class="py-3 px-3 text-center text-emerald-600 font-bold">${d.asistencias || 0}</td>
       <td class="py-3 px-3 text-center text-amber-600 font-bold">${d.tardanzas || 0}</td>
       <td class="py-3 px-3 text-center text-rose-600 font-bold">${(d.fJustificadas || 0) + (d.fInjustificadas || 0)}</td>
       <td class="py-3 px-3 text-center font-bold bg-slate-50">${d.puntajeTotal || 0} pts</td>
       <td class="py-3 px-3 text-center">
-        <button onclick="abrirModalEditar('${d.codigo}', '${d.nombre.replace(/'/g, "\\'")}')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-1 px-3 rounded-lg text-xs transition-all">✏️ Editar</button>
+        <button onclick="abrirModalEditar('${d.codigo}', '${nombreLimpio}')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-1 px-3 rounded-lg text-xs transition-all">✏️ Editar</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -396,23 +409,33 @@ function renderizarTablaReportes() {
 function abrirModalEditar(codigo, nombre) {
   const modal = document.getElementById('modal-editar-asistencia');
   if (!modal) return;
-  document.getElementById('edit-codigo-input').value = codigo;
-  document.getElementById('edit-nombre-alumno').innerText = nombre;
-  document.getElementById('edit-codigo-alumno').innerText = codigo;
+  const codigoInput = document.getElementById('edit-codigo-input');
+  const nombreAlumno = document.getElementById('edit-nombre-alumno');
+  const codigoAlumno = document.getElementById('edit-codigo-alumno');
+
+  if (codigoInput) codigoInput.value = codigo;
+  if (nombreAlumno) nombreAlumno.innerText = nombre;
+  if (codigoAlumno) codigoAlumno.innerText = codigo;
+
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 }
 
 function cerrarModalEditar() {
   const modal = document.getElementById('modal-editar-asistencia');
-  if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+  if (modal) { 
+    modal.classList.add('hidden'); 
+    modal.classList.remove('flex'); 
+  }
 }
 
 async function guardarEdicionAsistencia(event) {
   event.preventDefault();
-  const codigo = document.getElementById('edit-codigo-input').value;
-  const nuevoEstado = document.getElementById('edit-estado-select').value;
+  const codigo = document.getElementById('edit-codigo-input')?.value;
+  const nuevoEstado = document.getElementById('edit-estado-select')?.value;
   const fechaVal = document.getElementById('filtroFecha')?.value || obtenerFechaHoy();
+
+  if (!codigo) return;
 
   try {
     const response = await fetch('/api/asistencia/editar', {
@@ -424,6 +447,8 @@ async function guardarEdicionAsistencia(event) {
       alert("¡Asistencia modificada correctamente!");
       cerrarModalEditar();
       cargarConsolidado();
+    } else {
+      alert("Error al actualizar en el servidor.");
     }
   } catch (e) {
     alert("Guardado local exitoso.");
@@ -458,7 +483,7 @@ function obtenerObservacionEstado(estado) {
 async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, periodo, metricas, historial, nombreArchivo }) {
   const jsPDFClass = obtenerInstanciaPDF();
   if (!jsPDFClass) {
-    alert("La librería jsPDF no está disponible.");
+    alert("La librería jsPDF no está cargada correctamente.");
     return;
   }
 
