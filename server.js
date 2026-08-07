@@ -1,4 +1,4 @@
-const express = require('path') ? require('express') : require('express'); // Asegurado
+const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
@@ -49,7 +49,7 @@ function verificarPermisoAdmin(req, res, next) {
   }
 }
 
-// Inicialización de esquema y datos base
+// Inicialización de esquema y migraciones seguras
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -67,9 +67,12 @@ db.serialize(() => {
       usuario_codigo TEXT NOT NULL,
       fecha TEXT NOT NULL,
       hora TEXT NOT NULL,
+      hora_salida TEXT,
       estado TEXT NOT NULL
     )
-  `);
+  `, () => {
+    db.run(`ALTER TABLE asistencias ADD COLUMN hora_salida TEXT`, (err) => {});
+  });
 
   const stmt = db.prepare("INSERT OR IGNORE INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)");
   stmt.run('DIR-SRN-001', 'Manuel Asencio Málaga', 'Director', 'Dirección General');
@@ -86,27 +89,33 @@ app.post('/api/asistencia/cerrar', (req, res) => {
   registroActivo = false;
   const hoy = getFechaPeru();
 
-  db.all("SELECT codigo FROM usuarios WHERE LOWER(rol) IN ('alumno', 'docente')", [], (err, usuarios) => {
-    if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar usuarios.' });
+  // 1. Marcar automáticamente la hora máxima (13:10:00) a quienes tengan entrada pero no salida registrada
+  db.run("UPDATE asistencias SET hora_salida = '13:10:00' WHERE fecha = ? AND hora_salida IS NULL AND estado != 'FALTA'", [hoy], (errUpd) => {
+    if (errUpd) console.error('Error al autocompletar horas de salida:', errUpd);
 
-    db.all("SELECT usuario_codigo FROM asistencias WHERE fecha = ?", [hoy], (err, marcaciones) => {
-      if (err) return res.status(500).json({ success: false, mensaje: 'Error al validar marcaciones.' });
+    // 2. Procesar faltas para quienes nunca marcaron
+    db.all("SELECT codigo FROM usuarios WHERE LOWER(rol) IN ('alumno', 'docente')", [], (err, usuarios) => {
+      if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar usuarios.' });
 
-      const marcadosSet = new Set(marcaciones.map(m => m.usuario_codigo));
-      const ausentes = usuarios.filter(u => !marcadosSet.has(u.codigo));
+      db.all("SELECT usuario_codigo FROM asistencias WHERE fecha = ?", [hoy], (err, marcaciones) => {
+        if (err) return res.status(500).json({ success: false, mensaje: 'Error al validar marcaciones.' });
 
-      if (ausentes.length === 0) {
-        return res.json({ success: true, mensaje: 'Registro cerrado. Todo el personal registró asistencia.' });
-      }
+        const marcadosSet = new Set(marcaciones.map(m => m.usuario_codigo));
+        const ausentes = usuarios.filter(u => !marcadosSet.has(u.codigo));
 
-      db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
-        const stmt = db.prepare("INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, '00:00:00', 'FALTA')");
-        ausentes.forEach(u => stmt.run(u.codigo, hoy));
-        stmt.finalize();
-        db.run('COMMIT', (errCommit) => {
-          if (errCommit) return res.status(500).json({ success: false, mensaje: 'Error al procesar faltas automáticas.' });
-          res.json({ success: true, mensaje: `Asistencia cerrada. Se asignaron ${ausentes.length} faltas automáticas.` });
+        if (ausentes.length === 0) {
+          return res.json({ success: true, mensaje: 'Registro cerrado. Se ajustaron salidas pendientes y no hay ausentes.' });
+        }
+
+        db.serialize(() => {
+          db.run('BEGIN TRANSACTION');
+          const stmt = db.prepare("INSERT INTO asistencias (usuario_codigo, fecha, hora, hora_salida, estado) VALUES (?, ?, '00:00:00', '-', 'FALTA')");
+          ausentes.forEach(u => stmt.run(u.codigo, hoy));
+          stmt.finalize();
+          db.run('COMMIT', (errCommit) => {
+            if (errCommit) return res.status(500).json({ success: false, mensaje: 'Error al procesar faltas automáticas.' });
+            res.json({ success: true, mensaje: `Asistencia cerrada. Se ajustaron salidas y se asignaron ${ausentes.length} faltas automáticas.` });
+          });
         });
       });
     });
@@ -159,9 +168,24 @@ app.post('/api/usuarios', verificarPermisoAdmin, (req, res) => {
   });
 });
 
-// MARCACIÓN (Unificado para aceptar tanto /marcar como /registrar por compatibilidad)
+app.delete('/api/usuarios/:id', verificarPermisoAdmin, (req, res) => {
+  const { id } = req.params;
+
+  db.run('DELETE FROM usuarios WHERE id = ?', [id], function (err) {
+    if (err) {
+      return res.status(500).json({ success: false, mensaje: 'Error al eliminar el usuario en la base de datos.' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ success: false, mensaje: 'El usuario no fue encontrado.' });
+    }
+
+    res.json({ success: true, mensaje: 'Usuario eliminado correctamente.' });
+  });
+});
+
+// Marcación Inteligente con límite máximo de salida a las 13:10:00
 const procesarMarcacionLogica = (req, res) => {
-  // Soporte tanto para codigoQR como codigo
   const codigoQR = req.body.codigoQR || req.body.codigo;
 
   if (!codigoQR) {
@@ -174,32 +198,52 @@ const procesarMarcacionLogica = (req, res) => {
     const hoy = getFechaPeru();
     const horaActual = getHoraPeru();
 
-    db.get('SELECT * FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [usuario.codigo, hoy], (err, yaMarco) => {
+    db.get('SELECT * FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [usuario.codigo, hoy], (err, registroHoy) => {
       if (err) return res.status(500).json({ success: false, mensaje: 'Error al verificar marcación.' });
 
-      if (yaMarco) {
-        return res.json({ 
+      // CASO 1: Registrar ENTRADA
+      if (!registroHoy) {
+        const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
+        db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, hora_salida, estado) VALUES (?, ?, ?, NULL, ?)', 
+          [usuario.codigo, hoy, horaActual, estado], (err) => {
+            if (err) return res.status(500).json({ success: false, mensaje: 'Error al registrar entrada.' });
+            res.json({ 
+              success: true, 
+              tipo: 'ENTRADA',
+              mensaje: `Entrada [${estado}] registrada para ${usuario.nombre} a las ${horaActual}`, 
+              persona: usuario,
+              usuario, 
+              hora: horaActual, 
+              estado 
+            });
+        });
+      } 
+      // CASO 2: Registrar SALIDA (Máximo 13:10:00 de forma automática)
+      else if (!registroHoy.hora_salida) {
+        let horaSalidaFinal = horaActual > '13:10:00' ? '13:10:00' : horaActual;
+        
+        db.run('UPDATE asistencias SET hora_salida = ? WHERE id = ?', [horaSalidaFinal, registroHoy.id], (err) => {
+          if (err) return res.status(500).json({ success: false, mensaje: 'Error al registrar salida.' });
+          res.json({ 
+            success: true, 
+            tipo: 'SALIDA',
+            mensaje: `Salida registrada exitosamente para ${usuario.nombre} a las ${horaSalidaFinal}`, 
+            persona: usuario,
+            usuario, 
+            horaSalida: horaSalidaFinal 
+          });
+        });
+      } 
+      // CASO 3: Ya tiene ambos registros
+      else {
+        res.json({ 
           success: true, 
           duplicado: true,
-          mensaje: `${usuario.nombre} ya registró asistencia hoy a las ${yaMarco.hora}.`,
+          mensaje: `${usuario.nombre} ya registró su entrada (${registroHoy.hora}) y salida (${registroHoy.hora_salida}) hoy.`,
           persona: usuario,
           usuario
         });
       }
-
-      const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
-
-      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [usuario.codigo, hoy, horaActual, estado], (err) => {
-        if (err) return res.status(500).json({ success: false, mensaje: 'Error al registrar marcación.' });
-        res.json({ 
-          success: true, 
-          mensaje: `Marcación [${estado}] registrada para ${usuario.nombre}`, 
-          persona: usuario,
-          usuario, 
-          hora: horaActual, 
-          estado 
-        });
-      });
     });
   });
 };
@@ -229,21 +273,21 @@ app.get('/api/asistencia/hoy', (req, res) => {
   });
 });
 
-// Edición y corrección manual de asistencia
 app.post('/api/asistencia/editar', verificarPermisoAdmin, (req, res) => {
-  const { codigo, fecha, estado } = req.body;
+  const { codigo, fecha, estado, hora_salida } = req.body;
   if (!codigo || !fecha || !estado) return res.status(400).json({ success: false, mensaje: 'Datos incompletos.' });
 
   db.get('SELECT id FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [codigo, fecha], (err, row) => {
     if (row) {
-      db.run('UPDATE asistencias SET estado = ? WHERE id = ?', [estado, row.id], (err2) => {
+      db.run('UPDATE asistencias SET estado = ?, hora_salida = COALESCE(?, hora_salida) WHERE id = ?', [estado, hora_salida, row.id], (err2) => {
         if (err2) return res.status(500).json({ success: false, mensaje: 'Error al actualizar.' });
         res.json({ success: true, mensaje: 'Asistencia actualizada.' });
       });
     } else {
-      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [codigo, fecha, '07:30:00', estado], (err2) => {
-        if (err2) return res.status(500).json({ success: false, mensaje: 'Error al registrar.' });
-        res.json({ success: true, mensaje: 'Asistencia creada de forma manual.' });
+      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, hora_salida, estado) VALUES (?, ?, ?, ?, ?)', 
+        [codigo, fecha, '07:30:00', hora_salida || '13:10:00', estado], (err2) => {
+          if (err2) return res.status(500).json({ success: false, mensaje: 'Error al registrar.' });
+          res.json({ success: true, mensaje: 'Asistencia creada de forma manual.' });
       });
     }
   });
@@ -288,7 +332,7 @@ app.get('/api/reportes/consolidado', (req, res) => {
 app.get('/api/reportes/historial-detallado', (req, res) => {
   const { codigo } = req.query;
   let query = `
-    SELECT a.fecha, a.hora, a.estado, u.codigo, u.nombre, u.materia_aula AS aula
+    SELECT a.fecha, a.hora, a.hora_salida, a.estado, u.codigo, u.nombre, u.materia_aula AS aula
     FROM asistencias a JOIN usuarios u ON a.usuario_codigo = u.codigo
   `;
   const params = [];
