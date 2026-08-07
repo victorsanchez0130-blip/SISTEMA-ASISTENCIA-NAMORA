@@ -1,4 +1,4 @@
-const express = require('express');
+const express = require('path') ? require('express') : require('express'); // Asegurado
 const path = require('path');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
@@ -36,15 +36,15 @@ function getHoraPeru() {
   return new Date().toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour12: false });
 }
 
-// Middleware de verificación de permisos para Modificaciones (CRUD y Ajustes Manuales)
+// Middleware de verificación de permisos
 function verificarPermisoAdmin(req, res, next) {
-  const userRol = (req.headers['x-user-rol'] || '').trim().toLowerCase();
-  if (['admin', 'director', 'directivo'].includes(userRol)) {
+  const userRol = (req.headers['x-user-rol'] || req.body.rol_editor || '').trim().toLowerCase();
+  if (['admin', 'director', 'directivo', 'auxiliar'].includes(userRol)) {
     next();
   } else {
     return res.status(403).json({ 
       success: false, 
-      mensaje: 'Acceso denegado: Solo el Administrador/Director tiene permisos para realizar modificaciones.' 
+      mensaje: 'Acceso denegado: No cuenta con los permisos necesarios.' 
     });
   }
 }
@@ -74,117 +74,68 @@ db.serialize(() => {
   const stmt = db.prepare("INSERT OR IGNORE INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)");
   stmt.run('DIR-SRN-001', 'Manuel Asencio Málaga', 'Director', 'Dirección General');
   stmt.finalize();
-
-  db.run(`
-    UPDATE usuarios 
-    SET rol = 'Director', nombre = 'Manuel Asencio Málaga', materia_aula = 'Dirección General'
-    WHERE codigo = 'DIR-SRN-001'
-  `, (err) => {
-    if (err) console.error("Error al verificar el rol del Director:", err.message);
-    else console.log("Rol de Director verificado y actualizado correctamente.");
-  });
 });
 
-// ----------------------------------------------------
-// CONTROL DE PROCESO DE ASISTENCIA (INICIAR Y CERRAR)
-// ----------------------------------------------------
-
+// Control de Jornada
 app.post('/api/asistencia/iniciar', (req, res) => {
   registroActivo = true;
   res.json({ success: true, mensaje: 'Registro de asistencia iniciado con éxito.' });
 });
 
 app.post('/api/asistencia/cerrar', (req, res) => {
-  if (!registroActivo) {
-    return res.status(400).json({ success: false, mensaje: 'El proceso de registro no se encuentra activo.' });
-  }
-
   registroActivo = false;
   const hoy = getFechaPeru();
 
   db.all("SELECT codigo FROM usuarios WHERE LOWER(rol) IN ('alumno', 'docente')", [], (err, usuarios) => {
-    if (err) {
-      return res.status(500).json({ success: false, mensaje: 'Error al consultar la lista de usuarios.' });
-    }
+    if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar usuarios.' });
 
     db.all("SELECT usuario_codigo FROM asistencias WHERE fecha = ?", [hoy], (err, marcaciones) => {
-      if (err) {
-        return res.status(500).json({ success: false, mensaje: 'Error al validar marcaciones.' });
-      }
+      if (err) return res.status(500).json({ success: false, mensaje: 'Error al validar marcaciones.' });
 
       const marcadosSet = new Set(marcaciones.map(m => m.usuario_codigo));
       const ausentes = usuarios.filter(u => !marcadosSet.has(u.codigo));
 
       if (ausentes.length === 0) {
-        return res.json({ 
-          success: true, 
-          mensaje: 'Registro cerrado correctamente. Todo el personal y alumnado registró su marcación.' 
-        });
+        return res.json({ success: true, mensaje: 'Registro cerrado. Todo el personal registró asistencia.' });
       }
 
       db.serialize(() => {
         db.run('BEGIN TRANSACTION');
         const stmt = db.prepare("INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, '00:00:00', 'FALTA')");
-        
         ausentes.forEach(u => stmt.run(u.codigo, hoy));
-        
         stmt.finalize();
         db.run('COMMIT', (errCommit) => {
-          if (errCommit) {
-            return res.status(500).json({ success: false, mensaje: 'Error al procesar faltas automáticas.' });
-          }
-          res.json({
-            success: true,
-            mensaje: `Asistencia cerrada. Se han asignado ${ausentes.length} faltas automáticas.`
-          });
+          if (errCommit) return res.status(500).json({ success: false, mensaje: 'Error al procesar faltas automáticas.' });
+          res.json({ success: true, mensaje: `Asistencia cerrada. Se asignaron ${ausentes.length} faltas automáticas.` });
         });
       });
     });
   });
 });
 
-// ----------------------------------------------------
-// AUTENTICACIÓN Y GESTIÓN DE USUARIOS (CRUD Y PERMISOS)
-// ----------------------------------------------------
-
+// Autenticación
 app.post('/api/auth/login', (req, res) => {
   const { codigo } = req.body;
-  if (!codigo) {
-    return res.status(400).json({ success: false, mensaje: 'Por favor ingrese un código.' });
-  }
+  if (!codigo) return res.status(400).json({ success: false, mensaje: 'Ingrese un código.' });
 
   db.get('SELECT * FROM usuarios WHERE UPPER(codigo) = UPPER(?)', [codigo.trim()], (err, usuario) => {
-    if (err) {
-      return res.status(500).json({ success: false, mensaje: 'Error interno en la base de datos.' });
-    }
-    if (!usuario) {
-      return res.status(401).json({ success: false, mensaje: 'Código no encontrado en el sistema.' });
-    }
+    if (err) return res.status(500).json({ success: false, mensaje: 'Error en la base de datos.' });
+    if (!usuario) return res.status(401).json({ success: false, mensaje: 'Código no encontrado.' });
     
     const rolNormalizado = (usuario.rol || '').trim().toLowerCase();
-
     let redirectUrl = 'escaner.html';
-    if (['admin', 'director', 'directivo', 'docente'].includes(rolNormalizado)) {
-      redirectUrl = 'dashboard.html';
-    } else if (rolNormalizado === 'auxiliar') {
-      redirectUrl = 'escaner.html';
-    }
+    if (['admin', 'director', 'directivo', 'docente'].includes(rolNormalizado)) redirectUrl = 'dashboard.html';
 
     res.json({
       success: true,
       mensaje: 'Acceso concedido',
       redirectUrl,
-      usuario: {
-        id: usuario.id,
-        codigo: usuario.codigo,
-        nombre: usuario.nombre,
-        rol: usuario.rol,
-        materia_aula: usuario.materia_aula
-      }
+      usuario
     });
   });
 });
 
+// Listado y CRUD de Usuarios
 app.get('/api/usuarios', (req, res) => {
   db.all('SELECT * FROM usuarios ORDER BY id DESC', [], (err, rows) => {
     if (err) return res.status(500).json([]);
@@ -194,66 +145,31 @@ app.get('/api/usuarios', (req, res) => {
 
 app.post('/api/usuarios', verificarPermisoAdmin, (req, res) => {
   const { nombre, rol, materia_aula } = req.body;
-
   let prefijo = 'ALU';
   const rolUpper = (rol || '').toUpperCase();
   if (rolUpper === 'DOCENTE') prefijo = 'DOC';
   if (rolUpper === 'AUXILIAR') prefijo = 'AUX';
   if (rolUpper === 'DIRECTOR' || rolUpper === 'ADMIN') prefijo = 'DIR';
 
-  const aleatorio = Math.floor(1000 + Math.random() * 9000);
-  const codigoGenerado = `${prefijo}-SRN-${aleatorio}`;
+  const codigoGenerado = `${prefijo}-SRN-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const queryInsert = `INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)`;
-  
-  db.run(queryInsert, [codigoGenerado, nombre, rol, materia_aula], function (err) {
-    if (err) {
-      return res.status(500).json({ success: false, mensaje: err.message });
-    }
-    res.json({
-      success: true,
-      codigo: codigoGenerado,
-      id: this.lastID
-    });
+  db.run(`INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)`, [codigoGenerado, nombre, rol, materia_aula], function (err) {
+    if (err) return res.status(500).json({ success: false, mensaje: err.message });
+    res.json({ success: true, codigo: codigoGenerado, id: this.lastID });
   });
 });
 
-app.put('/api/usuarios/:id', verificarPermisoAdmin, (req, res) => {
-  const { id } = req.params;
-  const { nombre, rol, materia_aula } = req.body;
-  db.run('UPDATE usuarios SET nombre = ?, rol = ?, materia_aula = ? WHERE id = ?', [nombre, rol, materia_aula, id], (err) => {
-    if (err) return res.status(500).json({ success: false, mensaje: 'Error al actualizar usuario.' });
-    res.json({ success: true, mensaje: 'Usuario actualizado correctamente.' });
-  });
-});
+// MARCACIÓN (Unificado para aceptar tanto /marcar como /registrar por compatibilidad)
+const procesarMarcacionLogica = (req, res) => {
+  // Soporte tanto para codigoQR como codigo
+  const codigoQR = req.body.codigoQR || req.body.codigo;
 
-app.delete('/api/usuarios/:id', verificarPermisoAdmin, (req, res) => {
-  const { id } = req.params;
-  db.get('SELECT codigo FROM usuarios WHERE id = ?', [id], (err, row) => {
-    if (row) {
-      db.run('DELETE FROM asistencias WHERE usuario_codigo = ?', [row.codigo]);
-      db.run('DELETE FROM usuarios WHERE id = ?', [id]);
-    }
-    res.json({ success: true, mensaje: 'Usuario y registros eliminados correctamente.' });
-  });
-});
-
-// ----------------------------------------------------
-// MARCACIÓN Y REPORTES DE ASISTENCIA
-// ----------------------------------------------------
-
-app.post('/api/asistencia/marcar', (req, res) => {
-  if (!registroActivo) {
-    return res.status(400).json({ 
-      success: false, 
-      mensaje: 'El registro de asistencia está cerrado. Inicie la jornada para permitir marcaciones.' 
-    });
+  if (!codigoQR) {
+    return res.status(400).json({ success: false, mensaje: 'Código no proporcionado.' });
   }
 
-  const { codigoQR } = req.body;
-  
-  db.get('SELECT * FROM usuarios WHERE UPPER(codigo) = UPPER(?)', [codigoQR], (err, usuario) => {
-    if (err || !usuario) return res.status(404).json({ success: false, mensaje: 'Código QR no registrado.' });
+  db.get('SELECT * FROM usuarios WHERE UPPER(codigo) = UPPER(?)', [codigoQR.trim()], (err, usuario) => {
+    if (err || !usuario) return res.status(404).json({ success: false, mensaje: 'Código QR no registrado en el sistema.' });
 
     const hoy = getFechaPeru();
     const horaActual = getHoraPeru();
@@ -262,12 +178,12 @@ app.post('/api/asistencia/marcar', (req, res) => {
       if (err) return res.status(500).json({ success: false, mensaje: 'Error al verificar marcación.' });
 
       if (yaMarco) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.json({ 
+          success: true, 
           duplicado: true,
-          mensaje: `Atención: ${usuario.nombre} ya registró su asistencia el día de hoy a las ${yaMarco.hora}.`,
-          usuario,
-          horaAnterior: yaMarco.hora
+          mensaje: `${usuario.nombre} ya registró asistencia hoy a las ${yaMarco.hora}.`,
+          persona: usuario,
+          usuario
         });
       }
 
@@ -275,11 +191,21 @@ app.post('/api/asistencia/marcar', (req, res) => {
 
       db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [usuario.codigo, hoy, horaActual, estado], (err) => {
         if (err) return res.status(500).json({ success: false, mensaje: 'Error al registrar marcación.' });
-        res.json({ success: true, mensaje: `Marcación [${estado}] registrada para ${usuario.nombre}`, usuario, hora: horaActual, estado });
+        res.json({ 
+          success: true, 
+          mensaje: `Marcación [${estado}] registrada para ${usuario.nombre}`, 
+          persona: usuario,
+          usuario, 
+          hora: horaActual, 
+          estado 
+        });
       });
     });
   });
-});
+};
+
+app.post('/api/asistencia/marcar', procesarMarcacionLogica);
+app.post('/api/asistencia/registrar', procesarMarcacionLogica);
 
 app.get('/api/asistencia/hoy', (req, res) => {
   const hoy = getFechaPeru();
@@ -287,149 +213,46 @@ app.get('/api/asistencia/hoy', (req, res) => {
     SELECT 
       a.usuario_codigo AS codigo,
       u.nombre,
-      u.materia_aula AS rol,
-      a.hora,
+      u.materia_aula AS aula,
+      u.rol,
+      a.hora AS hora_entrada,
+      '-' AS hora_salida,
       a.estado
     FROM asistencias a
     JOIN usuarios u ON a.usuario_codigo = u.codigo
     WHERE a.fecha = ?
     ORDER BY a.id DESC
   `;
-
   db.all(query, [hoy], (err, rows) => {
     if (err) return res.status(500).json([]);
     res.json(rows || []);
   });
 });
 
-app.get('/api/rankings', (req, res) => {
-  const query = `
-    SELECT 
-      u.codigo,
-      u.nombre,
-      u.rol,
-      u.materia_aula AS asignacion,
-      COALESCE(SUM(
-        CASE 
-          WHEN UPPER(a.estado) = 'PUNTUAL' THEN 2.0
-          WHEN UPPER(a.estado) = 'TARDE' OR UPPER(a.estado) = 'TARDANZA' THEN 1.0
-          WHEN UPPER(a.estado) = 'JUSTIFICADA' THEN 0.5 
-          WHEN UPPER(a.estado) = 'INJUSTIFICADA' OR UPPER(a.estado) = 'FALTA' THEN 0.0
-          ELSE 0
-        END
-      ), 0) AS puntaje_acumulado
-    FROM usuarios u
-    LEFT JOIN asistencias a ON u.codigo = a.usuario_codigo
-    WHERE LOWER(u.rol) IN ('docente', 'alumno')
-    GROUP BY u.id
-    ORDER BY puntaje_acumulado DESC
-  `;
+// Edición y corrección manual de asistencia
+app.post('/api/asistencia/editar', verificarPermisoAdmin, (req, res) => {
+  const { codigo, fecha, estado } = req.body;
+  if (!codigo || !fecha || !estado) return res.status(400).json({ success: false, mensaje: 'Datos incompletos.' });
 
-  db.all(query, [], (err, rows) => {
-    if (err) return res.status(500).json({ success: false, docentes: [], alumnos: [] });
-
-    const docentes = rows.filter(r => (r.rol || '').toLowerCase() === 'docente');
-    const alumnos = rows.filter(r => (r.rol || '').toLowerCase() === 'alumno');
-
-    res.json({
-      success: true,
-      docentes,
-      alumnos
-    });
-  });
-});
-
-// MODIFICACIÓN MANUAL DE ASISTENCIA (Conectado con el frontend reportes.js)
-app.post('/api/asistencia/manual', verificarPermisoAdmin, (req, res) => {
-  const { usuario_codigo, fecha, estado } = req.body;
-  if (!usuario_codigo || !fecha || !estado) {
-    return res.status(400).json({ success: false, mensaje: 'Faltan datos obligatorios.' });
-  }
-
-  db.get('SELECT id FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [usuario_codigo, fecha], (err, row) => {
-    if (err) return res.status(500).json({ success: false, mensaje: 'Error en la base de datos.' });
-
+  db.get('SELECT id FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [codigo, fecha], (err, row) => {
     if (row) {
       db.run('UPDATE asistencias SET estado = ? WHERE id = ?', [estado, row.id], (err2) => {
         if (err2) return res.status(500).json({ success: false, mensaje: 'Error al actualizar.' });
-        res.json({ success: true, mensaje: 'Asistencia actualizada correctamente.' });
+        res.json({ success: true, mensaje: 'Asistencia actualizada.' });
       });
     } else {
-      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [usuario_codigo, fecha, '07:30:00', estado], (err2) => {
+      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, estado) VALUES (?, ?, ?, ?)', [codigo, fecha, '07:30:00', estado], (err2) => {
         if (err2) return res.status(500).json({ success: false, mensaje: 'Error al registrar.' });
-        res.json({ success: true, mensaje: 'Asistencia registrada correctamente.' });
+        res.json({ success: true, mensaje: 'Asistencia creada de forma manual.' });
       });
     }
   });
 });
 
-// Auxiliares de fechas para consolidado
-function obtenerLunesISO(valorWeek) {
-  if (!valorWeek || !valorWeek.includes('-W')) return null;
-  const partes = valorWeek.split('-W');
-  const anio = parseInt(partes[0], 10);
-  const semana = parseInt(partes[1], 10);
-
-  const simple = new Date(anio, 0, 4);
-  const day = simple.getDay() || 7;
-  simple.setDate(simple.getDate() - day + 1);
-  simple.setDate(simple.getDate() + (semana - 1) * 7);
-
-  const a = simple.getFullYear();
-  const m = String(simple.getMonth() + 1).padStart(2, '0');
-  const d = String(simple.getDate()).padStart(2, '0');
-  return `${a}-${m}-${d}`;
-}
-
-function sumarDiasFecha(fechaStr, dias) {
-  const partes = fechaStr.split('-');
-  const f = new Date(parseInt(partes[0], 10), parseInt(partes[1], 10) - 1, parseInt(partes[2], 10));
-  f.setDate(f.getDate() + dias);
-  const a = f.getFullYear();
-  const m = String(f.getMonth() + 1).padStart(2, '0');
-  const d = String(f.getDate()).padStart(2, '0');
-  return `${a}-${m}-${d}`;
-}
-
 app.get('/api/reportes/consolidado', (req, res) => {
-  let { tipo, fecha } = req.query;
-
-  if (!fecha) {
-    fecha = getFechaPeru();
-  }
-
-  let fechaInicio = fecha;
-  let fechaFin = fecha;
-
-  if (tipo === 'Semanal') {
-    const lunesStr = obtenerLunesISO(fecha);
-    if (lunesStr) {
-      fechaInicio = lunesStr;
-      fechaFin = sumarDiasFecha(lunesStr, 4);
-    }
-  } else if (tipo === 'Mensual') {
-    const partes = fecha.split('-');
-    if (partes.length >= 2) {
-      const anio = parseInt(partes[0], 10);
-      const mes = parseInt(partes[1], 10);
-      const ultimoDia = new Date(anio, mes, 0).getDate();
-      fechaInicio = `${partes[0]}-${String(mes).padStart(2, '0')}-01`;
-      fechaFin = `${partes[0]}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
-    }
-  }
-
-  db.all("SELECT * FROM usuarios WHERE LOWER(rol) = 'alumno' OR rol IS NULL OR rol = ''", [], (err, usuarios) => {
+  db.all("SELECT * FROM usuarios WHERE LOWER(rol) = 'alumno' OR rol IS NULL", [], (err, usuarios) => {
     if (err) return res.status(500).json([]);
-
-    let sqlAsistencias = 'SELECT * FROM asistencias';
-    let params = [];
-
-    if (fechaInicio && fechaFin) {
-      sqlAsistencias += ' WHERE fecha >= ? AND fecha <= ?';
-      params = [fechaInicio, fechaFin];
-    }
-
-    db.all(sqlAsistencias, params, (err, asistencias) => {
+    db.all("SELECT * FROM asistencias", [], (err, asistencias) => {
       if (err) return res.status(500).json([]);
 
       const consolidado = usuarios.map(u => {
@@ -437,14 +260,12 @@ app.get('/api/reportes/consolidado', (req, res) => {
         let asistenciasCount = 0, tardanzas = 0, fJustificadas = 0, fInjustificadas = 0;
 
         marcaciones.forEach(m => {
-          const estado = (m.estado || '').toUpperCase();
-          if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') asistenciasCount++;
-          else if (estado === 'TARDANZA' || estado === 'TARDE') tardanzas++;
-          else if (estado === 'JUSTIFICADA') fJustificadas++;
-          else if (estado === 'INJUSTIFICADA' || estado === 'FALTA') fInjustificadas++;
+          const est = (m.estado || '').toUpperCase();
+          if (est === 'PUNTUAL' || est === 'ASISTENCIA') asistenciasCount++;
+          else if (est === 'TARDANZA' || est === 'TARDE') tardanzas++;
+          else if (est === 'JUSTIFICADA') fJustificadas++;
+          else if (est === 'INJUSTIFICADA' || est === 'FALTA') fInjustificadas++;
         });
-
-        const puntajeTotal = (asistenciasCount * 2.0) + (tardanzas * 1.0) + (fJustificadas * 0.5);
 
         return {
           id: u.id,
@@ -456,44 +277,25 @@ app.get('/api/reportes/consolidado', (req, res) => {
           tardanzas,
           fJustificadas,
           fInjustificadas,
-          puntajeTotal
+          puntajeTotal: (asistenciasCount * 2.0) + (tardanzas * 1.0)
         };
       });
-
       res.json(consolidado);
     });
   });
 });
 
 app.get('/api/reportes/historial-detallado', (req, res) => {
-  const { codigo, fechaInicio, fechaFin } = req.query;
-
+  const { codigo } = req.query;
   let query = `
-    SELECT 
-      a.fecha,
-      a.hora,
-      a.estado,
-      u.codigo,
-      u.nombre,
-      u.materia_aula AS aula
-    FROM asistencias a
-    JOIN usuarios u ON a.usuario_codigo = u.codigo
-    WHERE 1=1
+    SELECT a.fecha, a.hora, a.estado, u.codigo, u.nombre, u.materia_aula AS aula
+    FROM asistencias a JOIN usuarios u ON a.usuario_codigo = u.codigo
   `;
-  let params = [];
-
+  const params = [];
   if (codigo && codigo !== 'todos') {
-    query += ` AND a.usuario_codigo = ?`;
+    query += ` WHERE a.usuario_codigo = ?`;
     params.push(codigo);
   }
-
-  if (fechaInicio && fechaFin) {
-    query += ` AND a.fecha >= ? AND a.fecha <= ?`;
-    params.push(fechaInicio, fechaFin);
-  }
-
-  query += ` ORDER BY a.fecha DESC, a.hora DESC`;
-
   db.all(query, params, (err, rows) => {
     if (err) return res.status(500).json([]);
     res.json(rows || []);
@@ -501,5 +303,5 @@ app.get('/api/reportes/historial-detallado', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor optimizado ejecutándose correctamente en el puerto ${PORT}`);
+  console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
