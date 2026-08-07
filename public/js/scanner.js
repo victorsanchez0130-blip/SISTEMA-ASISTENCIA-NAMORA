@@ -1,6 +1,6 @@
 /**
  * Control de Asistencia QR - I.E. SANTA ROSA - NAMORA
- * Lógica modular para scanner.js
+ * Lógica modular para scanner.js (Versión Corregida)
  */
 
 // ====================================================
@@ -221,15 +221,10 @@ function iniciarCamara() {
   }
 }
 
-/**
- * Filtro estricto que intercepta la lectura cruda de la librería de la cámara
- * y descarta disparos repetidos en menos de 3.5 segundos.
- */
 function manejarEscaneoControlado(codigoLeido) {
   const ahora = Date.now();
   const codigoLimpio = codigoLeido.trim();
 
-  // Si ya se está procesando una petición o si el mismo código se leyó hace menos de 3.5 segundos, se ignora por completo
   if (procesandoEscaneoQR) return;
   if (codigoLimpio === ultimoCodigoEscaneado && (ahora - tiempoUltimoEscaneo < 3500)) {
     return; 
@@ -309,7 +304,6 @@ async function procesarMarcacion(codigo) {
     iniciarRegistro();
   }
 
-  // Pausar hardware inmediatamente para evitar capturas repetidas o en bucle
   if (html5QrcodeScanner && camaraEncendida) {
     await html5QrcodeScanner.stop();
     camaraEncendida = false;
@@ -338,7 +332,7 @@ async function procesarMarcacion(codigo) {
       cargarConsolidado();
     } else {
       mostrarNotificacion(`❌ Error: ${res.mensaje || 'No se pudo guardar la marcación.'}`, "bg-rose-100 text-rose-800 border-rose-300");
-      iniciarCamara(); // Reactivar cámara de inmediato si el servidor rechazó el proceso
+      iniciarCamara(); 
     }
   } catch (error) {
     console.error("Error al procesar la marcación con el backend:", error);
@@ -354,7 +348,6 @@ async function procesarMarcacion(codigo) {
     mostrarTarjetaResultado(fallbackData);
     mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
   } finally {
-    // Liberación del bloqueo de concurrencia
     setTimeout(() => {
       procesandoEscaneoQR = false;
     }, 3000);
@@ -362,23 +355,46 @@ async function procesarMarcacion(codigo) {
 }
 
 // ====================================================
-// MODALES Y VENTANAS EMERGENTES (NUEVO & ACTUALIZADO)
+// MODALES Y VENTANAS EMERGENTES (CORREGIDO DE MANERA ROBUSTA)
 // ====================================================
 
 function abrirModalAsistencia(data) {
   const modal = document.getElementById('modal-asistencia');
   if (!modal) return;
 
-  // Extracción robusta de datos según el esquema de respuesta
-  const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data;
+  // Extracción jerárquica para soportar anidaciones del backend
+  const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data.datos || data;
 
-  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || data.nombre_completo;
+  // Extracción del Nombre Completo
+  const nombre = entidad.nombre_completo || 
+                 entidad.nombres_apellidos ||
+                 (entidad.nombre && entidad.apellido ? `${entidad.nombre} ${entidad.apellido}` : null) ||
+                 entidad.nombre || 
+                 entidad.nombres || 
+                 data.nombre || 
+                 'Usuario Registrado';
+
   const codigo = entidad.codigo || data.codigo || '-';
-  const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || 'Asignación Regular';
-  
+
+  // Extracción dinámica del Grado/Sección o Asignación Profesional
+  let aula = 'Asignación Regular';
+  if (entidad.grado_seccion) {
+    aula = entidad.grado_seccion;
+  } else if (entidad.grado && entidad.seccion) {
+    aula = `${entidad.grado} ${entidad.seccion}`;
+  } else if (entidad.aula) {
+    aula = entidad.aula;
+  } else if (entidad.materia_aula) {
+    aula = entidad.materia_aula;
+  } else if (entidad.asignacion) {
+    aula = entidad.asignacion;
+  } else if (entidad.cargo || entidad.rol) {
+    aula = entidad.cargo || entidad.rol;
+  }
+
   const horaFormateada = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
   
-  // Inyección de textos limpios
+  // Asignación limpia al DOM
   document.getElementById('modal-nombre').innerText = nombre;
   document.getElementById('modal-codigo').innerText = codigo;
   document.getElementById('modal-aula').innerText = aula;
@@ -388,7 +404,6 @@ function abrirModalAsistencia(data) {
   const icon = document.getElementById('modal-icon');
   const badgeEstado = document.getElementById('modal-estado');
 
-  // Aplicación estética basada en el Modo de Registro
   if (modoActual === 'SALIDA') {
     if (iconContainer) iconContainer.className = "w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-indigo-500/20 mb-4";
     if (icon) icon.className = "fa-solid fa-right-from-bracket";
@@ -400,12 +415,11 @@ function abrirModalAsistencia(data) {
     if (iconContainer) iconContainer.className = "w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/20 mb-4";
     if (icon) icon.className = "fa-solid fa-check";
     if (badgeEstado) {
-      badgeEstado.innerText = "PUNTUAL";
+      badgeEstado.innerText = data.estado || "PUNTUAL";
       badgeEstado.className = "font-black px-2 py-0.5 rounded-md text-[10px] bg-emerald-100 text-emerald-800";
     }
   }
 
-  // Quitar clases de ocultamiento y activar transiciones fluidas de CSS/Tailwind
   modal.classList.remove('hidden');
   setTimeout(() => {
     modal.classList.remove('opacity-0', 'pointer-events-none');
@@ -417,13 +431,12 @@ function cerrarModalAsistencia() {
   const modal = document.getElementById('modal-asistencia');
   if (!modal) return;
 
-  // Añadir animaciones de salida visual
   modal.classList.add('opacity-0', 'pointer-events-none');
   modal.firstElementChild?.classList.add('scale-95');
 
   setTimeout(() => {
     modal.classList.add('hidden');
-    iniciarCamara(); // Reactivación segura y automática del flujo de video
+    iniciarCamara(); 
   }, 300);
 }
 
@@ -431,11 +444,23 @@ function mostrarTarjetaResultado(data) {
   const card = document.getElementById('resultado-card');
   if (!card) return;
 
-  const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data;
+  const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data.datos || data;
 
-  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || data.nombre_completo;
+  const nombre = entidad.nombre_completo || 
+                 (entidad.nombre && entidad.apellido ? `${entidad.nombre} ${entidad.apellido}` : null) ||
+                 entidad.nombre || 
+                 entidad.nombres || 
+                 data.nombre || 
+                 'Usuario Registrado';
+                 
   const codigo = entidad.codigo || data.codigo || '-';
-  const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || 'Asignación Regular';
+  
+  let aula = 'Asignación Regular';
+  if (entidad.grado_seccion) aula = entidad.grado_seccion;
+  else if (entidad.grado && entidad.seccion) aula = `${entidad.grado} ${entidad.seccion}`;
+  else if (entidad.aula) aula = entidad.aula;
+  else if (entidad.asignacion) aula = entidad.asignacion;
+  else if (entidad.cargo || entidad.rol) aula = entidad.cargo || entidad.rol;
 
   const esSalida = modoActual === 'SALIDA';
   const colorBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -470,6 +495,10 @@ function mostrarNotificacion(msj, clases) {
     notif.classList.add('hidden');
   }, 4000);
 }
+
+// ====================================================
+// VISTAS E HISTORIAL DE TABLAS
+// ====================================================
 
 async function cargarAsistenciasHoy() {
   const tbody = document.getElementById('tabla-asistencias-hoy');
@@ -550,7 +579,6 @@ function obtenerFechaHoy() {
   return hoy.toISOString().split('T')[0];
 }
 
-/* Nota histórica: Cálculo basado en el año corriente 2026 */
 function obtenerSemanaActual() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
