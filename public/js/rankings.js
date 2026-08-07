@@ -6,28 +6,38 @@ document.addEventListener('DOMContentLoaded', cargarRankings);
 async function cargarRankings() {
   try {
     const res = await fetch('/api/rankings');
-    if (!res.ok) return;
+    if (!res.ok) {
+      throw new Error('Error al conectar con el servidor de rankings');
+    }
 
     const data = await res.json();
-    if (!data.success) return;
 
-    listaDocentes = data.docentes || [];
-    listaAlumnos = data.alumnos || [];
+    // Adaptabilidad: soporta tanto si el JSON viene envuelto en { success: true, docentes: [...] } 
+    // como si el backend devuelve directamente los arreglos o un objeto contenedor.
+    const docentesData = data.docentes || data.dataDocentes || (Array.isArray(data) ? data : []);
+    const alumnosData = data.alumnos || data.dataAlumnos || [];
+
+    listaDocentes = Array.isArray(docentesData) ? docentesData : [];
+    listaAlumnos = Array.isArray(alumnosData) ? alumnosData : [];
 
     // Renderizar Tabla Docentes
     const tbodyDocentes = document.getElementById('tbodyRankingDocentes');
     if (tbodyDocentes) {
       tbodyDocentes.innerHTML = '';
       if (listaDocentes.length === 0) {
-        tbodyDocentes.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 font-medium">No hay docentes registrados</td></tr>';
+        tbodyDocentes.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 font-medium">No hay docentes registrados en el ranking</td></tr>';
       } else {
         listaDocentes.forEach((d, index) => {
+          const nombre = d.nombre || d.nombre_completo || 'Sin nombre';
+          const asignacion = d.asignacion || d.materia || d.area || '-';
+          const puntaje = d.puntaje_acumulado || d.puntaje || d.puntos || 0;
+
           tbodyDocentes.innerHTML += `
             <tr class="border-b border-slate-100 text-xs hover:bg-slate-50">
               <td class="p-3 font-bold text-slate-700">#${index + 1}</td>
-              <td class="p-3 font-medium text-slate-800">${d.nombre}</td>
-              <td class="p-3 text-slate-600">${d.asignacion || '-'}</td>
-              <td class="p-3 font-bold text-sky-600">${d.puntaje_acumulado || 0} pts</td>
+              <td class="p-3 font-medium text-slate-800">${nombre}</td>
+              <td class="p-3 text-slate-600">${asignacion}</td>
+              <td class="p-3 font-bold text-sky-600">${puntaje} pts</td>
             </tr>
           `;
         });
@@ -39,15 +49,19 @@ async function cargarRankings() {
     if (tbodyAlumnos) {
       tbodyAlumnos.innerHTML = '';
       if (listaAlumnos.length === 0) {
-        tbodyAlumnos.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 font-medium">No hay alumnos registrados</td></tr>';
+        tbodyAlumnos.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 font-medium">No hay alumnos registrados en el ranking</td></tr>';
       } else {
         listaAlumnos.forEach((a, index) => {
+          const nombre = a.nombre || a.nombre_completo || 'Sin nombre';
+          const asignacion = a.asignacion || a.grado || a.aula || '-';
+          const puntaje = a.puntaje_acumulado || a.puntaje || a.puntos || 0;
+
           tbodyAlumnos.innerHTML += `
             <tr class="border-b border-slate-100 text-xs hover:bg-slate-50">
               <td class="p-3 font-bold text-slate-700">#${index + 1}</td>
-              <td class="p-3 font-medium text-slate-800">${a.nombre}</td>
-              <td class="p-3 text-slate-600">${a.asignacion || '-'}</td>
-              <td class="p-3 font-bold text-emerald-600">${a.puntaje_acumulado || 0} pts</td>
+              <td class="p-3 font-medium text-slate-800">${nombre}</td>
+              <td class="p-3 text-slate-600">${asignacion}</td>
+              <td class="p-3 font-bold text-emerald-600">${puntaje} pts</td>
             </tr>
           `;
         });
@@ -56,6 +70,10 @@ async function cargarRankings() {
 
   } catch (error) {
     console.error('Error al cargar los rankings:', error);
+    const tbodyDocentes = document.getElementById('tbodyRankingDocentes');
+    const tbodyAlumnos = document.getElementById('tbodyRankingAlumnos');
+    if (tbodyDocentes) tbodyDocentes.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-rose-500 font-medium">Error al cargar datos del servidor</td></tr>';
+    if (tbodyAlumnos) tbodyAlumnos.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-rose-500 font-medium">Error al cargar datos del servidor</td></tr>';
   }
 }
 
