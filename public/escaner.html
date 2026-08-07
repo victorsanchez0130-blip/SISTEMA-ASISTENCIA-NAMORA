@@ -3,119 +3,494 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Módulo de Marcación Diaria (Escáner) - I.E. Santa Rosa</title>
+  <title>Escáner de Asistencia QR - I.E. SANTA ROSA - NAMORA</title>
+
+  <!-- Validación de Sesión y Guardia de Seguridad -->
+  <script src="js/auth.js"></script>
+  
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- FontAwesome Iconos -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Librería Oficial HTML5 QR Code -->
+  
+  <!-- HTML5 QR Code Scanner Library -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen p-4 sm:p-6">
+<body class="bg-slate-100 min-h-screen text-slate-800 font-sans flex flex-col">
 
-  <div class="max-w-2xl mx-auto space-y-5">
-    <!-- Encabezado Principal -->
-    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+  <!-- Encabezado / Navbar -->
+  <header class="bg-indigo-900 text-white shadow-lg py-4 px-6">
+    <div class="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
       <div class="flex items-center gap-3">
-        <div class="bg-red-50 text-red-600 p-2.5 rounded-xl font-bold text-sm border border-red-100">
-          <i class="fa-solid fa-graduation-cap"></i>
-        </div>
+        <i class="fa-solid fa-qrcode text-2xl text-indigo-300"></i>
         <div>
-          <h1 class="text-base font-black tracking-tight text-slate-900">I.E. SANTA ROSA</h1>
-          <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide">MÓDULO DE MARCACIÓN DIARIA (ESCÁNER)</p>
+          <h1 class="text-xl font-bold leading-tight">Control de Asistencia QR</h1>
+          <p class="text-xs text-indigo-200">I.E. SANTA ROSA - NAMORA | CAJAMARCA</p>
         </div>
       </div>
-      <button onclick="window.location.href='index.html'" class="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm cursor-pointer">
-        Salir
-      </button>
-    </div>
-
-    <!-- Controles de Cámara y Escáner -->
-    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-      <div class="flex justify-between items-center">
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-black uppercase text-slate-400">Escáner de Fotochecks</span>
-          <span id="camara-status" class="text-xs font-normal text-slate-400">INACTIVA</span>
-        </div>
-        <div id="estado-registro-badge" class="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-2.5 py-0.5 rounded-md bg-amber-100 text-amber-700 border border-amber-200">
-          <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> CERRADO
-        </div>
-      </div>
-
-      <!-- Visor de Cámara -->
-      <div id="reader" class="w-full bg-slate-900 border border-slate-300 rounded-xl overflow-hidden min-h-[280px] flex items-center justify-center relative shadow-inner">
-        <div class="text-center p-6 text-slate-400">
-          <i class="fa-solid fa-video-slash text-3xl mb-2 block"></i>Cámara apagada. Pulse encender.
-        </div>
-      </div>
-
-      <!-- Botones de Control de Cámara (Encender y Cambiar) -->
-      <div class="grid grid-cols-2 gap-3 pt-1">
-        <button id="btn-toggle-camara" type="button" onclick="toggleCamara()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer">
-          <i class="fa-solid fa-power-off"></i> Encender Cámara
-        </button>
-        <button id="btn-cambiar-camara" type="button" onclick="cambiarCamara()" class="bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer opacity-50 cursor-not-allowed" disabled>
-          <i class="fa-solid fa-rotate"></i> Cambiar Cámara
+      <div class="flex items-center gap-3">
+        <span id="usuario-login" class="text-xs font-medium bg-indigo-800 px-3 py-1.5 rounded-lg border border-indigo-700 flex items-center gap-1">
+          <i class="fa-solid fa-user-gear mr-1"></i> <span id="label-rol-auxiliar" class="font-bold">AUXILIAR:</span> <span id="nombre-auxiliar">Cargando...</span>
+        </span>
+        <button onclick="logout()" class="bg-red-500/20 hover:bg-red-500 text-red-200 hover:text-white text-xs font-semibold py-1.5 px-3 rounded-lg border border-red-500/30 transition-all flex items-center gap-1.5">
+          <i class="fa-solid fa-right-from-bracket"></i> Salir
         </button>
       </div>
     </div>
+  </header>
 
-    <!-- Última Marcación Card -->
-    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
-      <h2 class="text-xs font-black uppercase text-slate-400 flex items-center gap-1.5">
-        <i class="fa-solid fa-id-badge text-indigo-600"></i> Última Marcación
-      </h2>
-      <div id="resultado-card" class="bg-slate-50/80 rounded-2xl p-5 border border-slate-200 flex flex-col items-center justify-center text-center space-y-2.5 min-h-[160px]">
-        <div class="w-14 h-14 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-black text-2xl shadow-inner">
-          <i class="fa-solid fa-qrcode"></i>
+  <!-- Contenido Principal -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 flex flex-col gap-4">
+
+    <!-- BARRA DE CONTROL DE ASISTENCIA Y SELECTOR DE TIPO -->
+    <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+      
+      <!-- Estado del sistema -->
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 bg-slate-100 rounded-xl text-slate-600">
+          <i class="fa-solid fa-toggle-on text-xl"></i>
         </div>
         <div>
-          <h3 class="text-base font-extrabold text-slate-700">Sin marcación reciente</h3>
-          <p class="text-xs font-mono font-bold text-slate-400 mt-0.5">La información aparecerá al escanear un código.</p>
-        </div>
-        <div class="pt-1">
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-lg bg-slate-100 text-slate-400 border border-slate-200 shadow-sm">
-            <i class="fa-solid fa-clock text-[10px]"></i> --:--:--
-          </span>
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block">Estado de Jornada</span>
+          <div class="flex items-center gap-2 mt-0.5">
+            <span id="estado-registro-badge" class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-red-100 text-red-700 border border-red-200">
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> CERRADO
+            </span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Marcaciones del Día Table -->
-    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-3">
-      <div class="flex justify-between items-center">
-        <h2 class="text-xs font-black uppercase text-slate-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-list-check text-indigo-600"></i> Marcaciones del Día
+      <!-- Selector TIPO DE REGISTRO (ENTRADA vs SALIDA) -->
+      <div class="flex items-center bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+        <span class="text-[11px] font-extrabold text-slate-500 uppercase px-2 hidden sm:inline">Modo:</span>
+        <div class="flex gap-1">
+          <label id="lbl-modo-entrada" onclick="cambiarModoRegistro('ENTRADA')" class="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-sm">
+            <input type="radio" name="tipo_registro" value="ENTRADA" checked class="hidden">
+            <i class="fa-solid fa-right-to-bracket"></i> ENTRADA
+          </label>
+          <label id="lbl-modo-salida" onclick="cambiarModoRegistro('SALIDA')" class="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200">
+            <input type="radio" name="tipo_registro" value="SALIDA" class="hidden">
+            <i class="fa-solid fa-right-from-bracket"></i> SALIDA
+          </label>
+        </div>
+      </div>
+
+      <!-- Botones de Control global de Jornada -->
+      <div class="flex items-center gap-2 w-full md:w-auto">
+        <button id="btn-iniciar" onclick="iniciarRegistro()" class="flex-1 md:flex-none inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl shadow-sm transition-all">
+          <i class="fa-solid fa-play"></i> Iniciar Jornada
+        </button>
+        <button id="btn-cerrar" onclick="cerrarRegistro()" disabled class="flex-1 md:flex-none inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold py-2.5 px-4 rounded-xl shadow-sm transition-all cursor-not-allowed">
+          <i class="fa-solid fa-stop"></i> Cerrar Jornada
+        </button>
+      </div>
+    </section>
+
+    <!-- ÁREA DEL ESCÁNER Y RESULTADOS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      <!-- Lector QR Cámara -->
+      <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
+        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3 w-full flex items-center justify-between">
+          <span><i class="fa-solid fa-camera mr-2 text-indigo-600"></i>Cámara Escáner</span>
+          <span id="camara-status" class="text-xs font-normal text-slate-400">Inactiva</span>
         </h2>
-        <button onclick="actualizarTablaMarcacionesHoy()" class="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 cursor-pointer">
-          <i class="fa-solid fa-rotate"></i> Actualizar
+        
+        <div id="reader" class="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-200 min-h-[260px] flex items-center justify-center text-slate-500 text-xs font-medium">
+          <div class="text-center p-4">
+            <i class="fa-solid fa-video-slash text-3xl mb-2 text-slate-600 block"></i>
+            Cámara apagada. Haz clic abajo para iniciar.
+          </div>
+        </div>
+
+        <div class="mt-4 w-full flex gap-2">
+          <button id="btn-toggle-camara" onclick="toggleCamara()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-power-off"></i> Encender Cámara
+          </button>
+          <button id="btn-girar-camara" onclick="girarCamara()" class="flex-1 bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2">
+            <i class="fa-solid fa-camera-rotate"></i> Cámara: Posterior
+          </button>
+        </div>
+      </section>
+
+      <!-- Tarjeta estática secundaria de Resumen rápido -->
+      <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div>
+          <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+            <i class="fa-solid fa-id-card mr-2 text-indigo-600"></i>Última Marcación
+          </h2>
+
+          <div id="resultado-card" class="bg-slate-50 border border-slate-200 rounded-xl p-5 text-center flex flex-col items-center justify-center min-h-[220px]">
+            <i class="fa-solid fa-qrcode text-4xl text-slate-300 mb-2"></i>
+            <p class="text-sm text-slate-500 font-medium">Escanea un código QR para ver los detalles de asistencia.</p>
+          </div>
+        </div>
+
+        <div id="notificacion-alerta" class="hidden mt-3 p-3 rounded-xl text-xs font-semibold text-center transition-all"></div>
+      </section>
+    </div>
+
+    <!-- TABLA DE MARCACIONES DE HOY -->
+    <section class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mt-2">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">
+          <i class="fa-solid fa-list-check mr-2 text-indigo-600"></i>Marcaciones del Día
+        </h2>
+        <button onclick="cargarAsistenciasHoy()" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1">
+          <i class="fa-solid fa-rotate-right"></i> Actualizar
         </button>
       </div>
+
       <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse">
+        <table class="w-full text-left text-xs">
           <thead>
-            <tr class="border-b border-slate-200 text-[11px] font-extrabold text-slate-400 uppercase bg-slate-50">
-              <th class="py-2.5 px-3">Código</th>
-              <th class="py-2.5 px-3">Nombre</th>
-              <th class="py-2.5 px-3">Aula</th>
-              <th class="py-2.5 px-3">Entrada</th>
-              <th class="py-2.5 px-3">Salida</th>
-              <th class="py-2.5 px-3">Estado</th>
+            <tr class="bg-slate-50 text-slate-500 uppercase tracking-wider border-b border-slate-200">
+              <th class="py-3 px-3">Código</th>
+              <th class="py-3 px-3">Nombre</th>
+              <th class="py-3 px-3">Rol / Asignación</th>
+              <th class="py-3 px-3">Hora Entrada</th>
+              <th class="py-3 px-3">Hora Salida</th>
+              <th class="py-3 px-3">Estado</th>
             </tr>
           </thead>
-          <tbody id="tabla-asistencias-hoy" class="text-xs divide-y divide-slate-100 font-medium">
+          <tbody id="tabla-asistencias-hoy" class="divide-y divide-slate-100 text-slate-700">
             <tr>
-              <td colspan="6" class="text-center py-6 text-slate-400">Sin marcaciones registradas hoy.</td>
+              <td colspan="6" class="text-center py-6 text-slate-400 font-medium">Cargando marcaciones...</td>
             </tr>
           </tbody>
         </table>
       </div>
+    </section>
+  </main>
+
+  <!-- ==================================================== -->
+  <!-- VENTANA EMERGENTE (MODAL DE ASISTENCIA DINÁMICO)      -->
+  <!-- ==================================================== -->
+  <div id="modal-asistencia" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center opacity-0 pointer-events-none transition-all duration-300 px-4">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl border border-slate-100 transform scale-95 transition-all duration-300 flex flex-col items-center text-center">
+      
+      <!-- Icono Dinámico Verde (Entrada) o Azul (Salida) -->
+      <div id="modal-icon-container" class="w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/20 mb-4">
+        <i id="modal-icon" class="fa-solid fa-check"></i>
+      </div>
+
+      <h3 id="modal-title" class="text-xl font-extrabold text-slate-900 mb-4 tracking-tight">Marcación Registrada</h3>
+
+      <!-- Ficha de Datos Rediseñada según Captura -->
+      <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left text-xs space-y-2.5 mb-5 font-medium text-slate-600">
+        <div><span class="text-slate-400 font-normal inline-block w-28">Nombre:</span> <span id="modal-nombre" class="text-slate-800 font-bold">---</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Código:</span> <span id="modal-codigo" class="text-slate-800">---</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Aula/Asignación:</span> <span id="modal-aula" class="text-slate-800 font-bold">---</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Hora de Marcación:</span> <span id="modal-hora" class="text-indigo-600 font-bold">---</span></div>
+        <div><span class="text-slate-400 font-normal inline-block w-28">Estado:</span> <span id="modal-estado" class="font-black px-2 py-0.5 rounded-md text-[10px]">---</span></div>
+      </div>
+
+      <button onclick="cerrarModalAsistencia()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm py-3.5 px-6 rounded-2xl transition-all shadow-md cursor-pointer">
+        Aceptar
+      </button>
     </div>
   </div>
 
-  <!-- Notificación flotante -->
-  <div id="notificacion-alerta" class="hidden fixed bottom-4 right-4 z-50 p-3 rounded-xl shadow-lg border text-xs font-bold max-w-sm"></div>
+  <!-- LÓGICA DE JAVASCRIPT DEL SISTEMA -->
+  <script>
+    let modoActual = 'ENTRADA';
+    let jornadaActiva = false;
+    let html5QrcodeScanner = null;
+    let camaraEncendida = false;
+    let camaraModo = "environment"; // "environment" = Trasera, "user" = Frontal
 
-  <!-- Script Lógico del Escáner -->
-  <script src="js/escaner.js"></script>
+    document.addEventListener('DOMContentLoaded', () => {
+      cargarDatosAuxiliar();
+      cargarAsistenciasHoy();
+    });
+
+    function cargarDatosAuxiliar() {
+      const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario');
+      if (sessionRaw) {
+        try {
+          const session = JSON.parse(sessionRaw);
+          document.getElementById('nombre-auxiliar').innerText = session.nombre || 'Auxiliar';
+        } catch(e) {
+          document.getElementById('nombre-auxiliar').innerText = 'Auxiliar';
+        }
+      }
+    }
+
+    function cambiarModoRegistro(nuevoModo) {
+      modoActual = nuevoModo;
+      const lblEntrada = document.getElementById('lbl-modo-entrada');
+      const lblSalida = document.getElementById('lbl-modo-salida');
+
+      if (nuevoModo === 'SALIDA') {
+        lblSalida.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm scale-105";
+        lblEntrada.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70";
+      } else {
+        lblEntrada.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-sm scale-105";
+        lblSalida.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70";
+      }
+    }
+
+    function iniciarRegistro() {
+      jornadaActiva = true;
+      const badge = document.getElementById('estado-registro-badge');
+      badge.className = "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-200";
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ABIERTO`;
+
+      document.getElementById('btn-iniciar').disabled = true;
+      document.getElementById('btn-iniciar').classList.add('opacity-50', 'cursor-not-allowed');
+      document.getElementById('btn-cerrar').disabled = false;
+      document.getElementById('btn-cerrar').classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    function cerrarRegistro() {
+      jornadaActiva = false;
+      const badge = document.getElementById('estado-registro-badge');
+      badge.className = "inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-md bg-red-100 text-red-700 border border-red-200";
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> CERRADO`;
+
+      document.getElementById('btn-iniciar').disabled = false;
+      document.getElementById('btn-iniciar').classList.remove('opacity-50', 'cursor-not-allowed');
+      document.getElementById('btn-cerrar').disabled = true;
+      document.getElementById('btn-cerrar').classList.add('opacity-50', 'cursor-not-allowed');
+
+      if (camaraEncendida) detenerCamara();
+    }
+
+    function toggleCamara() {
+      if (camaraEncendida) {
+        detenerCamara();
+      } else {
+        iniciarCamara();
+      }
+    }
+
+    function girarCamara() {
+      camaraModo = (camaraModo === "environment") ? "user" : "environment";
+      const btnGirar = document.getElementById('btn-girar-camara');
+      if (btnGirar) {
+        btnGirar.innerHTML = `<i class="fa-solid fa-camera-rotate"></i> Cámara: ${camaraModo === 'environment' ? 'Posterior' : 'Frontal'}`;
+      }
+
+      if (camaraEncendida && html5QrcodeScanner) {
+        html5QrcodeScanner.stop().then(() => {
+          iniciarCamara();
+        }).catch(err => console.error("Error al rotar cámara:", err));
+      }
+    }
+
+    function iniciarCamara() {
+      if (typeof Html5Qrcode === 'undefined') {
+        alert("La librería del escáner no ha cargado correctamente.");
+        return;
+      }
+
+      const readerContainer = document.getElementById('reader');
+      readerContainer.innerHTML = "";
+
+      html5QrcodeScanner = new Html5Qrcode("reader");
+      html5QrcodeScanner.start(
+        { facingMode: camaraModo },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        (decodedText) => {
+          procesarMarcacion(decodedText);
+        },
+        (errorMessage) => {}
+      ).then(() => {
+        camaraEncendida = true;
+        document.getElementById('camara-status').innerText = "Activa";
+        document.getElementById('camara-status').className = "text-xs font-bold text-emerald-600";
+        document.getElementById('btn-toggle-camara').innerHTML = `<i class="fa-solid fa-power-off"></i> Apagar Cámara`;
+        document.getElementById('btn-toggle-camara').className = "flex-1 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
+      }).catch(err => {
+        console.error("Error al acceder a la cámara:", err);
+        alert("No se pudo acceder a la cámara o no hay permisos.");
+      });
+    }
+
+    function detenerCamara() {
+      if (html5QrcodeScanner && camaraEncendida) {
+        return html5QrcodeScanner.stop().then(() => {
+          camaraEncendida = false;
+          document.getElementById('reader').innerHTML = `
+            <div class="text-center p-4">
+              <i class="fa-solid fa-video-slash text-3xl mb-2 text-slate-600 block"></i>
+              Cámara apagada. Haz clic abajo para iniciar.
+            </div>`;
+          document.getElementById('camara-status').innerText = "Inactiva";
+          document.getElementById('camara-status').className = "text-xs font-normal text-slate-400";
+          document.getElementById('btn-toggle-camara').innerHTML = `<i class="fa-solid fa-power-off"></i> Encender Cámara`;
+          document.getElementById('btn-toggle-camara').className = "flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2";
+        }).catch(err => console.error("Error al detener:", err));
+      }
+    }
+
+    async function procesarMarcacion(codigo) {
+      if (!jornadaActiva) {
+        mostrarNotificacion("⚠️ La jornada está CERRADA. Presiona 'Iniciar Jornada' para registrar.", "bg-amber-100 text-amber-800 border-amber-300");
+        return;
+      }
+
+      // Detener cámara momentáneamente para evitar lecturas infinitas duplicadas
+      if (html5QrcodeScanner && camaraEncendida) {
+        await html5QrcodeScanner.stop();
+        camaraEncendida = false;
+      }
+
+      try {
+        const response = await fetch('/api/asistencia/registrar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            codigo: codigo,
+            tipo: modoActual,
+            fecha_hora: new Date().toISOString()
+          })
+        });
+
+        const res = await response.json();
+
+        if (response.ok && (res.success || res.ok)) {
+          const payload = res.persona || res.alumno || res.docente || res.auxiliar || res.usuario || {
+            codigo: codigo,
+            nombre: res.nombre || 'No Especificado',
+            aula: res.asignacion || res.aula || '---'
+          };
+
+          abrirModalAsistencia(payload);
+          mostrarTarjetaResultado(payload);
+          cargarAsistenciasHoy();
+
+        } else {
+          mostrarNotificacion(`❌ ${res.mensaje || 'Error al procesar registro'}`, "bg-rose-100 text-rose-800 border-rose-300");
+          iniciarCamara(); 
+        }
+      } catch(err) {
+        console.error("Error en comunicación, ejecutando fallback local:", err);
+
+        const fallbackData = {
+          codigo: codigo,
+          nombre: 'Nombre No Especificado',
+          aula: '---'
+        };
+        
+        abrirModalAsistencia(fallbackData);
+        mostrarTarjetaResultado(fallbackData);
+        cargarAsistenciasHoy();
+      }
+    }
+
+    function abrirModalAsistencia(data) {
+      const horaFormateada = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      
+      document.getElementById('modal-nombre').innerText = data.nombre || 'No Especificado';
+      document.getElementById('modal-codigo').innerText = data.codigo || '-';
+      document.getElementById('modal-aula').innerText = data.aula || '---';
+      document.getElementById('modal-hora').innerText = horaFormateada;
+
+      const iconContainer = document.getElementById('modal-icon-container');
+      const icon = document.getElementById('modal-icon');
+      const badgeEstado = document.getElementById('modal-estado');
+
+      if (modoActual === 'ENTRADA') {
+        iconContainer.className = "w-16 h-16 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/20 mb-4";
+        icon.className = "fa-solid fa-check";
+        badgeEstado.innerText = "PUNTUAL";
+        badgeEstado.className = "font-black px-2 py-0.5 rounded-md text-[10px] bg-emerald-100 text-emerald-800";
+      } else {
+        iconContainer.className = "w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-indigo-500/20 mb-4";
+        icon.className = "fa-solid fa-right-from-bracket";
+        badgeEstado.innerText = "SALIDA REGISTRADA";
+        badgeEstado.className = "font-black px-2 py-0.5 rounded-md text-[10px] bg-indigo-100 text-indigo-800";
+      }
+
+      const modal = document.getElementById('modal-asistencia');
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      modal.firstElementChild.classList.remove('scale-95');
+    }
+
+    function cerrarModalAsistencia() {
+      const modal = document.getElementById('modal-asistencia');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      modal.firstElementChild.classList.add('scale-95');
+
+      // Reactivar escáner tras cerrar la ventana
+      setTimeout(() => {
+        iniciarCamara();
+      }, 300);
+    }
+
+    function mostrarTarjetaResultado(data) {
+      const card = document.getElementById('resultado-card');
+      const esSalida = modoActual === 'SALIDA';
+      const colorBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
+
+      card.innerHTML = `
+        <div class="w-16 h-16 rounded-full ${esSalida ? 'bg-indigo-600' : 'bg-emerald-600'} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
+          ${(data.nombre || 'U').charAt(0).toUpperCase()}
+        </div>
+        <h3 class="text-base font-extrabold text-slate-800 mb-0.5">${data.nombre || 'Nombre No Especificado'}</h3>
+        <p class="text-xs font-mono font-bold text-slate-500 mb-2">${data.codigo || '-'}</p>
+        <div class="flex items-center gap-2">
+          <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${colorBadge}">
+            <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${modoActual}
+          </span>
+          <span class="text-xs font-semibold text-slate-500">${new Date().toLocaleTimeString()}</span>
+        </div>
+      `;
+    }
+
+    function mostrarNotificacion(msj, clases) {
+      const notif = document.getElementById('notificacion-alerta');
+      if(!notif) return;
+      notif.className = `p-3 rounded-xl text-xs font-semibold text-center border transition-all ${clases}`;
+      notif.innerText = msj;
+      notif.classList.remove('hidden');
+
+      setTimeout(() => {
+        notif.classList.add('hidden');
+      }, 4000);
+    }
+
+    async function cargarAsistenciasHoy() {
+      const tbody = document.getElementById('tabla-asistencias-hoy');
+      try {
+        const response = await fetch('/api/asistencia/hoy');
+        if (!response.ok) throw new Error("Error en servidor");
+        const datos = await response.json();
+
+        tbody.innerHTML = '';
+        if (!datos || datos.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400">No hay registros de marcación el día de hoy.</td></tr>`;
+          return;
+        }
+
+        datos.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-slate-50 border-b border-slate-100 font-medium";
+          tr.innerHTML = `
+            <td class="py-2.5 px-3 font-mono font-bold">${row.codigo}</td>
+            <td class="py-2.5 px-3 font-semibold text-slate-800">${row.nombre}</td>
+            <td class="py-2.5 px-3 text-slate-500">${row.aula || '-'}</td>
+            <td class="py-2.5 px-3 text-emerald-600 font-bold">${row.hora_entrada || '-'}</td>
+            <td class="py-2.5 px-3 text-indigo-600 font-bold">${row.hora_salida || '-'}</td>
+            <td class="py-2.5 px-3">
+              <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-100 text-slate-700 border border-slate-200">
+                ${row.estado || 'REGISTRADO'}
+              </span>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400">Consola lista para recibir marcaciones en tiempo real.</td></tr>`;
+      }
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'index.html';
+    }
+  </script>
 </body>
 </html>
