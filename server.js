@@ -346,6 +346,54 @@ app.get('/api/reportes/historial-detallado', (req, res) => {
   });
 });
 
+// Endpoint para Rankings de Méritos
+app.get('/api/rankings', (req, res) => {
+  // 1. Obtener todos los usuarios
+  db.all("SELECT * FROM usuarios", [], (err, usuarios) => {
+    if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar usuarios.' });
+
+    // 2. Obtener todas las asistencias registradas
+    db.all("SELECT * FROM asistencias", [], (err, asistencias) => {
+      if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar asistencias.' });
+
+      // 3. Procesar puntajes por usuario (Puntual = 2 pts, Tardanza = 1 pt, etc.)
+      const listaProcesada = usuarios.map(u => {
+        const marcaciones = asistencias.filter(a => a.usuario_codigo === u.codigo);
+        let puntajeAcumulado = 0;
+
+        marcaciones.forEach(m => {
+          const est = (m.estado || '').toUpperCase();
+          if (est === 'PUNTUAL' || est === 'ASISTENCIA') puntajeAcumulado += 2;
+          else if (est === 'TARDANZA' || est === 'TARDE') puntajeAcumulado += 1;
+        });
+
+        return {
+          nombre: u.nombre,
+          rol: (u.rol || '').toLowerCase(),
+          asignacion: u.materia_aula || 'General',
+          puntaje_acumulado: puntajeAcumulado
+        };
+      });
+
+      // 4. Separar y ordenar de mayor a menor puntaje
+      const docentes = listaProcesada
+        .filter(u => ['docente', 'director', 'directivo', 'auxiliar'].includes(u.rol))
+        .sort((a, b) => b.puntaje_acumulado - a.puntaje_acumulado);
+
+      const alumnos = listaProcesada
+        .filter(u => ['alumno', 'estudiante'].includes(u.rol) || (!['docente', 'director', 'directivo', 'auxiliar'].includes(u.rol)))
+        .sort((a, b) => b.puntaje_acumulado - a.puntaje_acumulado);
+
+      // 5. Enviar respuesta estructurada
+      res.json({
+        success: true,
+        docentes,
+        alumnos
+      });
+    });
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
