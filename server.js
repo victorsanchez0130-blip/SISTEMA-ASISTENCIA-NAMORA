@@ -216,7 +216,7 @@ app.get('/api/asistencia/hoy', (req, res) => {
       u.materia_aula AS aula,
       u.rol,
       a.hora AS hora_entrada,
-      a.hora AS hora_salida,
+      COALESCE(a.hora_salida, '-') AS hora_salida,
       a.estado
     FROM asistencias a
     JOIN usuarios u ON a.usuario_codigo = u.codigo
