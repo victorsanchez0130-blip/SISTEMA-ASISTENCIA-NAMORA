@@ -372,7 +372,7 @@ function abrirModalAsistencia(data) {
   // Extracción robusta de datos según el esquema de respuesta
   const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data;
 
-  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || 'Usuario Desconocido';
+  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || data.nombre_completo;
   const codigo = entidad.codigo || data.codigo || '-';
   const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || 'Asignación Regular';
   
@@ -433,7 +433,7 @@ function mostrarTarjetaResultado(data) {
 
   const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data;
 
-  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || data.nombre_completo || 'Usuario Desconocido';
+  const nombre = entidad.nombre || entidad.nombres || entidad.nombre_completo || data.nombre || data.nombres || data.nombre_completo;
   const codigo = entidad.codigo || data.codigo || '-';
   const aula = entidad.aula || entidad.asignacion || entidad.grado_seccion || entidad.grado || entidad.seccion || entidad.cargo || entidad.rol || 'Asignación Regular';
 
