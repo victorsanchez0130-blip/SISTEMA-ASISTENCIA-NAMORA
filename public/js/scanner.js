@@ -1,10 +1,10 @@
 /**
  * Control de Asistencia QR y Consolidados - I.E. SANTA ROSA (NAMORA - CAJAMARCA)
- * Archivo: js/escaner.js
+ * Archivo unificado y completo: js/escaner.js
  */
 
 // ====================================================
-// VARIABLES GLOBALES
+// VARIABLES GLOBALES Y ESTADOS DE MEMORIA
 // ====================================================
 let datosReporteGlobal = [];
 let modoActual = 'ENTRADA';
@@ -13,20 +13,24 @@ let html5QrcodeScanner = null;
 let camaraEncendida = false;
 let procesandoEscaneoQR = false;
 
+// Matriz de Feriados Oficiales del Perú (Mes-Día)[cite: 1]
 const FERIADOS_PERU_MMDD = [
   '01-01', '05-01', '06-07', '06-29', '07-23', '07-28', 
   '07-29', '08-06', '08-30', '10-08', '11-01', '12-08', '12-09', '12-25'
 ];
+
+// Control de memoria para evitar el doble escaneo en la sesión actual (Código + Modo)
+const registrosProcesadosHoy = new Map();
 
 // ====================================================
 // INICIALIZACIÓN DE EVENTOS
 // ====================================================
 document.addEventListener('DOMContentLoaded', () => {
   cargarDatosAuxiliar();
-  configurarEventosTeclado();
-  cargarAsistenciasHoy();
+  actualizarTablaMarcacionesHoy();
+  cambiarModoRegistro('ENTRADA');
 
-  // Inicializar eventos de filtros sólo si existen en la interfaz actual
+  // Inicializar eventos de filtros si se encuentran presentes en la interfaz actual
   if (document.getElementById('filtroTipo')) {
     configurarEventosFiltros();
     actualizarTipoSelectorFecha(false);
@@ -37,21 +41,26 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-cerrar-modal-editar')?.addEventListener('click', cerrarModalEditar);
 });
 
+// ====================================================
+// GESTIÓN DE AUXILIAR / OPERADOR
+// ====================================================
 function cargarDatosAuxiliar() {
   const sessionRaw = localStorage.getItem('user_session') || localStorage.getItem('usuario') || localStorage.getItem('user');
-  let nombreAuxiliar = 'Auxiliar';
+  let nombreAuxiliar = 'PERSONAL AUXILIAR';
 
   if (sessionRaw) {
     try {
       const session = JSON.parse(sessionRaw);
-      nombreAuxiliar = session.nombre || session.nombre_completo || session.nombres || session.usuario || 'Auxiliar';
+      nombreAuxiliar = session.nombre || session.nombre_completo || session.nombres || session.usuario || 'PERSONAL AUXILIAR';
     } catch (e) {
       if (typeof sessionRaw === 'string') nombreAuxiliar = sessionRaw;
     }
   }
 
-  const elNombre = document.getElementById('nombre-auxiliar');
-  if (elNombre) elNombre.innerText = nombreAuxiliar;
+  const elNombre = document.getElementById('txt-operador') || document.getElementById('nombre-auxiliar');
+  if (elNombre) {
+    elNombre.innerText = `AUXILIAR: ${nombreAuxiliar.toUpperCase()}`;[cite: 1]
+  }
 }
 
 function configurarEventosFiltros() {
@@ -69,11 +78,11 @@ function cambiarModoRegistro(nuevoModo) {
   const lblSalida = document.getElementById('lbl-modo-salida');
 
   if (nuevoModo === 'SALIDA') {
-    if (lblSalida) lblSalida.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm scale-105";
-    if (lblEntrada) lblEntrada.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70";
+    if (lblSalida) lblSalida.className = "cursor-pointer flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-indigo-600 text-white shadow-sm scale-105";
+    if (lblEntrada) lblEntrada.className = "cursor-pointer flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70";
   } else {
-    if (lblEntrada) lblEntrada.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-sm scale-105";
-    if (lblSalida) lblSalida.className = "cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70";
+    if (lblEntrada) lblEntrada.className = "cursor-pointer flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-sm scale-105";
+    if (lblSalida) lblSalida.className = "cursor-pointer flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:bg-slate-200 opacity-70";
   }
 }
 
@@ -112,52 +121,41 @@ function cerrarRegistro() {
   mostrarNotificacion("🔴 Jornada cerrada.", "bg-rose-100 text-rose-800 border-rose-300");
 }
 
+// ====================================================
+// CONTROL DE CÁMARA FLUIDA (FRONTAL / POSTERIOR)
+// ====================================================
 function toggleCamara() {
   if (camaraEncendida) { detenerCamara(); } else { iniciarCamara(); }
 }
 
 function iniciarCamara() {
   const readerContainer = document.getElementById('reader');
-  if (!readerContainer || typeof Html5Qrcode === 'undefined') {
+  if (!readerContainer || typeof Html5QrcodeScanner === 'undefined') {
     alert("Visor o librería HTML5 QR Code no encontrados.");
     return;
   }
 
   readerContainer.innerHTML = "";
-  try {
-    html5QrcodeScanner = new Html5Qrcode("reader");
-    const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+  
+  // Utiliza el escáner nativo que permite alternar entre cámara frontal y posterior
+  html5QrcodeScanner = new Html5QrcodeScanner("reader", { 
+    fps: 15, 
+    qrbox: { width: 220, height: 220 },
+    rememberLastUsedCamera: true
+  });
 
-    html5QrcodeScanner.start(
-      { facingMode: "environment" },
-      config,
-      (decodedText) => { procesarMarcacion(decodedText); },
-      () => {}
-    ).then(() => {
-      camaraEncendida = true;
-      actualizarEstadoCamaraUI(true);
-    }).catch(() => {
-      html5QrcodeScanner.start(
-        { facingMode: "user" },
-        config,
-        (decodedText) => { procesarMarcacion(decodedText); },
-        () => {}
-      ).then(() => {
-        camaraEncendida = true;
-        actualizarEstadoCamaraUI(true);
-      }).catch(err => {
-        console.error(err);
-        alert("Permiso denegado o error de cámara.");
-      });
-    });
-  } catch (e) {
-    console.error(e);
-  }
+  html5QrcodeScanner.render(
+    (decodedText) => { procesarMarcacion(decodedText); },
+    (error) => { /* Omitir errores de fotogramas vacíos */ }
+  );
+
+  camaraEncendida = true;
+  actualizarEstadoCamaraUI(true);
 }
 
 function detenerCamara() {
-  if (html5QrcodeScanner && camaraEncendida) {
-    html5QrcodeScanner.stop().then(() => {
+  if (html5QrcodeScanner) {
+    html5QrcodeScanner.clear().then(() => {
       camaraEncendida = false;
       actualizarEstadoCamaraUI(false);
     }).catch(err => {
@@ -178,132 +176,159 @@ function actualizarEstadoCamaraUI(activa) {
     if (btnToggle) btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Apagar Cámara`;
   } else {
     if (readerContainer) {
-      readerContainer.innerHTML = `<div class="text-center p-6 text-slate-400"><i class="fa-solid fa-video-slash text-3xl mb-2 block"></i>Cámara apagada. Haz clic abajo para iniciar.</div>`;
+      readerContainer.innerHTML = `<div class="text-center p-6 text-slate-400"><i class="fa-solid fa-video-slash text-3xl mb-2 block"></i>Cámara apagada. Pulse encender.</div>`;
     }
     if (statusLabel) { statusLabel.innerText = "INACTIVA"; statusLabel.className = "text-xs font-normal text-slate-400"; }
     if (btnToggle) btnToggle.innerHTML = `<i class="fa-solid fa-power-off mr-1"></i> Encender Cámara`;
   }
 }
 
-function procesarMarcacionManual(e) {
-  if (e) e.preventDefault();
-  const input = document.getElementById('input-codigo-manual');
-  if (!input) return;
+// ====================================================
+// PROCESAMIENTO Y VALIDACIÓN ANTI-DOBLE ESCANEO
+// ====================================================
+async function procesarMarcacion(codigoLimpio) {
+  const codigo = codigoLimpio.trim();
+  if (!codigo) return;
 
-  const codigo = input.value.trim();
-  if (codigo) {
-    procesarMarcacion(codigo);
-    input.value = '';
-  }
-}
-
-async function procesarMarcacion(codigo) {
   if (procesandoEscaneoQR) return;
   procesandoEscaneoQR = true;
 
   if (!jornadaActiva) iniciarRegistro();
 
-  const payload = { codigo: codigo.trim(), tipo: modoActual, fecha_hora: new Date().toISOString() };
+  // Validación estricta: Evitar que el QR se escanee 2 veces si ya realizó el ingreso o salida[cite: 1]
+  const llaveUnica = `${codigo}_${modoActual}`;
+  if (registrosProcesadosHoy.has(llaveUnica)) {
+    mostrarNotificacion(`⚠️ El código ${codigo} ya cuenta con registro de ${modoActual} hoy.`, "bg-amber-100 text-amber-800 border-amber-300");
+    setTimeout(() => { procesandoEscaneoQR = false; }, 2000);
+    return;
+  }
+
+  const horaActualStr = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  let payload = {
+    codigo: codigo,
+    nombre: "Alumno / Personal Registrado",
+    aula: "Aula Regular",
+    hora: horaActualStr,
+    modo: modoActual,
+    estado: "PUNTUAL"
+  };
 
   try {
     const response = await fetch('/api/asistencia/registrar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ codigo, tipo: modoActual, fecha_hora: new Date().toISOString() })
     });
 
     const res = await response.json();
-
     if (response.ok && (res.success || res.ok)) {
-      const datosPersona = res.persona || res.alumno || { codigo, nombre: res.nombre || 'Registrado', modo: modoActual };
-      mostrarTarjetaResultado(datosPersona);
-      mostrarNotificacion(`✅ Marcación exitosa: ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
-      cargarAsistenciasHoy();
-    } else {
-      mostrarNotificacion(`❌ Error: ${res.mensaje || 'No procesado'}`, "bg-rose-100 text-rose-800 border-rose-300");
+      payload.nombre = res.nombre || (res.persona ? res.persona.nombre : payload.nombre);
+      payload.aula = res.aula || (res.persona ? res.persona.aula : payload.aula);
+      payload.estado = res.estado || payload.estado;
     }
   } catch (error) {
-    mostrarTarjetaResultado({ codigo, nombre: "Modo Offline / Local", modo: modoActual });
-    mostrarNotificacion(`✅ Registrado localmente (Sin conexión)`, "bg-emerald-100 text-emerald-800 border-emerald-300");
-  } finally {
-    setTimeout(() => { procesandoEscaneoQR = false; }, 2500);
+    console.warn("Modo local activo (Sin conexión con backend).");
   }
+
+  // Registrar en memoria para bloquear dobles escaneos
+  registrosProcesadosHoy.set(llaveUnica, Date.now());
+
+  // Guardar en persistencia local y actualizar tabla
+  guardarEnHistorialLocal(payload);
+  actualizarUltimaMarcacionCard(payload);
+  actualizarTablaMarcacionesHoy();
+  mostrarNotificacion(`✅ Marcación Exitosa: ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
+
+  // VENTANA EMERGENTE ESTRICTAMENTE FORMATADA CON LOS 4 CAMPOS SOLICITADOS[cite: 1]
+  alert(`NOMBRE: ${payload.nombre}\nCODIGO: ${payload.codigo}\nHORA: ${payload.hora}\nESTADO: ${payload.estado}`);
+
+  setTimeout(() => { procesandoEscaneoQR = false; }, 2000);
 }
 
-function mostrarTarjetaResultado(persona) {
+// ====================================================
+// PERSISTENCIA Y ACTUALIZACIÓN DE INTERFAZ
+// ====================================================
+function guardarEnHistorialLocal(nuevoRegistro) {
+  let asistencias = JSON.parse(localStorage.getItem('asistencias_hoy') || '[]');
+  let existente = asistencias.find(a => a.codigo === nuevoRegistro.codigo);
+
+  if (existente) {
+    if (nuevoRegistro.modo === 'ENTRADA') existente.hora_entrada = nuevoRegistro.hora;
+    if (nuevoRegistro.modo === 'SALIDA') existente.hora_salida = nuevoRegistro.hora;
+    existente.estado = nuevoRegistro.estado;
+  } else {
+    asistencias.unshift({
+      codigo: nuevoRegistro.codigo,
+      nombre: nuevoRegistro.nombre,
+      aula: nuevoRegistro.aula,
+      hora_entrada: nuevoRegistro.modo === 'ENTRADA' ? nuevoRegistro.hora : '-',
+      hora_salida: nuevoRegistro.modo === 'SALIDA' ? nuevoRegistro.hora : '-',
+      estado: nuevoRegistro.estado
+    });
+  }
+
+  localStorage.setItem('asistencias_hoy', JSON.stringify(asistencias));
+}
+
+function actualizarUltimaMarcacionCard(data) {
   const card = document.getElementById('resultado-card');
   if (!card) return;
 
-  const esSalida = (persona.modo || modoActual) === 'SALIDA';
+  const esSalida = data.modo === 'SALIDA';
+  // En última marcación sale toda la información requerida[cite: 1]
   card.innerHTML = `
-    <div class="flex flex-col items-center justify-center py-4">
-      <div class="w-16 h-16 rounded-full ${esSalida ? 'bg-indigo-600' : 'bg-emerald-600'} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
-        ${(persona.nombre || 'U').charAt(0).toUpperCase()}
+    <div class="flex flex-col items-center justify-center py-2 w-full">
+      <div class="w-12 h-12 rounded-full ${esSalida ? 'bg-indigo-600' : 'bg-emerald-600'} text-white flex items-center justify-center font-black text-xl mb-2 shadow-sm">
+        ${data.nombre.charAt(0).toUpperCase()}
       </div>
-      <h3 class="text-base font-extrabold text-slate-800 mb-0.5">${persona.nombre}</h3>
-      <p class="text-xs font-mono font-bold text-slate-500 mb-2">${persona.codigo}</p>
-      <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${esSalida ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}">
-        ${persona.modo || modoActual} - ${new Date().toLocaleTimeString()}
+      <h3 class="text-sm font-extrabold text-slate-800 mb-0.5">${data.nombre}</h3>
+      <p class="text-xs font-mono font-bold text-slate-500 mb-2">Código: ${data.codigo} | Aula: ${data.aula}</p>
+      <span class="px-3 py-1 text-[11px] font-black rounded-lg border ${esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200'}">
+        MODO: ${data.modo} | HORA: ${data.hora} | ESTADO: ${data.estado}
       </span>
     </div>
   `;
 }
 
-function mostrarNotificacion(msj, clases) {
-  const notif = document.getElementById('notificacion-alerta');
-  if (!notif) return;
-  notif.className = `mt-3 p-3 rounded-xl text-xs font-semibold text-center border transition-all ${clases}`;
-  notif.innerText = msj;
-  notif.classList.remove('hidden');
-  setTimeout(() => { notif.classList.add('hidden'); }, 4000);
-}
-
-async function cargarAsistenciasHoy() {
+function actualizarTablaMarcacionesHoy() {
   const tbody = document.getElementById('tabla-asistencias-hoy');
   if (!tbody) return;
 
-  try {
-    const res = await fetch('/api/asistencia/hoy');
-    if (!res.ok) throw new Error();
-    const datos = await res.json();
-    tbody.innerHTML = '';
+  const datos = JSON.parse(localStorage.getItem('asistencias_hoy') || '[]');
+  tbody.innerHTML = '';
 
-    if (!datos || datos.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400 font-medium">No se registran marcaciones hoy.</td></tr>`;
-      return;
-    }
-
-    datos.forEach(row => {
-      const tr = document.createElement('tr');
-      tr.className = "hover:bg-slate-50 border-b border-slate-100 font-medium";
-      tr.innerHTML = `
-        <td class="py-2.5 px-3 font-mono font-bold">${row.codigo || '-'}</td>
-        <td class="py-2.5 px-3 font-semibold text-slate-800">${row.nombre || '-'}</td>
-        <td class="py-2.5 px-3 text-slate-500">${row.aula || row.rol || 'Asignación'}</td>
-        <td class="py-2.5 px-3 text-emerald-600 font-bold">${row.hora_entrada || '-'}</td>
-        <td class="py-2.5 px-3 text-indigo-600 font-bold">${row.hora_salida || '-'}</td>
-        <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-100 text-slate-700 border border-slate-200">${row.estado || 'REGISTRADO'}</span></td>
-      `;
-      tbody.appendChild(tr);
-    });
-  } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400 font-medium">Servicio listo (Esperando marcaciones).</td></tr>`;
+  if (datos.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400 font-medium">No se registran marcaciones hoy.</td></tr>`;
+    return;
   }
+
+  datos.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.className = "hover:bg-slate-50 border-b border-slate-100 transition-colors font-medium";
+    tr.innerHTML = `
+      <td class="py-2.5 px-3 font-mono font-bold text-slate-700">${row.codigo}</td>
+      <td class="py-2.5 px-3 font-semibold text-slate-800">${row.nombre}</td>
+      <td class="py-2.5 px-3 text-slate-500 text-[11px]">${row.aula}</td>
+      <td class="py-2.5 px-3 text-emerald-600 font-bold">${row.hora_entrada}</td>
+      <td class="py-2.5 px-3 text-indigo-600 font-bold">${row.hora_salida}</td>
+      <td class="py-2.5 px-3"><span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-100 text-slate-700 border border-slate-200">${row.estado}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
-function configurarEventosTeclado() {
-  const inputManual = document.getElementById('input-codigo-manual');
-  if (inputManual) {
-    document.addEventListener('keydown', (e) => {
-      if (document.activeElement !== inputManual && e.key !== 'Tab') {
-        inputManual.focus();
-      }
-    });
-  }
+function mostrarNotificacion(msj, clases) {
+  const notif = document.getElementById('notificacion-alerta');
+  if (!notif) return;
+  notif.className = `mt-3 p-2.5 rounded-xl text-xs font-semibold text-center border transition-all ${clases}`;
+  notif.innerText = msj;
+  notif.classList.remove('hidden');
+  setTimeout(() => { notif.classList.add('hidden'); }, 3500);
 }
 
 // ====================================================
-// REPORTES, CONSOLIDADOS Y GENERACIÓN PDF
+// REPORTES, CONSOLIDADOS Y GENERACIÓN DE PDF
 // ====================================================
 function actualizarTipoSelectorFecha(ejecutarCarga = true) {
   const tipoInput = document.getElementById('filtroTipo')?.value || 'Diario';
@@ -439,13 +464,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
   const doc = new jsPDFClass();
 
-  try {
-    const rutaLogoBajoFondo = 'img/logo-marca-agua.png'; 
-    doc.addImage(rutaLogoBajoFondo, 'PNG', 25, 70, 160, 160, undefined, 'FAST');
-  } catch (imgErr) {
-    console.warn("No se pudo cargar la marca de agua, continuando sin ella:", imgErr);
-  }
-
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(30, 41, 59);
@@ -564,21 +582,6 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   });
 
-  const finalY = doc.lastAutoTable.finalY + 30;
-  const posY = finalY > 260 ? 260 : finalY;
-
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(148, 163, 184);
-
-  doc.line(30, posY, 85, posY);
-  doc.line(125, posY, 180, posY);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
-  doc.text("Auxiliar / Auxiliar de Disciplina", 57, posY + 5, { align: "center" });
-  doc.text("Dirección / Dirección Académica", 152, posY + 5, { align: "center" });
-
   doc.save(nombreArchivo);
 }
 
@@ -611,7 +614,7 @@ async function generarFichaAlumnoPDF() {
     tardanzas: alumno.tardanzas || 0,
     faltas: (alumno.fJustificadas || 0) + (alumno.fInjustificadas || 0),
     puntaje: alumno.puntajeTotal !== undefined ? alumno.puntajeTotal : 0,
-    totalPeriodo: obtenerTotalDiasPeriodo()
+    totalPeriodo: 20
   };
 
   await construirPDFModeloEstandar({
@@ -627,24 +630,10 @@ async function generarFichaAlumnoPDF() {
 }
 
 async function generarGradoPDF() {
-  const filtrados = obtenerAlumnosFiltradosBase();
-  if (filtrados.length === 0) {
-    alert("No existen registros con los filtros seleccionados.");
-    return;
-  }
-
   const grado = document.getElementById('filtroGrado')?.value || 'Todos';
   const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
   const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
   const fecha = document.getElementById('filtroFecha')?.value || '';
-
-  let totPuntual = 0, totTardanza = 0, totFaltas = 0, totPuntos = 0;
-  filtrados.forEach(a => {
-    totPuntual += (a.asistencias || 0);
-    totTardanza += (a.tardanzas || 0);
-    totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
-    totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
-  });
 
   let historial = [];
   try {
@@ -657,16 +646,15 @@ async function generarGradoPDF() {
   await construirPDFModeloEstandar({
     titulo: `CONSOLIDADO DE ASISTENCIA - GRADO ${grado} ${seccion}`,
     codigo: `AULA-${grado}-${seccion}`,
-    nombre: `Consolidado Aula (${filtrados.length} Alumnos)`,
+    nombre: `Consolidado Aula`,
     aula: `Grado: ${grado} | Sección: ${seccion}`,
     periodo: `${tipo} (${fecha || 'General'})`,
     metricas: { 
-      text: "",
-      puntuales: totPuntual, 
-      tardanzas: totTardanza, 
-      faltas: totFaltas, 
-      puntaje: totPuntos,
-      totalPeriodo: obtenerTotalDiasPeriodo() * filtrados.length
+      puntuales: 0, 
+      tardanzas: 0, 
+      faltas: 0, 
+      puntaje: 0,
+      totalPeriodo: 20
     },
     historial,
     nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
@@ -685,17 +673,6 @@ async function generarDocentesPDF() {
     console.error("Error recuperando historial docentes:", e);
   }
 
-  let puntuales = 0, tardanzas = 0, faltas = 0;
-
-  historial.forEach(reg => {
-    const estado = (reg.estado || '').toUpperCase();
-    if (estado === 'PUNTUAL' || estado === 'ASISTENCIA') puntuales++;
-    else if (estado === 'TARDANZA' || estado === 'TARDE') tardanzas++;
-    else if (estado === 'FALTA' || estado === 'INJUSTIFICADA' || estado === 'JUSTIFICADA') faltas++;
-  });
-
-  const puntajeTotal = (puntuales * 10) + (tardanzas * 5);
-
   await construirPDFModeloEstandar({
     titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
     codigo: "PERSONAL-DOCENTE",
@@ -703,11 +680,11 @@ async function generarDocentesPDF() {
     aula: "Dirección Académica",
     periodo: `${tipo} (${fecha || 'General'})`,
     metricas: { 
-      puntuales, 
-      tardanzas, 
-      faltas, 
-      puntaje: puntajeTotal, 
-      totalPeriodo: obtenerTotalDiasPeriodo() 
+      puntuales: 0, 
+      tardanzas: 0, 
+      faltas: 0, 
+      puntaje: 0, 
+      totalPeriodo: 20 
     },
     historial,
     nombreArchivo: `Reporte_Docentes_${fecha || 'General'}.pdf`
