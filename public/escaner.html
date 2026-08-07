@@ -48,10 +48,13 @@
         </div>
       </div>
 
-      <!-- Botón de Control de Cámara -->
-      <div class="grid grid-cols-1 gap-3 pt-1">
+      <!-- Botones de Control de Cámara (Encender y Cambiar) -->
+      <div class="grid grid-cols-2 gap-3 pt-1">
         <button id="btn-toggle-camara" type="button" onclick="toggleCamara()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer">
           <i class="fa-solid fa-power-off"></i> Encender Cámara
+        </button>
+        <button id="btn-cambiar-camara" type="button" onclick="cambiarCamara()" class="bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer opacity-50 cursor-not-allowed" disabled>
+          <i class="fa-solid fa-rotate"></i> Cambiar Cámara
         </button>
       </div>
     </div>
@@ -62,15 +65,15 @@
         <i class="fa-solid fa-id-badge text-indigo-600"></i> Última Marcación
       </h2>
       <div id="resultado-card" class="bg-slate-50/80 rounded-2xl p-5 border border-slate-200 flex flex-col items-center justify-center text-center space-y-2.5 min-h-[160px]">
-        <div class="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-2xl shadow-md">
-          U
+        <div class="w-14 h-14 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-black text-2xl shadow-inner">
+          <i class="fa-solid fa-qrcode"></i>
         </div>
         <div>
-          <h3 class="text-base font-extrabold text-slate-900">Usuario Identificado</h3>
-          <p class="text-xs font-mono font-bold text-slate-500 mt-0.5">Esperando escaneo...</p>
+          <h3 class="text-base font-extrabold text-slate-700">Sin marcación reciente</h3>
+          <p class="text-xs font-mono font-bold text-slate-400 mt-0.5">La información aparecerá al escanear un código.</p>
         </div>
         <div class="pt-1">
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-lg bg-slate-100 text-slate-600 border border-slate-200 shadow-sm">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black rounded-lg bg-slate-100 text-slate-400 border border-slate-200 shadow-sm">
             <i class="fa-solid fa-clock text-[10px]"></i> --:--:--
           </span>
         </div>
