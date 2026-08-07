@@ -311,7 +311,7 @@
         }
       } catch (err) { console.warn("Error consultando usuarios:", err); }
 
-      // 2. Cargar Asistencias y Tardanzas de Hoy
+      // 2. Cargar Asistencias y Tardanzas de Hoy (Datos del Escáner)
       try {
         let resHoy = await fetch('/api/asistencia/hoy');
         if (resHoy.ok) {
@@ -346,8 +346,8 @@
                 badge = '<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">FALTA</span>';
               }
 
-              // Se separan la hora de entrada y la hora de salida en celdas distintas
-              const horaEntrada = item.hora || item.hora_entrada || '--:--';
+              // Mapeo adaptado para mostrar hora de entrada y salida por separado
+              const horaEntrada = item.hora_entrada || item.hora || '--:--';
               const horaSalida = item.hora_salida || '-';
 
               tbody.innerHTML += `
@@ -368,6 +368,9 @@
         }
       } catch (err) { console.error("Error consultando marcaciones:", err); }
     }
+
+    // Opcional: Refrescar automáticamente cada 10 segundos para ver los escaneos en vivo
+    setInterval(cargarMetricasDashboard, 10000);
   </script>
 </body>
 </html>
