@@ -376,8 +376,9 @@ async function guardarEdicionAsistencia(event) {
   }
 
   try {
-    // CORRECCIÓN: Apuntando correctamente al endpoint '/api/asistencia/manual' configurado en server.js
-    const response = await fetch('/api/asistencia/manual', {
+    // CORRECCIÓN: Cambiar '/api/asistencia/manual' por '/api/asistencia/editar' 
+    // y la propiedad 'usuario_codigo' por 'codigo' para que coincida con el servidor.
+    const response = await fetch('/api/asistencia/editar', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -385,7 +386,7 @@ async function guardarEdicionAsistencia(event) {
         'x-user-rol': 'admin' // Envía los permisos requeridos por el middleware del servidor
       },
       body: JSON.stringify({ 
-        usuario_codigo: codigo, 
+        codigo: codigo,          // <- Corregido de usuario_codigo a codigo
         estado: nuevoEstado, 
         fecha: fechaVal 
       })
