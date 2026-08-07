@@ -1,6 +1,6 @@
 /**
  * Control de Asistencia QR - I.E. SANTA ROSA
- * Lógica modular para scanner.js - Versión Corregida con Bloqueo de Duplicados Extremos
+ * Lógica modular para scanner.js - Versión Corregida al 100% Sin Datos Genéricos Falsos
  */
 
 let datosReporteGlobal = [];
@@ -17,7 +17,6 @@ const FERIADOS_PERU_MMDD = [
 
 document.addEventListener('DOMContentLoaded', () => {
   cargarDatosAuxiliar();
-  configurarEventosTeclado();
   cargarAsistenciasHoy();
   
   // Inicializar modo UI
@@ -187,23 +186,11 @@ function manejarEscaneoControlado(codigoLeido) {
     procesandoEscaneoQR = true;
     mostrarNotificacion(`⚠️ El código ${codigoLimpio} YA registró su ${modoActual} hoy.`, "bg-amber-100 text-amber-800 border-amber-300");
     
-    // Reproducir una advertencia visual breve sin romper la cámara
     setTimeout(() => { procesandoEscaneoQR = false; }, 3000);
     return;
   }
 
   procesarMarcacion(codigoLimpio);
-}
-
-function procesarMarcacionManual(e) {
-  if (e) e.preventDefault();
-  const input = document.getElementById('input-codigo-manual');
-  if (!input) return;
-  const codigo = input.value.trim();
-  if (codigo) {
-    manejarEscaneoControlado(codigo);
-    input.value = '';
-  }
 }
 
 async function procesarMarcacion(codigo) {
@@ -227,6 +214,7 @@ async function procesarMarcacion(codigo) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    
     const res = await response.json();
 
     if (response.ok && (res.success || res.ok)) {
@@ -234,28 +222,23 @@ async function procesarMarcacion(codigo) {
       mostrarTarjetaResultado(res);
       abrirModalAsistencia(res);
     } else {
-      mostrarNotificacion(`❌ Error: ${res.mensaje || 'Marcación inválida.'}`, "bg-rose-100 text-rose-800 border-rose-300");
-      iniciarCamara();
+      mostrarNotificacion(`❌ Error del Servidor: ${res.mensaje || 'Marcación inválida.'}`, "bg-rose-100 text-rose-800 border-rose-300");
+      if (!camaraEncendida) iniciarCamara();
     }
   } catch (error) {
-    // Modo de contingencia offline local
-    const fallbackData = {
-      codigo: codigo,
-      nombre: "Estudiante / Personal Local",
-      aula: "Aula General",
-      modo: modoActual,
-      estado: modoActual === 'ENTRADA' ? 'PUNTUAL' : 'SALIDA REGISTRADA'
-    };
-    registrarMarcacionEnMemoria(codigo, modoActual);
-    mostrarTarjetaResultado(fallbackData);
-    abrirModalAsistencia(fallbackData);
+    console.error("Fallo de red o servidor caído:", error);
+    mostrarNotificacion("🚨 Error de Red: No se pudo conectar con el servidor en Railway.", "bg-rose-600 text-white font-bold border-rose-700");
+    if (!camaraEncendida) iniciarCamara();
   } finally {
     setTimeout(() => { procesandoEscaneoQR = false; }, 1500);
   }
 }
 
 function registrarMarcacionEnMemoria(codigo, modo) {
-  registroLocalMarcaciones.push({ codigo, modo, timestamp: Date.now() });
+  // Evitamos meter duplicados exactos en memoria local
+  if (!verificarDuplicadoHoy(codigo, modo)) {
+    registroLocalMarcaciones.push({ codigo, modo, timestamp: Date.now() });
+  }
 }
 
 function abrirModalAsistencia(data) {
@@ -299,7 +282,7 @@ function cerrarModalAsistencia() {
   modal.classList.add('opacity-0', 'pointer-events-none');
   setTimeout(() => {
     modal.classList.add('hidden');
-    cargarAsistenciasHoy();
+    cargarAsistenciasHoy(); // Refresca la tabla llamando de forma limpia al backend
     if (!camaraEncendida) iniciarCamara();
   }, 300);
 }
@@ -308,9 +291,10 @@ function mostrarTarjetaResultado(data) {
   const card = document.getElementById('resultado-card');
   if (!card) return;
 
-  const nombre = data.nombre || 'Usuario Registrado';
-  const codigo = data.codigo || '-';
-  const aula = data.aula || 'Regular';
+  const entidad = data.persona || data.alumno || data;
+  const nombre = data.nombre || entidad.nombre_completo || 'Usuario Registrado';
+  const codigo = data.codigo || entidad.codigo || '-';
+  const aula = data.aula || entidad.aula || 'Regular';
   const esSalida = modoActual === 'SALIDA';
 
   card.innerHTML = `
@@ -331,7 +315,7 @@ function mostrarNotificacion(msj, clases) {
   notif.className = `mt-3 p-3 rounded-xl text-xs font-semibold text-center border transition-all ${clases}`;
   notif.innerText = msj;
   notif.classList.remove('hidden');
-  setTimeout(() => { notif.classList.add('hidden'); }, 3500);
+  setTimeout(() => { notif.classList.add('hidden'); }, 4000);
 }
 
 async function cargarAsistenciasHoy() {
@@ -340,17 +324,20 @@ async function cargarAsistenciasHoy() {
 
   try {
     const res = await fetch('/api/asistencia/hoy');
-    if (!res.ok) throw new Error();
+    if (!res.ok) throw new Error("No se pudo obtener el listado");
     const datos = await res.json();
     tbody.innerHTML = '';
 
-    // Sincronizar memoria antiduplicados con los datos existentes del servidor
+    // Sincronizar memoria interna solo con los datos verificados del servidor
     datos.forEach(row => {
       if (row.hora_entrada && row.hora_entrada !== '-') registrarMarcacionEnMemoria(row.codigo, 'ENTRADA');
       if (row.hora_salida && row.hora_salida !== '-') registrarMarcacionEnMemoria(row.codigo, 'SALIDA');
     });
 
-    if (datos.length === 0) throw new Error();
+    if (datos.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-slate-400">Sin marcaciones procesadas el día de hoy.</td></tr>`;
+      return;
+    }
 
     datos.forEach(row => {
       const tr = document.createElement('tr');
@@ -366,18 +353,7 @@ async function cargarAsistenciasHoy() {
       tbody.appendChild(tr);
     });
   } catch (err) {
-    // Fallback visual si la API está vacía temporalmente
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-slate-400">Sin marcaciones procesadas el día de hoy.</td></tr>`;
-  }
-}
-
-function configurarEventosTeclado() {
-  const inputManual = document.getElementById('input-codigo-manual');
-  if (inputManual) {
-    document.addEventListener('keydown', (e) => {
-      if (document.activeElement !== inputManual && e.key !== 'Tab' && e.key !== 'Enter') {
-        inputManual.focus();
-      }
-    });
+    console.error("Error al cargar la tabla de hoy desde el servidor:", err);
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-rose-500 font-semibold">⚠️ Error de conexión al sincronizar el historial del día.</td></tr>`;
   }
 }
