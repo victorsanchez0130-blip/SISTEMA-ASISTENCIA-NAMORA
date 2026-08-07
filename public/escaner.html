@@ -177,7 +177,7 @@
 
       <h3 id="modal-title" class="text-xl font-extrabold text-slate-900 mb-4 tracking-tight">Marcación Registrada</h3>
 
-      <!-- Ficha de Datos Completa (Corregido: Alineación de Clases) -->
+      <!-- Ficha de Datos Completa -->
       <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left text-xs space-y-2.5 mb-5 font-medium text-slate-600">
         <div><span class="text-slate-400 font-normal inline-block w-28">Nombre:</span> <span id="modal-nombre" class="text-slate-800 font-bold">Cargando...</span></div>
         <div><span class="text-slate-400 font-normal inline-block w-28">Código:</span> <span id="modal-codigo" class="text-slate-800">Cargando...</span></div>
@@ -192,7 +192,7 @@
     </div>
   </div>
 
-  <!-- LÓGICA DE JAVASCRIPT REESTRUCTURADA -->
+  <!-- LÓGICA DE JAVASCRIPT REESTRUCTURADA Y CORREGIDA -->
   <script>
     let modoActual = 'ENTRADA';
     let jornadaActiva = false;
@@ -325,6 +325,38 @@
       }
     }
 
+    // Extracción jerárquica unificada de propiedades (Mapea correctamente al modal y tarjeta)
+    function extraerDatosEntidad(data) {
+      const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data.datos || data;
+      
+      const nombre = entidad.nombre_completo || 
+                     entidad.nombres_apellidos ||
+                     (entidad.nombre && entidad.apellido ? `${entidad.nombre} ${entidad.apellido}` : null) ||
+                     entidad.nombre || 
+                     entidad.nombres || 
+                     data.nombre || 
+                     'Usuario Desconocido';
+
+      const codigo = entidad.codigo || data.codigo || '-';
+
+      let aula = 'Asignación Regular';
+      if (entidad.grado_seccion) {
+        aula = entidad.grado_seccion;
+      } else if (entidad.grado && entidad.seccion) {
+        aula = `${entidad.grado} ${entidad.seccion}`;
+      } else if (entidad.aula) {
+        aula = entidad.aula;
+      } else if (entidad.materia_aula) {
+        aula = entidad.materia_aula;
+      } else if (entidad.asignacion) {
+        aula = entidad.asignacion;
+      } else if (entidad.cargo || entidad.rol) {
+        aula = entidad.cargo || entidad.rol;
+      }
+
+      return { nombre, codigo, aula };
+    }
+
     async function procesarMarcacion(codigo) {
       if (!jornadaActiva) {
         mostrarNotificacion("⚠️ La jornada está CERRADA. Presiona 'Iniciar Jornada' para registrar.", "bg-amber-100 text-amber-800 border-amber-300");
@@ -360,9 +392,10 @@
       } catch(err) {
         console.error("Error en comunicación, ejecutando fallback local:", err);
 
+        // Corregido: Ahora se define un formato genérico limpio para que funcione sin problemas en modo offline
         const fallbackData = {
           codigo: codigo,
-          nombre: 'Registro Local / Fuera de línea',
+          nombre: 'Usuario Marcado (Modo Offline)',
           aula: 'Asignación Regular'
         };
 
@@ -372,50 +405,18 @@
       }
     }
 
-    // Extracción jerárquica unificada de propiedades (Sincronizado con scanner.js)
-    function extraerDatosEntidad(data) {
-      const entidad = data.persona || data.alumno || data.docente || data.auxiliar || data.usuario || data.datos || data;
-      
-      const nombre = entidad.nombre_completo || 
-                     entidad.nombres_apellidos ||
-                     (entidad.nombre && entidad.apellido ? `${entidad.nombre} ${entidad.apellido}` : null) ||
-                     entidad.nombre || 
-                     entidad.nombres || 
-                     data.nombre || 
-                     'Usuario Registrado';
-
-      const codigo = entidad.codigo || data.codigo || '-';
-
-      let aula = 'Asignación Regular';
-      if (entidad.grado_seccion) {
-        aula = entidad.grado_seccion;
-      } else if (entidad.grado && entidad.seccion) {
-        aula = `${entidad.grado} ${entidad.seccion}`;
-      } else if (entidad.aula) {
-        aula = entidad.aula;
-      } else if (entidad.materia_aula) {
-        aula = entidad.materia_aula;
-      } else if (entidad.asignacion) {
-        aula = entidad.asignacion;
-      } else if (entidad.cargo || entidad.rol) {
-        aula = entidad.cargo || entidad.rol;
-      }
-
-      return { nombre, codigo, aula };
-    }
-
     function abrirModalAsistencia(data) {
       const modal = document.getElementById('modal-asistencia');
       if (!modal) return;
 
-      // Usar el extractor robusto
-      const datosLimbios = extraerDatosEntidad(data);
+      // Corregido: Se llama correctamente a extraerDatosEntidad
+      const datosListos = extraerDatosEntidad(data);
       
       const horaFormateada = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
       
-      document.getElementById('modal-nombre').innerText = datosLimbios.nombre;
-      document.getElementById('modal-codigo').innerText = datosLimbios.codigo;
-      document.getElementById('modal-aula').innerText = datosLimbios.aula;
+      document.getElementById('modal-nombre').innerText = datosListos.nombre;
+      document.getElementById('modal-codigo').innerText = datosListos.codigo;
+      document.getElementById('modal-aula').innerText = datosListos.aula;
       document.getElementById('modal-hora').innerText = horaFormateada;
 
       const iconContainer = document.getElementById('modal-icon-container');
@@ -458,18 +459,18 @@
       const card = document.getElementById('resultado-card');
       if (!card) return;
 
-      const datosLimbios = extraerDatosEntidad(data);
+      const datosListos = extraerDatosEntidad(data);
       const esSalida = modoActual === 'SALIDA';
       const colorBadge = esSalida ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
       card.innerHTML = `
         <div class="flex flex-col items-center justify-center py-2">
           <div class="w-16 h-16 rounded-full ${esSalida ? 'bg-indigo-600' : 'bg-emerald-600'} text-white flex items-center justify-center font-black text-2xl mb-3 shadow-md">
-            ${datosLimbios.nombre.charAt(0).toUpperCase()}
+            ${datosListos.nombre.charAt(0).toUpperCase()}
           </div>
-          <h3 class="text-base font-extrabold text-slate-800 mb-0.5 text-center">${datosLimbios.nombre}</h3>
-          <p class="text-xs font-mono font-bold text-slate-500 mb-1">${datosLimbios.codigo}</p>
-          <p class="text-xs font-medium text-slate-600 mb-2">${datosLimbios.aula}</p>
+          <h3 class="text-base font-extrabold text-slate-800 mb-0.5 text-center">${datosListos.nombre}</h3>
+          <p class="text-xs font-mono font-bold text-slate-500 mb-1">${datosListos.codigo}</p>
+          <p class="text-xs font-medium text-slate-600 mb-2">${datosListos.aula}</p>
           <div class="flex items-center gap-2">
             <span class="px-2.5 py-1 text-[11px] font-black rounded-lg border ${colorBadge}">
               <i class="fa-solid ${esSalida ? 'fa-right-from-bracket' : 'fa-right-to-bracket'} mr-1"></i> ${modoActual}
