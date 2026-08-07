@@ -186,6 +186,15 @@ app.delete('/api/usuarios/:id', verificarPermisoAdmin, (req, res) => {
 
 // Marcación Inteligente con límite máximo de salida a las 13:10:00
 const procesarMarcacionLogica = (req, res) => {
+
+  if (!registroActivo) {
+    return res.status(400).json({ 
+      success: false, 
+      mensaje: 'La jornada de asistencia está cerrada o no ha sido iniciada. No se pueden registrar marcaciones.' 
+    });
+  }
+
+  
   const codigoQR = req.body.codigoQR || req.body.codigo;
 
   if (!codigoQR) {
