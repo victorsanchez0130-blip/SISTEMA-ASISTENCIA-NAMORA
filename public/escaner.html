@@ -354,7 +354,7 @@
           const payload = res.persona || res.alumno || res.docente || res.auxiliar || res.usuario || {
             codigo: codigo,
             nombre: res.nombre || 'No Especificado',
-            aula: res.asignacion || res.aula || '---'
+            aula: res.asignacion || res.materia_aula || '---'
           };
 
           abrirModalAsistencia(payload);
@@ -385,7 +385,7 @@
       
       document.getElementById('modal-nombre').innerText = data.nombre || 'No Especificado';
       document.getElementById('modal-codigo').innerText = data.codigo || '-';
-      document.getElementById('modal-aula').innerText = data.aula || data.asignacion || '---';
+      document.getElementById('modal-aula').innerText = data.materia_aula || data.asignacion || '---';
       document.getElementById('modal-hora').innerText = horaFormateada;
 
       const iconContainer = document.getElementById('modal-icon-container');
