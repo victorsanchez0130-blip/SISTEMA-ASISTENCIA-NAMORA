@@ -186,15 +186,6 @@ app.delete('/api/usuarios/:id', verificarPermisoAdmin, (req, res) => {
 
 // Marcación Inteligente con límite máximo de salida a las 13:10:00
 const procesarMarcacionLogica = (req, res) => {
-
-  if (!registroActivo) {
-    return res.status(400).json({ 
-      success: false, 
-      mensaje: 'La jornada de asistencia está cerrada o no ha sido iniciada. No se pueden registrar marcaciones.' 
-    });
-  }
-
-  
   const codigoQR = req.body.codigoQR || req.body.codigo;
 
   if (!codigoQR) {
@@ -211,49 +202,65 @@ const procesarMarcacionLogica = (req, res) => {
       if (err) return res.status(500).json({ success: false, mensaje: 'Error al verificar marcación.' });
 
       // CASO 1: Registrar ENTRADA
-      if (!registroHoy) {
-        const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
-        db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, hora_salida, estado) VALUES (?, ?, ?, NULL, ?)', 
-          [usuario.codigo, hoy, horaActual, estado], (err) => {
-            if (err) return res.status(500).json({ success: false, mensaje: 'Error al registrar entrada.' });
-            res.json({ 
-              success: true, 
-              tipo: 'ENTRADA',
-              mensaje: `Entrada [${estado}] registrada para ${usuario.nombre} a las ${horaActual}`, 
-              persona: usuario,
-              usuario, 
-              hora: horaActual, 
-              estado 
-            });
-        });
-      } 
-      // CASO 2: Registrar SALIDA (Máximo 13:10:00 de forma automática)
-      else if (!registroHoy.hora_salida) {
-        let horaSalidaFinal = horaActual > '13:10:00' ? '13:10:00' : horaActual;
-        
-        db.run('UPDATE asistencias SET hora_salida = ? WHERE id = ?', [horaSalidaFinal, registroHoy.id], (err) => {
-          if (err) return res.status(500).json({ success: false, mensaje: 'Error al registrar salida.' });
+    if (!registroHoy) {
+      const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
+      db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, hora_salida, estado) VALUES (?, ?, ?, NULL, ?)', 
+        [usuario.codigo, hoy, horaActual, estado], (err) => {
+          if (err) return res.status(500).json({ success: false, mensaje: 'Error al registrar entrada.' });
           res.json({ 
             success: true, 
-            tipo: 'SALIDA',
-            mensaje: `Salida registrada exitosamente para ${usuario.nombre} a las ${horaSalidaFinal}`, 
+            tipo: 'ENTRADA',
+            mensaje: `Entrada [${estado}] registrada para ${usuario.nombre} a las ${horaActual}`, 
             persona: usuario,
             usuario, 
-            horaSalida: horaSalidaFinal 
+            hora: horaActual, 
+            estado 
           });
-        });
-      } 
-      // CASO 3: Ya tiene ambos registros
-      else {
-        res.json({ 
+      });
+    } 
+    // CASO 2: Registrar SALIDA (Protegido contra dobles escaneos accidentales)
+    else if (!registroHoy.hora_salida) {
+      // Calcular la diferencia en minutos entre la entrada y el segundo escaneo
+      const [hIngreso, mIngreso] = registroHoy.hora.split(':').map(Number);
+      const [hActual, mActual] = horaActual.split(':').map(Number);
+      const minutosTranscurridos = (hActual * 60 + mActual) - (hIngreso * 60 + mIngreso);
+
+      // Si pasan menos de 30 minutos desde la entrada, se bloquea la salida y se trata como duplicado
+      if (minutosTranscurridos < 30) {
+        return res.json({ 
           success: true, 
           duplicado: true,
-          mensaje: `${usuario.nombre} ya registró su entrada (${registroHoy.hora}) y salida (${registroHoy.hora_salida}) hoy.`,
+          mensaje: `⚠️ ${usuario.nombre} ya registró su entrada a las ${registroHoy.hora}. Aún no es hora de salida.`,
           persona: usuario,
           usuario
         });
       }
-    });
+
+      let horaSalidaFinal = horaActual > '13:10:00' ? '13:10:00' : horaActual;
+      
+      db.run('UPDATE asistencias SET hora_salida = ? WHERE id = ?', [horaSalidaFinal, registroHoy.id], (err) => {
+        if (err) return res.status(500).json({ success: false, mensaje: 'Error al registrar salida.' });
+        res.json({ 
+          success: true, 
+          tipo: 'SALIDA',
+          mensaje: `Salida registrada exitosamente para ${usuario.nombre} a las ${horaSalidaFinal}`, 
+          persona: usuario,
+          usuario, 
+          horaSalida: horaSalidaFinal 
+        });
+      });
+    } 
+    // CASO 3: Ya tiene ambos registros
+    else {
+      res.json({ 
+        success: true, 
+        duplicado: true,
+        mensaje: `${usuario.nombre} ya registró su entrada (${registroHoy.hora}) y salida (${registroHoy.hora_salida}) hoy.`,
+        persona: usuario,
+        usuario
+      });
+    }
+  });
   });
 };
 
