@@ -245,7 +245,6 @@ async function procesarMarcacion(codigoLimpio) {
   actualizarTablaMarcacionesHoy();
   mostrarNotificacion(`✅ Marcación Exitosa: ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
 
-  // Ventana emergente con formato estricto solicitado
   alert(`NOMBRE: ${payload.nombre}\nCODIGO: ${payload.codigo}\nHORA: ${payload.hora}\nESTADO: ${payload.estado}`);
 
   setTimeout(() => { procesandoEscaneoQR = false; }, 2000);
