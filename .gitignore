@@ -1,3 +1,11 @@
-node_modules/
-.env
+# Archivos del Sistema Operativo
+Thumbs.db
 .DS_Store
+
+# Entornos virtuales o dependencias (según tu tecnología)
+node_modules/
+vendor/
+
+# Archivos de configuración sensible / Variables de entorno
+.env
+config.local.php
