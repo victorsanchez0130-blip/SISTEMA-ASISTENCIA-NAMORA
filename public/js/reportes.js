@@ -747,14 +747,14 @@ async function generarDocentesPDF() {
 
   const historialDocentes = historialGeneral.filter(reg => {
     const rolUsuario = (reg.rol || '').toUpperCase();
-    return rolUsuario === 'DOCENTE';
+    return rolUsuario === 'DOCENTE' || rolUsuario === 'Docente' || rolUsuario === 'Director' || rolUsuario === 'Auxiliar';
   });
 
   let puntuales = 0;
   let tardanzas = 0;
   let faltas = 0;
 
-  historial.forEach(reg => {
+  historialDocentes.forEach(reg => {
     const fontEstado = (reg.estado || '').toUpperCase();
     
     if (fontEstado === 'PUNTUAL') {
