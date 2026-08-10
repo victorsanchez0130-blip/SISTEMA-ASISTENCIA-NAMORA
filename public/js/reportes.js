@@ -552,7 +552,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setTextColor(30, 41, 59);
   doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
 
-  const headersHistorial = [["FECHA", "DÍA", "H. ENTRADA", "H. SALIDA", "ESTADO", "OBSERVACIÓN"]];
+  const headersHistorial = [["FECHA", "DÍA", "NOMBRES", "H. ENTRADA", "H. SALIDA", "ESTADO", "OBSERVACIÓN"]];
   
   const rowsHistorial = historial.map(h => {
     const estadoLimpio = (h.estado || '').toUpperCase();
@@ -566,7 +566,8 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
     return [
       h.fecha || '-',
-      obtenerNombreDia(h.fecha),
+      obtenerDiaCorto(h.fecha),
+      h.nombre || h.alumno || nombre || '-',
       entradaDisplay,
       salidaDisplay,
       estadoLimpio,
