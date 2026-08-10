@@ -737,13 +737,23 @@ async function generarDocentesPDF() {
   const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
   const fecha = document.getElementById('filtroFecha')?.value || '';
 
-  let historial = [];
+  let historialGeneral = [];
   try {
     const res = await fetch(`/api/reportes/historial-detallado`);
-    if (res.ok) historial = await res.json();
+    if (res.ok) historialGeneral = await res.json();
   } catch (e) {
     console.error("Error recuperando historial docentes:", e);
   }
+
+  const historialDocentes = historialGeneral.filter(reg => {
+    const codigo = (reg.codigo || '').toUpperCase();
+    if (codigo.startsWith('ALU-')) return false;
+    const aulaCargo = (reg.aula || reg.rol || '').toUpperCase();
+    if (aulaCargo.includes('1RO') || aulaCargo.includes('2DO') || aulaCargo.includes('3RO') || aulaCargo.includes('4TO') || aulaCargo.includes('5TO')) {
+      return false;
+    }
+    return true;
+  });
 
   let puntuales = 0;
   let tardanzas = 0;
@@ -776,7 +786,7 @@ async function generarDocentesPDF() {
       puntaje: puntajeTotal, 
       totalPeriodo: obtenerTotalDiasPeriodo() 
     },
-    historial,
+    historial: historialDocentes,
     nombreArchivo: `Reporte_Docentes_${fecha || 'General'}.pdf`
   });
 }
