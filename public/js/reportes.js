@@ -746,13 +746,8 @@ async function generarDocentesPDF() {
   }
 
   const historialDocentes = historialGeneral.filter(reg => {
-    const codigo = (reg.codigo || '').toUpperCase();
-    if (codigo.startsWith('ALU-')) return false;
-    const aulaCargo = (reg.aula || reg.rol || '').toUpperCase();
-    if (aulaCargo.includes('1RO') || aulaCargo.includes('2DO') || aulaCargo.includes('3RO') || aulaCargo.includes('4TO') || aulaCargo.includes('5TO')) {
-      return false;
-    }
-    return true;
+    const rolUsuario = (reg.rol || '').toUpperCase();
+    return rolUsuario === 'DOCENTE';
   });
 
   let puntuales = 0;
