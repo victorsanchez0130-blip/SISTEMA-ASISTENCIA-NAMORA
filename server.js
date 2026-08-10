@@ -414,8 +414,19 @@ app.listen(PORT, () => {
   console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
 
-// LÍNEA TEMPORAL: Borrar la asistencia de hoy al iniciar
-db.run("DELETE FROM asistencia WHERE fecha LIKE '2026-08-10%'", (err) => {
-    if (err) console.error("Error al borrar:", err.message);
-    else console.log("¡Asistencia de hoy borrada con éxito!");
+// CÓDIGO DE INVESTIGACIÓN TEMP
+db.all("SELECT name FROM sqlite_master WHERE type='table';", [], (err, tables) => {
+    if (err) return console.error("Error buscando tablas:", err.message);
+    console.log("--- TUS TABLAS REALES SON ---");
+    console.log(tables);
+    
+    // Si encuentra tablas, vamos a mirar qué tiene la primera que huela a asistencia
+    tables.forEach(t => {
+        if(t.name.includes('asist')) {
+            db.all(`PRAGMA table_info(${t.name});`, [], (err, columns) => {
+                console.log(`--- COLUMNAS DE LA TABLA ${t.name} ---`);
+                console.log(columns.map(c => c.name));
+            });
+        }
+    });
 });
