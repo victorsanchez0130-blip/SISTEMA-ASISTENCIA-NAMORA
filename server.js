@@ -413,12 +413,3 @@ app.get('/api/rankings', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
-
-// LÍNEA DEFINITIVA DE LIMPIEZA
-db.run("DELETE FROM asistencias WHERE fecha LIKE '2026-08-07%'", function(err) {
-    if (err) {
-        console.error("❌ Error al borrar asistencia:", err.message);
-    } else {
-        console.log(`✅ ¡Éxito! Se eliminaron ${this.changes} registros de asistencia de hoy.`);
-    }
-});
