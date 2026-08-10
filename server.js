@@ -414,8 +414,11 @@ app.listen(PORT, () => {
   console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
 
-// LÍNEA TEMPORAL: Borrar la asistencia de hoy al iniciar
-db.run("DELETE FROM asistencia WHERE fecha LIKE '2026-08-10%'", (err) => {
-    if (err) console.error("Error al borrar:", err.message);
-    else console.log("¡Asistencia de hoy borrada con éxito!");
+// LÍNEA DEFINITIVA DE LIMPIEZA
+db.run("DELETE FROM asistencias WHERE fecha LIKE '2026-08-10%'", function(err) {
+    if (err) {
+        console.error("❌ Error al borrar asistencia:", err.message);
+    } else {
+        console.log(`✅ ¡Éxito! Se eliminaron ${this.changes} registros de asistencia de hoy.`);
+    }
 });
