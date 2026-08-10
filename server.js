@@ -321,8 +321,8 @@ app.get('/api/reportes/consolidado', (req, res) => {
 
         marcaciones.forEach(m => {
           const est = (m.estado || '').toUpperCase();
-          if (est === 'PUNTUAL' || est === 'ASISTENCIA') asistenciasCount++;
-          else if (est === 'TARDANZA' || est === 'TARDE') tardanzas++;
+          if (est === 'PUNTUAL') asistenciasCount++;
+          else if (est === 'TARDANZA') tardanzas++;
           else if (est === 'JUSTIFICADA') fJustificadas++;
           else if (est === 'INJUSTIFICADA' || est === 'FALTA') fInjustificadas++;
         });
@@ -379,8 +379,8 @@ app.get('/api/rankings', (req, res) => {
 
         marcaciones.forEach(m => {
           const est = (m.estado || '').toUpperCase();
-          if (est === 'PUNTUAL' || est === 'ASISTENCIA') puntajeAcumulado += 2;
-          else if (est === 'TARDANZA' || est === 'TARDE') puntajeAcumulado += 1;
+          if (est === 'PUNTUAL') puntajeAcumulado += 2;
+          else if (est === 'TARDANZA') puntajeAcumulado += 1;
         });
 
         return {
@@ -412,4 +412,10 @@ app.get('/api/rankings', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
+});
+
+// LÍNEA TEMPORAL: Borrar la asistencia de hoy al iniciar
+db.run("DELETE FROM asistencia WHERE fecha LIKE '2026-08-10%'", (err) => {
+    if (err) console.error("Error al borrar:", err.message);
+    else console.log("¡Asistencia de hoy borrada con éxito!");
 });

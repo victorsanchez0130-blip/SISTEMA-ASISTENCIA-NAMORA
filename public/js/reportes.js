@@ -440,10 +440,10 @@ function obtenerNombreDia(fechaStr) {
 
 function obtenerObservacionEstado(estado) {
   const est = (estado || '').toUpperCase();
-  if (est === 'PUNTUAL' || est === 'ASISTENCIA') return 'Ingreso dentro del horario regular';
-  if (est === 'TARDANZA' || est === 'TARDE') return 'Ingreso fuera de horario regular';
+  if (est === 'PUNTUAL') return 'Ingreso dentro del horario regular';
+  if (est === 'TARDANZA') return 'Ingreso fuera de horario regular';
   if (est === 'JUSTIFICADA') return 'Falta justificada con documento';
-  if (est === 'INJUSTIFICADA' || est === 'FALTA') return 'Inasistencia sin justificación';
+  if (est === 'FALTA') return 'Inasistencia sin justificación';
   return 'Registro de marcación';
 }
 
@@ -752,11 +752,11 @@ async function generarDocentesPDF() {
   historial.forEach(reg => {
     const fontEstado = (reg.estado || '').toUpperCase();
     
-    if (fontEstado === 'PUNTUAL' || fontEstado === 'ASISTENCIA') {
+    if (fontEstado === 'PUNTUAL') {
       puntuales++;
-    } else if (fontEstado === 'TARDANZA' || fontEstado === 'TARDE') {
+    } else if (fontEstado === 'TARDANZA') {
       tardanzas++;
-    } else if (fontEstado === 'FALTA' || fontEstado === 'INJUSTIFICADA' || fontEstado === 'JUSTIFICADA') {
+    } else if (fontEstado === 'FALTA') {
       faltas++;
     }
   });

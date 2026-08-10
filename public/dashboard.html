@@ -334,14 +334,14 @@
 
           marcaciones.forEach((item, index) => {
             const estadoUpper = (item.estado || '').toUpperCase();
-            if (estadoUpper === 'PUNTUAL' || estadoUpper === 'REGISTRADO' || estadoUpper === 'ASISTENCIA') puntuales++;
-            if (estadoUpper === 'TARDANZA' || estadoUpper === 'TARDE') tardanzas++;
+            if (estadoUpper === 'ASISTENCIA') puntuales++;
+            if (estadoUpper === 'TARDANZA') tardanzas++;
 
             if (index < 6) {
               let badge = '<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">PUNTUAL</span>';
               
-              if (estadoUpper === 'TARDANZA' || estadoUpper === 'TARDE') {
-                badge = '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">TARDE</span>';
+              if (estadoUpper === 'TARDANZA') {
+                badge = '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">TARDANZA</span>';
               } else if (estadoUpper === 'FALTA' || estadoUpper === 'INJUSTIFICADA') {
                 badge = '<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded-md font-extrabold text-[11px]">FALTA</span>';
               }
