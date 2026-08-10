@@ -415,7 +415,7 @@ app.listen(PORT, () => {
 });
 
 // LÍNEA DEFINITIVA DE LIMPIEZA
-db.run("DELETE FROM asistencias WHERE fecha LIKE '2026-08-10%'", function(err) {
+db.run("DELETE FROM asistencias WHERE fecha LIKE '2026-08-07%'", function(err) {
     if (err) {
         console.error("❌ Error al borrar asistencia:", err.message);
     } else {
