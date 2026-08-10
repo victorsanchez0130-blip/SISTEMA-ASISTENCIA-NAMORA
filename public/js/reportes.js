@@ -574,7 +574,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
 
     return [
       h.fecha || '-',
-      obtenerDiaCorto(h.fecha),
+      obtenerNombreDia(h.fecha),
       h.nombre || h.alumno || nombre || '-',
       entradaDisplay,
       salidaDisplay,
