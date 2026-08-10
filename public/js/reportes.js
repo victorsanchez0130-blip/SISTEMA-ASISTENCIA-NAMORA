@@ -475,7 +475,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   const pintarFondoMarcaAgua = () => {
     if (imgLogoLoaded) {
       doc.saveGraphicsState();
-      const opacityState = new doc.GState({ opacity: 0.2 });
+      const opacityState = new doc.GState({ opacity: 0.15 });
       doc.setGState(opacityState);
       doc.addImage(imgLogoLoaded, 'PNG', 25, 70, 160, 160, undefined, 'FAST');
       doc.restoreGraphicsState();
@@ -509,15 +509,15 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     theme: 'plain',
     styles: {
       fontSize: 9,
-      cellPadding: 4,
+      cellPadding: 3,
       lineColor: [203, 213, 225],
       lineWidth: 0.5,
       textColor: [51, 65, 85],
       fillColor: false
     },
     columnStyles: {
-      0: { cellWidth: 85 },
-      1: { cellWidth: 95 }
+      0: { cellWidth: 90 },
+      1: { cellWidth: 92 }
     }
   });
 
@@ -535,7 +535,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   ]];
 
   doc.autoTable({
-    startY: doc.lastAutoTable.finalY + 6,
+    startY: doc.lastAutoTable.finalY + 5,
     head: tablaMetricasHead,
     body: tablaMetricasBody,
     theme: 'grid',
@@ -548,7 +548,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     },
     bodyStyles: {
       halign: 'center',
-      fontSize: 10,
+      fontSize: 9,
       fontStyle: 'bold',
       textColor: [15, 23, 42],
       fillColor: false
@@ -558,7 +558,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(30, 41, 59);
-  doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 10);
+  doc.text("HISTORIAL DETALLADO DÍA A DÍA", 14, doc.lastAutoTable.finalY + 8);
 
   const headersHistorial = [["FECHA", "DÍA", "NOMBRES", "H. ENTRADA", "H. SALIDA", "ESTADO", "OBSERVACIÓN"]];
   
@@ -588,49 +588,54 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   }
 
   doc.autoTable({
-    startY: doc.lastAutoTable.finalY + 14,
+    startY: doc.lastAutoTable.finalY + 12,
     head: headersHistorial,
     body: rowsHistorial,
     theme: 'striped',
+    tableWidth: 'auto',
     headStyles: {
       fillColor: [30, 41, 59],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8,
-      halign: 'center'
+      halign: 'center',
+      valign: 'middle'
     },
     styles: {
-      fontSize: 8,
+      fontSize: 7.5,
       textColor: [51, 65, 85],
-      fillColor: false
+      fillColor: false,
+      cellPadding: 2,
+      overflow: 'linebreak'
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 25 }, 
-      1: { halign: 'center', cellWidth: 22 }, 
-      2: { halign: 'center', cellWidth: 26 }, 
-      3: { halign: 'center', cellWidth: 26 }, 
-      4: { halign: 'center', cellWidth: 26 }, 
-      5: { cellWidth: 55 }                  
+      0: { halign: 'center', cellWidth: 20 }, // Fecha
+      1: { halign: 'center', cellWidth: 18 }, // Día
+      2: { halign: 'center', cellWidth: 40 }, // Nombres
+      3: { halign: 'center', cellWidth: 20 }, // H. Entrada
+      4: { halign: 'center', cellWidth: 20 }, // H. Salida
+      5: { halign: 'center', cellWidth: 22 }, // Estado
+      6: { halign: 'left',   cellWidth: 42 }  // Observación             
     },
     didDrawPage: function (data) {
       pintarFondoMarcaAgua();
     }
   });
 
-  const finalY = doc.lastAutoTable.finalY + 30;
-  const posY = finalY > 260 ? 260 : finalY;
+  const finalY = doc.lastAutoTable.finalY + 25;
+  const posY = finalY > 265 ? 265 : finalY;
 
-  doc.setLineWidth(0.5);
+  doc.setLineWidth(0.4);
   doc.setDrawColor(148, 163, 184);
 
-  doc.line(30, posY, 85, posY);
-  doc.line(125, posY, 180, posY);
+  doc.line(25, posY, 85, posY);
+  doc.line(125, posY, 185, posY);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(71, 85, 105);
-  doc.text("Auxiliar / Auxiliar de Disciplina", 57, posY + 5, { align: "center" });
-  doc.text("Dirección / Dirección Académica", 152, posY + 5, { align: "center" });
+  doc.text("Auxiliar / Auxiliar de Disciplina", 55, posY + 4, { align: "center" });
+  doc.text("Dirección / Dirección Académica", 155, posY + 4, { align: "center" });
 
   doc.save(nombreArchivo);
 }
