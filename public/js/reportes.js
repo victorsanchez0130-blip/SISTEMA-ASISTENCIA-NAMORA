@@ -193,14 +193,22 @@ function obtenerAlumnosPorAula() {
   const seccion = document.getElementById('filtroSeccion')?.value || 'Todos';
 
   return datosReporteGlobal.filter(item => {
-    const aulaStr = (item.aula || item.materia_aula || '').toUpperCase();
+    // Normalizamos quitando espacios extraños al inicio/final
+    const aulaStr = (item.aula || item.materia_aula || '').toUpperCase().trim();
 
+    // 1. Validar Nivel (ej. "SECUNDARIA")
     if (nivel !== 'Todos' && !aulaStr.includes(nivel.toUpperCase())) return false;
+    
+    // 2. Validar Grado (ej. "5TO")
     if (grado !== 'Todos' && !aulaStr.includes(grado.toUpperCase())) return false;
 
+    // 3. CORRECCIÓN DEFINITIVA PARA LA SECCIÓN:
+    // En lugar de usar .includes(), validamos que la cadena termine exactamente en la sección
+    // Ejemplo: "SECUNDARIA 5TO B" termina en "B", "SECUNDARIA 5TO A" termina en "A".
     if (seccion !== 'Todos') {
-      const seccionNormalizada = seccion.toUpperCase();
-      if (!aulaStr.includes(seccionNormalizada)) {
+      const seccionNormalizada = seccion.toUpperCase().trim();
+      // Verificamos si termina en " A", " B", " C", etc. para evitar confundirse con letras internas de "Secundaria"
+      if (!aulaStr.endsWith(" " + seccionNormalizada)) {
         return false;
       }
     }
