@@ -704,13 +704,25 @@ async function generarGradoPDF() {
     totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
   });
 
-  let historial = [];
+  let historialGeneral = [];
   try {
     const res = await fetch(`/api/reportes/historial-detallado`);
-    if (res.ok) historial = await res.json();
+    if (res.ok) historialGeneral = await res.json();
   } catch (e) {
     console.error("Error recuperando historial general:", e);
   }
+
+  // =========================================================================
+  // CORRECCIÓN: Filtrar el historial detallado para que solo muestre el 5to C (o el aula seleccionada)
+  // =========================================================================
+  const historialFiltrado = historialGeneral.filter(reg => {
+    // Si el filtro está en "Todos", dejamos pasar el registro
+    const coincideGrado = grado === 'Todos' || (reg.grado || reg.aula || '').toUpperCase().includes(grado.toUpperCase());
+    const coincideSeccion = seccion === 'Todos' || (reg.seccion || reg.aula || '').toUpperCase().includes(seccion.toUpperCase());
+    
+    return coincideGrado && coincideSeccion;
+  });
+  // =========================================================================
 
   // Obtenemos la cantidad total exacta de alumnos filtrados
   const totalAlumnos = filtrados.length;
@@ -726,9 +738,9 @@ async function generarGradoPDF() {
       tardanzas: totTardanza, 
       faltas: totFaltas, 
       puntaje: totPuntos,
-      totalPeriodo: totalAlumnos // <- Asignamos directamente la cantidad total de alumnos como denominador
+      totalPeriodo: totalAlumnos 
     },
-    historial,
+    historial: historialFiltrado, // <- CAMBIO AQUÍ: Ahora pasamos solo los registros del aula elegida
     nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
   });
 }
