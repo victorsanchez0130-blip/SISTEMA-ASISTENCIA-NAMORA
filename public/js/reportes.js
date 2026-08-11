@@ -713,15 +713,29 @@ async function generarGradoPDF() {
   }
 
   // =========================================================================
-  // CORRECCIÓN: Filtrar el historial detallado para que solo muestre el 5to C (o el aula seleccionada)
+  // CORRECCIÓN: Filtrar el historial detallado para que solo muestre el aula seleccionada
   // =========================================================================
-  const historialFiltrado = historialGeneral.filter(reg => {
-    // Si el filtro está en "Todos", dejamos pasar el registro
-    const coincideGrado = grado === 'Todos' || (reg.grado || reg.aula || '').toUpperCase().includes(grado.toUpperCase());
-    const coincideSeccion = seccion === 'Todos' || (reg.seccion || reg.aula || '').toUpperCase().includes(seccion.toUpperCase());
-    
-    return coincideGrado && coincideSeccion;
-  });
+    const historialFiltrado = historialGeneral.filter(reg => {
+      // Si el filtro general está en "Todos", dejamos pasar todo
+      if (grado === 'Todos' && seccion === 'Todos') return true;
+
+      // Juntamos el grado y la sección que seleccionó el usuario (Ej: "1RO A")
+      const aulaBuscada = `${grado.toUpperCase()} ${seccion.toUpperCase()}`;
+
+      // Obtenemos los campos donde tu base de datos suele guardar el aula y los limpiamos
+      const campoAula = (reg.aula || '').toUpperCase();
+      const campoMateriaAula = (reg.materia_aula || '').toUpperCase();
+      const campoGradoSeccionDirecto = `${(reg.grado || '').toUpperCase()} ${(reg.seccion || '').toUpperCase()}`.trim();
+
+      // Verificamos si la combinación exacta ("1RO A") existe en alguna de las columnas
+      const coincideEnAula = campoAula.includes(aulaBuscada) || 
+                            campoAula.includes(`${grado.toUpperCase()}`) && campoAula.includes(`SECCIÓN: ${seccion.toUpperCase()}`);
+                            
+      const coincideEnMateria = campoMateriaAula.includes(aulaBuscada);
+      const coincideDirecto = campoGradoSeccionDirecto.includes(aulaBuscada);
+
+      return coincideEnAula || coincideEnMateria || coincideDirecto;
+    });
   // =========================================================================
 
   // Obtenemos la cantidad total exacta de alumnos filtrados
