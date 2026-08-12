@@ -64,18 +64,25 @@ function filtrarYRenderizarAlumnos() {
 
   if (!tbodyAlumnos) return;
 
+  const gradoUpper = grado.toUpperCase();
+  const seccionUpper = seccion.toUpperCase();
+  
   // Filtrado de alta precisión buscando coincidencias por columnas separadas o strings agrupados
   listaAlumnosFiltradaGlobal = listaAlumnos.filter(a => {
+    if (a.grado !== undefined || a.seccion !== undefined) {
+      const cumpleGrado = grado === 'Todos' || String(a.grado || '').toUpperCase().includes(gradoUpper);
+      const cumpleSeccion = seccion === 'Todos' || String(a.seccion || '').toUpperCase().trim() === seccionUpper.trim();
+      return cumpleGrado && cumpleSeccion;
+    }
+
     const asignacion = (a.asignacion || a.grado || a.aula || '').toUpperCase();
-    
-    const coincidenciaAtributos = (grado === 'Todos' || (a.grado || '').toUpperCase().includes(grado.toUpperCase())) &&
-                                  (seccion === 'Todos' || (a.seccion || '').toUpperCase().includes(seccion.toUpperCase()));
+    const cumpleGradoCadena = grado === 'Todos' || asignacion.includes(gradoUpper);
+    const cumpleSeccionCadena = seccion === 'Todos' || 
+          asignacion.includes(` ${seccionUpper}`) || 
+          asignacion.endsWith(seccionUpper);
 
-    const coincidenciaCadenaUnica = (grado === 'Todos' || asignacion.includes(grado.toUpperCase())) &&
-                                    (seccion === 'Todos' || asignacion.includes(seccion.toUpperCase()));
-
-    return coincidenciaAtributos || coincidenciaCadenaUnica;
-  });
+    return cumpleGradoCadena && cumpleSeccionCadena;
+    });
 
   // Re-ordenamiento descendente estricto por puntaje para que los puestos se asignen bien tras el filtro
   listaAlumnosFiltradaGlobal.sort((x, y) => {
@@ -225,5 +232,7 @@ async function imprimirRankingAlumnosPDF() {
     }
   });
 
+  document.getElementById('filtroGradoRanking')?.addEventListener('change', filtrarYRenderizarAlumnos);
+  document.getElementById('filtroSeccionRanking')?.addEventListener('change', filtrarYRenderizarAlumnos);
   doc.save(`Ranking_Alumnos_${grado}_${seccion}.pdf`);
 }
