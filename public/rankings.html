@@ -70,10 +70,10 @@
         </a>
 
         <!-- Botón Cerrar Sesión -->
-        <button onclick="logout()" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors font-bold text-sm text-left mt-6">
+      <!--  <button onclick="logout()" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors font-bold text-sm text-left mt-6">
           <i class="fa-solid fa-right-from-bracket w-5 text-center text-base text-rose-500"></i>
           <span>Cerrar Sesión</span>
-        </button>
+        </button>-->
       </nav>
     </div>
       </nav>
@@ -144,9 +144,30 @@
 
       <!-- TABLA: RANKING DE ALUMNOS -->
       <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
-        <h2 class="text-base sm:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <i class="fa-solid fa-user-graduate text-emerald-600"></i> Ranking de Alumnos
-        </h2>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <h2 class="text-base sm:text-lg font-bold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-user-graduate text-emerald-600"></i> Ranking de Alumnos
+          </h2>
+          
+          <!-- FILTROS DE GRADO Y SECCIÓN AGREGADOS -->
+          <div class="flex items-center gap-2">
+            <select id="filtroGradoRanking" onchange="filtrarYRenderizarAlumnos()" class="text-xs bg-slate-50 border border-slate-300 rounded-lg p-2 font-semibold text-slate-700 focus:ring-blue-500 focus:border-blue-500">
+              <option value="Todos">Todos los Grados</option>
+              <option value="1ro">1ro</option>
+              <option value="2do">2do</option>
+              <option value="3ro">3ro</option>
+              <option value="4to">4to</option>
+              <option value="5to">5to</option>
+            </select>
+            <select id="filtroSeccionRanking" onchange="filtrarYRenderizarAlumnos()" class="text-xs bg-slate-50 border border-slate-300 rounded-lg p-2 font-semibold text-slate-700 focus:ring-blue-500 focus:border-blue-500">
+              <option value="Todos">Todas las Secciones</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+            </select>
+          </div>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse min-w-[500px]">
             <thead>

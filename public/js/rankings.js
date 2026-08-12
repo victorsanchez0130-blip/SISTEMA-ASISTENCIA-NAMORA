@@ -1,5 +1,6 @@
 let listaDocentes = [];
 let listaAlumnos = [];
+let listaAlumnosFiltradaGlobal = []; // Mantiene la lista en memoria para sincronizar la pantalla y el PDF
 
 document.addEventListener('DOMContentLoaded', cargarRankings);
 
@@ -12,8 +13,7 @@ async function cargarRankings() {
 
     const data = await res.json();
 
-    // Adaptabilidad: soporta tanto si el JSON viene envuelto en { success: true, docentes: [...] } 
-    // como si el backend devuelve directamente los arreglos o un objeto contenedor.
+    // Adaptabilidad: soporta múltiples estructuras de respuesta del backend
     const docentesData = data.docentes || data.dataDocentes || (Array.isArray(data) ? data : []);
     const alumnosData = data.alumnos || data.dataAlumnos || [];
 
@@ -44,29 +44,8 @@ async function cargarRankings() {
       }
     }
 
-    // Renderizar Tabla Alumnos
-    const tbodyAlumnos = document.getElementById('tbodyRankingAlumnos');
-    if (tbodyAlumnos) {
-      tbodyAlumnos.innerHTML = '';
-      if (listaAlumnos.length === 0) {
-        tbodyAlumnos.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 font-medium">No hay alumnos registrados en el ranking</td></tr>';
-      } else {
-        listaAlumnos.forEach((a, index) => {
-          const nombre = a.nombre || a.nombre_completo || 'Sin nombre';
-          const asignacion = a.asignacion || a.grado || a.aula || '-';
-          const puntaje = a.puntaje_acumulado || a.puntaje || a.puntos || 0;
-
-          tbodyAlumnos.innerHTML += `
-            <tr class="border-b border-slate-100 text-xs hover:bg-slate-50">
-              <td class="p-3 font-bold text-slate-700">#${index + 1}</td>
-              <td class="p-3 font-medium text-slate-800">${nombre}</td>
-              <td class="p-3 text-slate-600">${asignacion}</td>
-              <td class="p-3 font-bold text-emerald-600">${puntaje} pts</td>
-            </tr>
-          `;
-        });
-      }
-    }
+    // Ejecuta la lógica inicial de pintado y filtrado para la tabla de alumnos
+    filtrarYRenderizarAlumnos();
 
   } catch (error) {
     console.error('Error al cargar los rankings:', error);
@@ -75,6 +54,56 @@ async function cargarRankings() {
     if (tbodyDocentes) tbodyDocentes.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-rose-500 font-medium">Error al cargar datos del servidor</td></tr>';
     if (tbodyAlumnos) tbodyAlumnos.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-rose-500 font-medium">Error al cargar datos del servidor</td></tr>';
   }
+}
+
+// NUEVA FUNCIÓN: Filtra la lista en memoria, re-calcula las posiciones de mérito y redibuja la tabla
+function filtrarYRenderizarAlumnos() {
+  const grado = document.getElementById('filtroGradoRanking')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccionRanking')?.value || 'Todos';
+  const tbodyAlumnos = document.getElementById('tbodyRankingAlumnos');
+
+  if (!tbodyAlumnos) return;
+
+  // Filtrado de alta precisión buscando coincidencias por columnas separadas o strings agrupados
+  listaAlumnosFiltradaGlobal = listaAlumnos.filter(a => {
+    const asignacion = (a.asignacion || a.grado || a.aula || '').toUpperCase();
+    
+    const coincidenciaAtributos = (grado === 'Todos' || (a.grado || '').toUpperCase().includes(grado.toUpperCase())) &&
+                                  (seccion === 'Todos' || (a.seccion || '').toUpperCase().includes(seccion.toUpperCase()));
+
+    const coincidenciaCadenaUnica = (grado === 'Todos' || asignacion.includes(grado.toUpperCase())) &&
+                                    (seccion === 'Todos' || asignacion.includes(seccion.toUpperCase()));
+
+    return coincidenciaAtributos || coincidenciaCadenaUnica;
+  });
+
+  // Re-ordenamiento descendente estricto por puntaje para que los puestos se asignen bien tras el filtro
+  listaAlumnosFiltradaGlobal.sort((x, y) => {
+    const ptsX = x.puntaje_acumulado || x.puntaje || x.puntos || 0;
+    const ptsY = y.puntaje_acumulado || y.puntaje || y.puntos || 0;
+    return ptsY - ptsX;
+  });
+
+  tbodyAlumnos.innerHTML = '';
+  if (listaAlumnosFiltradaGlobal.length === 0) {
+    tbodyAlumnos.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400 font-medium">No hay alumnos registrados para los filtros seleccionados</td></tr>';
+    return;
+  }
+
+  listaAlumnosFiltradaGlobal.forEach((a, index) => {
+    const nombre = a.nombre || a.nombre_completo || 'Sin nombre';
+    const asignacion = a.asignacion || a.grado || a.aula || '-';
+    const puntaje = a.puntaje_acumulado || a.puntaje || a.puntos || 0;
+
+    tbodyAlumnos.innerHTML += `
+      <tr class="border-b border-slate-100 text-xs hover:bg-slate-50">
+        <td class="p-3 font-bold text-slate-700">#${index + 1}</td>
+        <td class="p-3 font-medium text-slate-800">${nombre}</td>
+        <td class="p-3 text-slate-600">${asignacion}</td>
+        <td class="p-3 font-bold text-emerald-600">${puntaje} pts</td>
+      </tr>
+    `;
+  });
 }
 
 function agregarMembreteInstitucional(doc, titulo) {
@@ -92,13 +121,12 @@ function agregarMembreteInstitucional(doc, titulo) {
   doc.line(14, 26, 196, 26);
 }
 
-// Función compartida interna para precargar imagen en Rankings
 function preCargarLogoRankings(url) {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = url;
     img.onload = () => resolve(img);
-    img.onerror = () => resolve(null); // Retorna nulo pacíficamente si falla
+    img.onerror = () => resolve(null);
   });
 }
 
@@ -110,17 +138,15 @@ async function imprimirRankingDocentesPDF() {
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-
-  // Precargar Logo
   const imgLogo = await preCargarLogoRankings('img/logo.png');
 
   agregarMembreteInstitucional(doc, "RANKING OFICIAL DE MÉRITOS - DOCENTES");
 
   const bodyData = listaDocentes.map((d, index) => [
     `#${index + 1}`,
-    d.nombre,
-    d.asignacion || '-',
-    `${d.puntaje_acumulado || 0} pts`
+    d.nombre || d.nombre_completo || 'Sin nombre',
+    d.asignacion || d.materia || d.area || '-',
+    `${d.puntaje_acumulado || d.puntaje || 0} pts`
   ]);
 
   doc.autoTable({
@@ -129,21 +155,20 @@ async function imprimirRankingDocentesPDF() {
     body: bodyData,
     theme: 'grid',
     headStyles: { 
-    fillColor: [0, 102, 51], 
-    textColor: [255, 255, 255], 
-    fontStyle: 'bold' },
+      fillColor: [0, 102, 51], 
+      textColor: [255, 255, 255], 
+      fontStyle: 'bold' 
+    },
     styles: { 
       fontSize: 8,
-      fillColor: false // Permite ver el logo de fondo
+      fillColor: false 
     },
     didDrawPage: function (data) {
       if (imgLogo) {
         doc.saveGraphicsState();
         const opacityState = new doc.GState({ opacity: 0.2 });
         doc.setGState(opacityState);
-        
         doc.addImage(imgLogo, 'PNG', 25, 70, 160, 160, undefined, 'FAST');
-        
         doc.restoreGraphicsState();
       }
     }
@@ -153,24 +178,26 @@ async function imprimirRankingDocentesPDF() {
 }
 
 async function imprimirRankingAlumnosPDF() {
-  if (listaAlumnos.length === 0) {
+  if (listaAlumnosFiltradaGlobal.length === 0) {
     alert("No hay datos cargados para generar el ranking.");
     return;
   }
 
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-
-  // Precargar Logo
   const imgLogo = await preCargarLogoRankings('img/logo.png');
 
-  agregarMembreteInstitucional(doc, "RANKING OFICIAL DE MÉRITOS - ALUMNOS");
+  const grado = document.getElementById('filtroGradoRanking')?.value || 'Todos';
+  const seccion = document.getElementById('filtroSeccionRanking')?.value || 'Todos';
 
-  const bodyData = listaAlumnos.map((a, index) => [
+  // Configuración del membrete adaptada a los filtros visuales activos
+  agregarMembreteInstitucional(doc, `RANKING OFICIAL DE MÉRITOS - ALUMNOS (${grado.toUpperCase()} ${seccion.toUpperCase()})`);
+
+  const bodyData = listaAlumnosFiltradaGlobal.map((a, index) => [
     `#${index + 1}`,
-    a.nombre,
-    a.asignacion || '-',
-    `${a.puntaje_acumulado || 0} pts`
+    a.nombre || a.nombre_completo || 'Sin nombre',
+    a.asignacion || a.grado || a.aula || '-',
+    `${a.puntaje_acumulado || a.puntaje || 0} pts`
   ]);
 
   doc.autoTable({
@@ -179,25 +206,24 @@ async function imprimirRankingAlumnosPDF() {
     body: bodyData,
     theme: 'grid',
     headStyles: { 
-    fillColor: [0, 102, 51], 
-    textColor: [255, 255, 255], 
-    fontStyle: 'bold' },
+      fillColor: [0, 102, 51], 
+      textColor: [255, 255, 255], 
+      fontStyle: 'bold' 
+    },
     styles: { 
       fontSize: 8,
-      fillColor: false // Permite ver el logo de fondo
+      fillColor: false 
     },
     didDrawPage: function (data) {
       if (imgLogo) {
         doc.saveGraphicsState();
         const opacityState = new doc.GState({ opacity: 0.2 });
         doc.setGState(opacityState);
-        
         doc.addImage(imgLogo, 'PNG', 25, 70, 160, 160, undefined, 'FAST');
-        
         doc.restoreGraphicsState();
       }
     }
   });
 
-  doc.save('Ranking_Alumnos_Santa_Rosa.pdf');
+  doc.save(`Ranking_Alumnos_${grado}_${seccion}.pdf`);
 }
