@@ -9,64 +9,16 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-  <!-- SIDEBAR NAVEGACIÓN DINÁMICO -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 transform -translate-x-full md:relative md:translate-x-0 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between shadow-xl z-20 min-h-screen transition-transform duration-200 ease-in-out">
-    <div>
-      <div class="flex items-center gap-3 p-4 border-b border-slate-800">
-        <img src="img/logo.png" alt="Logo I.E. Santa Rosa" class="w-12 h-12 object-contain" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2991/2991108.png'">
-        <div>
-          <h2 class="text-white font-bold text-sm leading-tight tracking-wider">I.E. SANTA ROSA</h2>
-          <span class="text-[11px] text-slate-400 font-medium">Control Asistencial</span>
-        </div>
-      </div>
-
-      <nav class="p-3 space-y-2 text-sm font-semibold" id="nav-menu">
-        <a href="dashboard.html" id="nav-inicio" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-          <i class="fa-solid fa-chart-pie w-5 text-center text-base text-cyan-300"></i>
-          <span>Inicio</span>
-        </a>
-
-        <!-- Control y Reportes (Módulo Activo) -->
-        <a href="reportes.html" id="nav-reportes" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-blue-600 text-white shadow-md">
-          <i class="fa-solid fa-folder-open w-5 text-center text-base text-emerald-400"></i>
-          <span>Control y Reportes</span>
-        </a>
-
-        <a href="rankings.html" id="nav-rankings" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-          <i class="fa-solid fa-trophy w-5 text-center text-base text-amber-400"></i>
-          <span>Rankings y Puntos</span>
-        </a>
-
-        <!-- Inscribir / CRUD (Restringido para Director y Admin) -->
-        <a href="inscripciones.html" id="nav-crud" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors">
-          <i class="fa-solid fa-user-pen w-5 text-center text-base text-purple-400"></i>
-          <span>Inscribir / CRUD</span>
-        </a>
-
-        <!-- Botón Cerrar Sesión -->
-          <!--<button onclick="logout()" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors font-bold text-sm text-left mt-6">
-            <i class="fa-solid fa-right-from-bracket w-5 text-center text-base text-rose-500"></i>
-            <span>Cerrar Sesión</span>
-          </button>-->
-          </nav>
-          </div>
-        </button>
+  <div class="dashboard-container">
+    <aside class="sidebar">
+      <div class="brand">🏫 I.E. Santa Rosa</div>
+      <nav class="menu">
+        <a href="dashboard.html">🏠 Inicio</a>
+        <a href="reportes.html">📁 Control y Reportes</a>
+        <a href="rankings.html">🏆 Rankings y Puntos</a>
+        <a href="inscripciones.html" class="active">📝 Inscribir / CRUD</a>
       </nav>
-    </div>
-
-    <!-- Perfil Dinámico al pie del Sidebar -->
-    <div class="p-4 border-t border-slate-800 bg-slate-950/40">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/30" id="user-avatar">
-          U
-        </div>
-        <div class="overflow-hidden">
-          <p class="text-xs font-bold text-white truncate" id="user-name">Usuario</p>
-          <span class="inline-block px-2 py-0.5 text-[10px] font-extrabold rounded bg-slate-800 text-cyan-400 tracking-wide uppercase" id="user-role-badge">ROL</span>
-        </div>
-      </div>
-    </div>
-  </aside>
+    </aside>
 
     <main class="main-content">
       <div class="card-box">
