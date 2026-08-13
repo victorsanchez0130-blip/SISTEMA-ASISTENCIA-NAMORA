@@ -288,7 +288,7 @@ function procesarMarcacionManual(e) {
 }
 
 async function procesarMarcacion(codigo) {
-  // 1. Validar duplicados inmediatos en memoria
+  // 1. Validar duplicados inmediatos en memoria (Bloqueo de ráfaga de escaneo)
   if (procesandoEscaneoQR) return;
   procesandoEscaneoQR = true;
 
@@ -296,8 +296,49 @@ async function procesarMarcacion(codigo) {
     iniciarRegistro();
   }
 
+  const codigoLimpio = codigo.trim();
+
+  // ====================================================
+  // VALIDACIÓN LOCAL PREVIA (Evita peticiones innecesarias)
+  // ====================================================
+  const tablaHoy = document.getElementById('tabla-asistencias-hoy');
+  if (tablaHoy) {
+    // Buscamos si el código ya existe en la tabla de asistencias de hoy
+    const filas = tablaHoy.querySelectorAll('tr');
+    let yaTieneEntrada = false;
+    let yaTieneSalida = false;
+
+    filas.forEach(fila => {
+      const celdaCodigo = fila.querySelector('td:first-child');
+      if (celdaCodigo && celdaCodigo.innerText.trim() === codigoLimpio) {
+        // Obtenemos los valores de las columnas de Entrada (columna 4) y Salida (columna 5)
+        const horaEntrada = fila.cells[3]?.innerText.trim() || '-';
+        const horaSalida = fila.cells[4]?.innerText.trim() || '-';
+
+        if (horaEntrada !== '-') yaTieneEntrada = true;
+        if (horaSalida !== '-') yaTieneSalida = true;
+      }
+    });
+
+    // Evaluamos según el modo seleccionado actualmente en el sistema
+    if (modoActual === 'ENTRADA' && yaTieneEntrada) {
+      mostrarNotificacion("❌ ERROR, YA INGRESÓ", "bg-rose-100 text-rose-800 border-rose-300 font-bold");
+      setTimeout(() => { procesandoEscaneoQR = false; }, 3000);
+      return; // Detiene el flujo
+    } 
+    
+    if (modoActual === 'SALIDA' && yaTieneSalida) {
+      mostrarNotificacion("❌ ERROR, YA MARCÓ SALIDA", "bg-rose-100 text-rose-800 border-rose-300 font-bold");
+      setTimeout(() => { procesandoEscaneoQR = false; }, 3000);
+      return; // Detiene el flujo
+    }
+  }
+
+  // ====================================================
+  // ENVÍO DE DATOS AL BACKEND (Si pasa la validación local)
+  // ====================================================
   const payload = {
-    codigo: codigo.trim(),
+    codigo: codigoLimpio,
     tipo: modoActual,
     fecha_hora: new Date().toISOString()
   };
@@ -313,31 +354,41 @@ async function procesarMarcacion(codigo) {
 
     if (response.ok && (res.success || res.ok)) {
       const datosPersona = res.persona || res.alumno || res.docente || res.auxiliar || res.usuario || { 
-        codigo: codigo, 
+        codigo: codigoLimpio, 
         nombre: res.nombre || 'Usuario Registrado', 
         aula: res.asignacion || res.aula || res.grado_seccion || 'Asignación Regular',
         modo: modoActual 
       };
 
       mostrarTarjetaResultado(datosPersona);
-      mostrarNotificacion(`✅ ${modoActual} registrada para el código ${codigo}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
-      cargarAsistenciasHoy();
-      cargarConsolidado();
+      mostrarNotificacion(`✅ ${modoActual} registrada para el código ${codigoLimpio}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
+      
+      // Refrescar las listas para que la validación local tenga datos frescos en el siguiente escaneo
+      await cargarAsistenciasHoy();
+      await cargarConsolidado();
     } else {
-      mostrarNotificacion(`❌ Error: ${res.mensaje || 'No se pudo guardar la marcación.'}`, "bg-rose-100 text-rose-800 border-rose-300");
+      // Si el servidor devuelve un error de duplicado, adaptamos el mensaje personalizado
+      let mensajeError = res.mensaje || 'No se pudo guardar la marcación.';
+      if (mensajeError.toLowerCase().includes('ya ingresó') || mensajeError.toLowerCase().includes('entrada ya registrada')) {
+        mensajeError = "ERROR, YA INGRESÓ";
+      } else if (mensajeError.toLowerCase().includes('ya marcó salida') || mensajeError.toLowerCase().includes('salida ya registrada')) {
+        mensajeError = "ERROR, YA MARCÓ SALIDA";
+      }
+
+      mostrarNotificacion(`❌ ${mensajeError}`, "bg-rose-100 text-rose-800 border-rose-300 font-bold");
     }
   } catch (error) {
     console.error("Error al procesar la marcación con el backend:", error);
+    // En caso de trabajar offline, el sistema avisa del registro pero respetando que no estuviera duplicado antes
     mostrarTarjetaResultado({ 
-      codigo: codigo, 
+      codigo: codigoLimpio, 
       nombre: "Registro Local / Sincronizando", 
       aula: "Pendiente de red", 
       modo: modoActual 
     });
     mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
   } finally {
-    // CORRECCIÓN DE BUG: Dejar que el flujo manual o un retraso prudente libere el lector 
-    // para evitar el spam en bucle de peticiones asíncronas.
+    // Libera el lector QR después de 3 segundos para prevenir lecturas en bucle del mismo código
     setTimeout(() => {
       procesandoEscaneoQR = false;
     }, 3000); 

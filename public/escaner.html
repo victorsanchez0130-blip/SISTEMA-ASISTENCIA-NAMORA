@@ -196,6 +196,9 @@
         // CORRECCIÓN CLAVE: Evita envíos masivos y dobles marcas en milisegundos
         let procesandoEscaneoQR = false; 
 
+        // Variable global para almacenar en memoria las asistencias renderizadas en la tabla
+        let asistenciasCargadasMemoria = [];
+
         // Inicialización General
         document.addEventListener('DOMContentLoaded', () => {
             actualizarReloj();
@@ -343,7 +346,7 @@
         }
 
         // ========================================================
-        // CONTROL ASÍNCRONO REMOTO (FRONT-BACKEND INTERCONEXIÓN)
+        // CONTROL ASÍNCRONO REMOTO CORREGIDO CON VALIDACIÓN DE DUPLICADOS
         // ========================================================
         async function procesarMarcacion(codigo) {
             if (!jornadaActiva) {
@@ -351,11 +354,31 @@
                 return;
             }
 
-            // 1. Bloqueo inmediato anti-rebote
+            const codigoLimpio = codigo.trim();
+
+            // 1. VALIDACIÓN LOCAL DE DUPLICADOS (Mismo Día)
+            // Se comprueba en el arreglo de asistencias cargadas de hoy si el código ya tiene una marca coincidente
+            const registroExistente = asistenciasCargadasMemoria.find(item => item.codigo === codigoLimpio);
+            
+            if (registroExistente) {
+                const estadoMayuscula = (registroExistente.estado || '').toUpperCase();
+                
+                if (modoActual === 'ENTRADA' && (estadoMayuscula.includes('PUNTUAL') || estadoMayuscula.includes('TARDANZA') || estadoMayuscula.includes('ENTRADA'))) {
+                    mostrarNotificacion("❌ ERROR, YA INGRESÓ", "bg-rose-100 text-rose-800 border-rose-300 font-bold");
+                    return; 
+                }
+                
+                if (modoActual === 'SALIDA' && estadoMayuscula.includes('SALIDA')) {
+                    mostrarNotificacion("❌ ERROR, YA MARCÓ SALIDA", "bg-rose-100 text-rose-800 border-rose-300 font-bold");
+                    return;
+                }
+            }
+
+            // 2. Bloqueo inmediato anti-rebote
             if (procesandoEscaneoQR) return;
             procesandoEscaneoQR = true;
 
-            // 2. Detener cámara en caliente antes del fetch para congelar fotograma
+            // 3. Detener cámara en caliente antes del fetch para congelar fotograma
             if (html5QrcodeScanner && camaraEncendida) {
                 try {
                     await html5QrcodeScanner.stop();
@@ -371,7 +394,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        codigo: codigo.trim(),
+                        codigo: codigoLimpio,
                         tipo: modoActual,
                         fecha_hora: new Date().toISOString()
                     })
@@ -381,35 +404,51 @@
 
                 if (response.ok && (res.success || res.ok)) {
                     const payload = res.persona || res.alumno || res.docente || res.auxiliar || res.usuario || {
-                        codigo: codigo,
+                        codigo: codigoLimpio,
                         nombre: res.nombre || 'No Especificado',
                         materia_aula: res.asignacion || res.aula || res.grado_seccion || 'Asignación Regular'
                     };
                     
-                    // Capturar de forma estricta el estado calculado del backend (PUNTUAL / TARDANZA)
                     payload.estadoReal = res.estado || payload.estado || (modoActual === 'ENTRADA' ? 'PUNTUAL' : 'SALIDA');
 
                     abrirModalAsistencia(payload);
                     mostrarTarjetaResultado(payload);
-                    cargarAsistenciasHoy();
+                    await cargarAsistenciasHoy();
 
                 } else {
-                    mostrarNotificacion(`❌ ${res.mensaje || 'Error al procesar el registro'}`, "bg-rose-100 text-rose-800 border-rose-300");
+                    let mensajeServidor = res.mensaje || 'Error al procesar el registro';
+                    // Sanitización de textos devueltos por el backend para mantener consistencia
+                    if (mensajeServidor.toLowerCase().includes('ya ingresó') || mensajeServidor.toLowerCase().includes('entrada ya registrada')) {
+                        mensajeServidor = "ERROR, YA INGRESÓ";
+                    } else if (mensajeServidor.toLowerCase().includes('ya marcó salida') || mensajeServidor.toLowerCase().includes('salida ya registrada')) {
+                        mensajeServidor = "ERROR, YA MARCÓ SALIDA";
+                    }
+
+                    mostrarNotificacion(`❌ ${mensajeServidor}`, "bg-rose-100 text-rose-800 border-rose-300 font-bold");
                     procesandoEscaneoQR = false;
-                    iniciarCamara(); // Reactiva la cámara si el código era inválido
+                    iniciarCamara();
                 }
             } catch(err) {
                 console.error("Modo Offline activado por fallo de red:", err);
                 const fallbackData = {
-                    codigo: codigo,
+                    codigo: codigoLimpio,
                     nombre: 'Registro de Emergencia',
                     materia_aula: 'Modo Offline',
-                    estadoReal: modoActual === 'ENTRADA' ? 'PROCESADO LOCAL' : 'SALIDA LOCAL'
+                    estadoReal: modoActual === 'ENTRADA' ? 'PUNTUAL' : 'SALIDA'
                 };
                 
                 abrirModalAsistencia(fallbackData);
                 mostrarTarjetaResultado(fallbackData);
-                cargarAsistenciasHoy();
+                
+                // Agregar localmente al listado de memoria para que la validación funcione de forma offline
+                asistenciasCargadasMemoria.push({
+                    codigo: fallbackData.codigo,
+                    nombre: fallbackData.nombre,
+                    materia_aula: fallbackData.materia_aula,
+                    hora: new Date().toLocaleTimeString(),
+                    estado: fallbackData.estadoReal
+                });
+                renderizarTablaAsistencias(asistenciasCargadasMemoria);
             }
         }
 
@@ -425,7 +464,6 @@
             const icon = document.getElementById('modal-icon');
             const badgeEstado = document.getElementById('modal-estado');
 
-            // PROCESAMIENTO DINÁMICO DE ESTADOS DESDE BACKEND
             const estadoAMostrar = data.estadoReal.toUpperCase();
 
             if (modoActual === 'ENTRADA') {
@@ -450,7 +488,6 @@
                 badgeEstado.className = "font-black px-2.5 py-1 rounded-md text-[10px] bg-indigo-100 text-indigo-800 border border-indigo-200";
             }
 
-            // Desplegar Modal animado sin superposiciones caóticas
             const modal = document.getElementById('modal-asistencia');
             if (modal) {
                 modal.classList.remove('hidden');
@@ -471,7 +508,6 @@
                     modal.classList.remove('flex');
                     modal.classList.add('hidden');
                     
-                    // SINCRO SEGURA: Desbloquear el flag global y encender la cámara limpiamente
                     procesandoEscaneoQR = false; 
                     if (jornadaActiva) {
                         iniciarCamara();
@@ -520,14 +556,18 @@
                 const response = await fetch('/api/asistencia/hoy');
                 if(!response.ok) throw new Error("API Offline");
                 const datos = await response.json();
+                asistenciasCargadasMemoria = datos; // Guardar en memoria global
                 renderizarTablaAsistencias(datos);
             } catch(e) {
-                console.warn("API remota inaccesible, usando filas base en UI.");
-                const simulados = [
-                    { codigo: "AL202601", nombre: "Carlos Mendoza Torres", materia_aula: "5to de Secundaria - A", hora: "07:42:15 AM", estado: "PUNTUAL" },
-                    { codigo: "DOC4412", nombre: "Dra. Elena Rostova", materia_aula: "Álgebra Avanzada", hora: "08:03:10 AM", estado: "TARDANZA" }
-                ];
-                renderizarTablaAsistencias(simulados);
+                console.warn("API remota inaccesible, usando datos en memoria actual.");
+                // Si la tabla está vacía y falla la red por primera vez, mostramos ejemplos base
+                if (asistenciasCargadasMemoria.length === 0) {
+                    asistenciasCargadasMemoria = [
+                        { codigo: "AL202601", nombre: "Carlos Mendoza Torres", materia_aula: "5to de Secundaria - A", hora: "07:42:15 AM", estado: "PUNTUAL" },
+                        { codigo: "DOC4412", nombre: "Dra. Elena Rostova", materia_aula: "Álgebra Avanzada", hora: "08:03:10 AM", estado: "TARDANZA" }
+                    ];
+                }
+                renderizarTablaAsistencias(asistenciasCargadasMemoria);
             }
         }
 
