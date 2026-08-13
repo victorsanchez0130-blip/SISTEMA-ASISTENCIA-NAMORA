@@ -288,7 +288,7 @@ function procesarMarcacionManual(e) {
 }
 
 async function procesarMarcacion(codigo) {
-  // Evitar escaneos múltiples consecutivos del mismo QR
+  // 1. Validar duplicados inmediatos en memoria
   if (procesandoEscaneoQR) return;
   procesandoEscaneoQR = true;
 
@@ -336,10 +336,11 @@ async function procesarMarcacion(codigo) {
     });
     mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
   } finally {
-    // Liberar el bloqueo del escáner después de 2.5 segundos para permitir un nuevo escaneo limpio
+    // CORRECCIÓN DE BUG: Dejar que el flujo manual o un retraso prudente libere el lector 
+    // para evitar el spam en bucle de peticiones asíncronas.
     setTimeout(() => {
       procesandoEscaneoQR = false;
-    }, 2500);
+    }, 3000); 
   }
 }
 
