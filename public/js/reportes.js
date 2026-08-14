@@ -704,42 +704,56 @@ async function generarGradoPDF() {
     totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
   });
 
+  // OBTENER DÍAS LECTIVOS DEL PERIODO ACTUAL (Diario = 1, Semanal = 5, etc.)
+  const diasPeriodo = obtenerTotalDiasPeriodo();
+  // El máximo posible de registros en este grupo es: (Días del Periodo) x (Cantidad de Alumnos)
+  const maxUniversoRegistros = diasPeriodo * filtrados.length;
+
   let historialGeneral = [];
   try {
-    const res = await fetch(`/api/reportes/historial-detallado`);
-    if (res.ok) historialGeneral = await res.json();
+    // CORRECCIÓN: Pasar la fecha actual para que la API solo devuelva el historial del día/semana/mes filtrado
+    const res = await fetch(`/api/reportes/historial-detallado?tipo=${tipo}&fecha=${encodeURIComponent(fecha)}`);
+    if (res.ok) {
+      historialGeneral = await res.json();
+    } else {
+      // Fallback si la API requiere la ruta limpia
+      const resClean = await fetch(`/api/reportes/historial-detallado`);
+      if (resClean.ok) historialGeneral = await resClean.json();
+    }
   } catch (e) {
     console.error("Error recuperando historial general:", e);
   }
 
   // =========================================================================
-  // CORRECCIÓN: Filtrar el historial detallado para que solo muestre el aula seleccionada
+  // FILTRADO ESTRICTO POR AULA Y POR FECHA SELECCIONADA (Para Reporte Diario)
   // =========================================================================
-    const historialFiltrado = historialGeneral.filter(reg => {
-      // Si el filtro general está en "Todos", dejamos pasar todo
-      if (grado === 'Todos' && seccion === 'Todos') return true;
+  const historialFiltrado = historialGeneral.filter(reg => {
+    // Si es reporte Diario, nos aseguramos de que solo pasen los registros de esa fecha exacta
+    if (tipo === 'Diario' && fecha && reg.fecha && reg.fecha !== fecha) {
+      return false;
+    }
 
-      // Juntamos el grado y la sección que seleccionó el usuario (Ej: "1RO A")
-      const aulaBuscada = `${grado.toUpperCase()} ${seccion.toUpperCase()}`;
+    // Si el filtro general está en "Todos", dejamos pasar todo
+    if (grado === 'Todos' && seccion === 'Todos') return true;
 
-      // Obtenemos los campos donde tu base de datos suele guardar el aula y los limpiamos
-      const campoAula = (reg.aula || '').toUpperCase();
-      const campoMateriaAula = (reg.materia_aula || '').toUpperCase();
-      const campoGradoSeccionDirecto = `${(reg.grado || '').toUpperCase()} ${(reg.seccion || '').toUpperCase()}`.trim();
+    // Juntamos el grado y la sección que seleccionó el usuario (Ej: "1RO A")
+    const aulaBuscada = `${grado.toUpperCase()} ${seccion.toUpperCase()}`;
 
-      // Verificamos si la combinación exacta ("1RO A") existe en alguna de las columnas
-      const coincideEnAula = campoAula.includes(aulaBuscada) || 
-                            campoAula.includes(`${grado.toUpperCase()}`) && campoAula.includes(`SECCIÓN: ${seccion.toUpperCase()}`);
-                            
-      const coincideEnMateria = campoMateriaAula.includes(aulaBuscada);
-      const coincideDirecto = campoGradoSeccionDirecto.includes(aulaBuscada);
+    // Obtenemos los campos donde tu base de datos suele guardar el aula y los limpiamos
+    const campoAula = (reg.aula || '').toUpperCase();
+    const campoMateriaAula = (reg.materia_aula || '').toUpperCase();
+    const campoGradoSeccionDirecto = `${(reg.grado || '').toUpperCase()} ${(reg.seccion || '').toUpperCase()}`.trim();
 
-      return coincideEnAula || coincideEnMateria || coincideDirecto;
-    });
+    // Verificamos si la combinación exacta ("1RO A") existe en alguna de las columnas
+    const coincideEnAula = campoAula.includes(aulaBuscada) || 
+                          (campoAula.includes(`${grado.toUpperCase()}`) && campoAula.includes(`SECCIÓN: ${seccion.toUpperCase()}`));
+                          
+    const coincideEnMateria = campoMateriaAula.includes(aulaBuscada);
+    const coincideDirecto = campoGradoSeccionDirecto.includes(aulaBuscada);
+
+    return coincideEnAula || coincideEnMateria || coincideDirecto;
+  });
   // =========================================================================
-
-  // Obtenemos la cantidad total exacta de alumnos filtrados
-  const totalAlumnos = filtrados.length;
 
   await construirPDFModeloEstandar({
     titulo: `CONSOLIDADO DE ASISTENCIA - GRADO ${grado} ${seccion}`,
@@ -752,9 +766,10 @@ async function generarGradoPDF() {
       tardanzas: totTardanza, 
       faltas: totFaltas, 
       puntaje: totPuntos,
-      totalPeriodo: totalAlumnos 
+      // CAMBIO AQUÍ: Enviamos el universo total de registros posibles del periodo para calcular bien el (%)
+      totalPeriodo: maxUniversoRegistros || 1 
     },
-    historial: historialFiltrado, // <- CAMBIO AQUÍ: Ahora pasamos solo los registros del aula elegida
+    historial: historialFiltrado,
     nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
   });
 }
