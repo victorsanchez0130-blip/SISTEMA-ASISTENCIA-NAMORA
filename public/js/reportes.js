@@ -622,8 +622,12 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
     }
   });
 
-  const finalY = doc.lastAutoTable.finalY + 25;
-  const posY = finalY > 265 ? 265 : finalY;
+  let posY = doc.lastAutoTable.finalY + 35;
+  if (posY > 255) {
+    doc.addPage();
+    pintarFondoMarcaAgua(); // Mantiene la marca de agua si cambia de hoja
+    posY = 50; // Posición inicial limpia en la nueva página
+  }
 
   doc.setLineWidth(0.4);
   doc.setDrawColor(148, 163, 184);
@@ -632,10 +636,10 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.line(125, posY, 185, posY);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105);
-  doc.text("Auxiliar / Auxiliar de Disciplina", 55, posY + 4, { align: "center" });
-  doc.text("Dirección / Dirección Académica", 155, posY + 4, { align: "center" });
+  doc.text("Auxiliar / Auxiliar de Disciplina", 55, posY + 5, { align: "center" });
+  doc.text("Dirección / Dirección Académica", 155, posY + 5, { align: "center" });
 
   doc.save(nombreArchivo);
 }
