@@ -696,27 +696,13 @@ async function generarGradoPDF() {
   const tipo = document.getElementById('filtroTipo')?.value || 'Diario';
   const fecha = document.getElementById('filtroFecha')?.value || '';
 
-  let totPuntual = 0, totTardanza = 0, totFaltas = 0, totPuntos = 0;
-  filtrados.forEach(a => {
-    totPuntual += (a.asistencias || 0);
-    totTardanza += (a.tardanzas || 0);
-    totFaltas += ((a.fJustificadas || 0) + (a.fInjustificadas || 0));
-    totPuntos += (a.puntajeTotal !== undefined ? a.puntajeTotal : 0);
-  });
-
-  // OBTENER DÍAS LECTIVOS DEL PERIODO ACTUAL (Diario = 1, Semanal = 5, etc.)
-  const diasPeriodo = obtenerTotalDiasPeriodo();
-  // El máximo posible de registros en este grupo es: (Días del Periodo) x (Cantidad de Alumnos)
-  const maxUniversoRegistros = diasPeriodo * filtrados.length;
-
   let historialGeneral = [];
   try {
-    // CORRECCIÓN: Pasar la fecha actual para que la API solo devuelva el historial del día/semana/mes filtrado
+    // Intentamos pasar los parámetros de filtro a la API para reducir la carga
     const res = await fetch(`/api/reportes/historial-detallado?tipo=${tipo}&fecha=${encodeURIComponent(fecha)}`);
     if (res.ok) {
       historialGeneral = await res.json();
     } else {
-      // Fallback si la API requiere la ruta limpia
       const resClean = await fetch(`/api/reportes/historial-detallado`);
       if (resClean.ok) historialGeneral = await resClean.json();
     }
@@ -725,26 +711,21 @@ async function generarGradoPDF() {
   }
 
   // =========================================================================
-  // FILTRADO ESTRICTO POR AULA Y POR FECHA SELECCIONADA (Para Reporte Diario)
+  // FILTRADO ESTRICTO POR AULA Y POR FECHA SELECCIONADA
   // =========================================================================
   const historialFiltrado = historialGeneral.filter(reg => {
-    // Si es reporte Diario, nos aseguramos de que solo pasen los registros de esa fecha exacta
+    // Si el filtro es Diario, descartamos estrictamente registros de otras fechas
     if (tipo === 'Diario' && fecha && reg.fecha && reg.fecha !== fecha) {
       return false;
     }
 
-    // Si el filtro general está en "Todos", dejamos pasar todo
     if (grado === 'Todos' && seccion === 'Todos') return true;
 
-    // Juntamos el grado y la sección que seleccionó el usuario (Ej: "1RO A")
     const aulaBuscada = `${grado.toUpperCase()} ${seccion.toUpperCase()}`;
-
-    // Obtenemos los campos donde tu base de datos suele guardar el aula y los limpiamos
     const campoAula = (reg.aula || '').toUpperCase();
     const campoMateriaAula = (reg.materia_aula || '').toUpperCase();
     const campoGradoSeccionDirecto = `${(reg.grado || '').toUpperCase()} ${(reg.seccion || '').toUpperCase()}`.trim();
 
-    // Verificamos si la combinación exacta ("1RO A") existe en alguna de las columnas
     const coincideEnAula = campoAula.includes(aulaBuscada) || 
                           (campoAula.includes(`${grado.toUpperCase()}`) && campoAula.includes(`SECCIÓN: ${seccion.toUpperCase()}`));
                           
@@ -753,7 +734,27 @@ async function generarGradoPDF() {
 
     return coincideEnAula || coincideEnMateria || coincideDirecto;
   });
+
   // =========================================================================
+  // NUEVO RE-CÁLCULO DE MÉTRICAS BASADO EXCLUSIVAMENTE EN EL HISTORIAL FILTRADO
+  // =========================================================================
+  let totPuntual = 0, totTardanza = 0, totFaltas = 0, totPuntos = 0;
+
+  historialFiltrado.forEach(reg => {
+    const estado = (reg.estado || '').toUpperCase();
+    if (estado === 'PUNTUAL') {
+      totPuntual++;
+      totPuntos += 10; // O el puntaje que asignes por puntualidad
+    } else if (estado === 'TARDANZA') {
+      totTardanza++;
+      totPuntos += 5;  // O el puntaje que asignes por tardanza
+    } else if (estado === 'FALTA' || estado === 'INJUSTIFICADA') {
+      totFaltas++;
+    }
+  });
+
+  // El universo total de registros evaluados es la suma de los estados procesados
+  const universoTotal = totPuntual + totTardanza + totFaltas;
 
   await construirPDFModeloEstandar({
     titulo: `CONSOLIDADO DE ASISTENCIA - GRADO ${grado} ${seccion}`,
@@ -765,9 +766,9 @@ async function generarGradoPDF() {
       puntuales: totPuntual, 
       tardanzas: totTardanza, 
       faltas: totFaltas, 
-      puntaje: totPuntos,
-      // CAMBIO AQUÍ: Enviamos el universo total de registros posibles del periodo para calcular bien el (%)
-      totalPeriodo: maxUniversoRegistros || 1 
+      textPuntaje: totPuntos, // Puntos acumulados en el periodo
+      get puntaje() { return totPuntos; },
+      totalPeriodo: universoTotal || 1 // Evita división por cero si está vacío
     },
     historial: historialFiltrado,
     nombreArchivo: `Reporte_Grado_${grado}_${seccion}.pdf`
