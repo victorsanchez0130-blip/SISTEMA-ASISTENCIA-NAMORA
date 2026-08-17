@@ -415,9 +415,6 @@ app.listen(PORT, () => {
   console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
 
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./tu_base_de_datos.sqlite'); // Reemplaza con la ruta de tu archivo DB
-
 db.run(`
   DELETE FROM asistencias 
   WHERE fecha LIKE '2026-08-%' AND SUBSTR(fecha, 9, 2) IN ('11', '12', '13', '14')
