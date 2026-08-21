@@ -173,7 +173,7 @@ function toggleCamara() {
   }
 }
 
-function iniciarCamara() {
+async function iniciarCamara() {
   const readerContainer = document.getElementById('reader') || document.querySelector('[id*="camara"]') || document.querySelector('.bg-slate-900');
 
   if (!readerContainer) {
@@ -188,6 +188,10 @@ function iniciarCamara() {
   if (typeof Html5Qrcode === 'undefined') {
     alert("La librería del escáner HTML5 (Html5Qrcode) no está cargada en la página.");
     return;
+  }
+
+  if (camaraEncendida) {
+    await detenerCamara();
   }
 
   readerContainer.innerHTML = "";
@@ -226,16 +230,16 @@ function iniciarCamara() {
   }
 }
 
-function detenerCamara() {
+async function detenerCamara() {
   if (html5QrcodeScanner && camaraEncendida) {
-    html5QrcodeScanner.stop().then(() => {
-      camaraEncendida = false;
-      actualizarEstadoCamaraUI(false);
-    }).catch(err => {
+    try {
+      await html5QrcodeScanner.stop();
+    } catch (err) {
       console.error("Error al detener la cámara:", err);
+    } finally {
       camaraEncendida = false;
       actualizarEstadoCamaraUI(false);
-    });
+    }
   } else {
     camaraEncendida = false;
     actualizarEstadoCamaraUI(false);
@@ -288,7 +292,6 @@ function procesarMarcacionManual(e) {
 }
 
 async function procesarMarcacion(codigo) {
-  // 1. Validar duplicados inmediatos en memoria (Bloqueo de ráfaga de escaneo)
   if (procesandoEscaneoQR) return;
   procesandoEscaneoQR = true;
 
@@ -299,11 +302,10 @@ async function procesarMarcacion(codigo) {
   const codigoLimpio = codigo.trim();
 
   // ====================================================
-  // VALIDACIÓN LOCAL PREVIA (Evita peticiones innecesarias)
+  // VALIDACIÓN LOCAL PREVIA
   // ====================================================
   const tablaHoy = document.getElementById('tabla-asistencias-hoy');
   if (tablaHoy) {
-    // Buscamos si el código ya existe en la tabla de asistencias de hoy
     const filas = tablaHoy.querySelectorAll('tr');
     let yaTieneEntrada = false;
     let yaTieneSalida = false;
@@ -311,7 +313,6 @@ async function procesarMarcacion(codigo) {
     filas.forEach(fila => {
       const celdaCodigo = fila.querySelector('td:first-child');
       if (celdaCodigo && celdaCodigo.innerText.trim() === codigoLimpio) {
-        // Obtenemos los valores de las columnas de Entrada (columna 4) y Salida (columna 5)
         const horaEntrada = fila.cells[3]?.innerText.trim() || '-';
         const horaSalida = fila.cells[4]?.innerText.trim() || '-';
 
@@ -320,22 +321,21 @@ async function procesarMarcacion(codigo) {
       }
     });
 
-    // Evaluamos según el modo seleccionado actualmente en el sistema
     if (modoActual === 'ENTRADA' && yaTieneEntrada) {
       mostrarNotificacion("❌ ERROR, YA INGRESÓ", "bg-rose-100 text-rose-800 border-rose-300 font-bold");
       setTimeout(() => { procesandoEscaneoQR = false; }, 3000);
-      return; // Detiene el flujo
+      return;
     } 
     
     if (modoActual === 'SALIDA' && yaTieneSalida) {
       mostrarNotificacion("❌ ERROR, YA MARCÓ SALIDA", "bg-rose-100 text-rose-800 border-rose-300 font-bold");
       setTimeout(() => { procesandoEscaneoQR = false; }, 3000);
-      return; // Detiene el flujo
+      return;
     }
   }
 
   // ====================================================
-  // ENVÍO DE DATOS AL BACKEND (Si pasa la validación local)
+  // ENVÍO DE DATOS AL BACKEND
   // ====================================================
   const payload = {
     codigo: codigoLimpio,
@@ -363,11 +363,8 @@ async function procesarMarcacion(codigo) {
       mostrarTarjetaResultado(datosPersona);
       mostrarNotificacion(`✅ ${modoActual} registrada para el código ${codigoLimpio}`, "bg-emerald-100 text-emerald-800 border-emerald-300");
       
-      // Refrescar las listas para que la validación local tenga datos frescos en el siguiente escaneo
-      await cargarAsistenciasHoy();
-      await cargarConsolidado();
+      await Promise.all([cargarAsistenciasHoy(), cargarConsolidado()]);
     } else {
-      // Si el servidor devuelve un error de duplicado, adaptamos el mensaje personalizado
       let mensajeError = res.mensaje || 'No se pudo guardar la marcación.';
       if (mensajeError.toLowerCase().includes('ya ingresó') || mensajeError.toLowerCase().includes('entrada ya registrada')) {
         mensajeError = "ERROR, YA INGRESÓ";
@@ -379,7 +376,6 @@ async function procesarMarcacion(codigo) {
     }
   } catch (error) {
     console.error("Error al procesar la marcación con el backend:", error);
-    // En caso de trabajar offline, el sistema avisa del registro pero respetando que no estuviera duplicado antes
     mostrarTarjetaResultado({ 
       codigo: codigoLimpio, 
       nombre: "Registro Local / Sincronizando", 
@@ -388,7 +384,6 @@ async function procesarMarcacion(codigo) {
     });
     mostrarNotificacion(`✅ Marcación (${modoActual}) realizada localmente.`, "bg-emerald-100 text-emerald-800 border-emerald-300");
   } finally {
-    // Libera el lector QR después de 3 segundos para prevenir lecturas en bucle del mismo código
     setTimeout(() => {
       procesandoEscaneoQR = false;
     }, 3000); 
@@ -483,7 +478,7 @@ function configurarEventosTeclado() {
 }
 
 // ====================================================
-// CONSOLIDADOS Y REPORTES EN PDF (COMPLETO)
+// CONSOLIDADOS Y REPORTES EN PDF
 // ====================================================
 
 function actualizarTipoSelectorFecha(ejecutarCarga = true) {
@@ -785,7 +780,7 @@ function cerrarModalEditar() {
 }
 
 async function guardarEdicionAsistencia(event) {
-  event.preventDefault();
+  if (event) event.preventDefault();
 
   const codigo = document.getElementById('edit-codigo-input')?.value;
   const nuevoEstado = document.getElementById('edit-estado-select')?.value || document.querySelector('#modal-editar-asistencia select')?.value;
@@ -821,7 +816,7 @@ async function guardarEdicionAsistencia(event) {
 
     const resultado = await response.json();
 
-    if (response.ok && (resultado.success || resultado.ok || resultado.status === 'success')) {
+    if (response.ok && (resultado.success || resultado.ok || resultado.status === 'success' || resultado.status === 200)) {
       alert("¡Asistencia modificada correctamente en el servidor!");
       cerrarModalEditar();
       cargarConsolidado();
@@ -832,8 +827,8 @@ async function guardarEdicionAsistencia(event) {
     console.warn("Fallo en /api/asistencia/editar, intentando endpoint alternativo...", error);
     
     try {
-      const altResponse = await fetch(`/api/reportes/editar?codigo=${codigo}&estado=${nuevoEstado}&fecha=${fechaVal}`, {
-        method: 'PUT' || 'POST'
+      const altResponse = await fetch(`/api/reportes/editar?codigo=${encodeURIComponent(codigo)}&estado=${encodeURIComponent(nuevoEstado)}&fecha=${encodeURIComponent(fechaVal)}`, {
+        method: 'PUT'
       });
       if (altResponse.ok) {
         alert("¡Asistencia actualizada exitosamente!");

@@ -115,7 +115,8 @@
                         <tr class="bg-slate-50/60 text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-100">
                             <th class="py-3 px-5">Código / Persona</th>
                             <th class="py-3 px-4">Asignación / Aula</th>
-                            <th class="py-3 px-4">Hora</th>
+                            <th class="py-3 px-4 text-emerald-600">H. Entrada</th>
+                            <th class="py-3 px-4 text-indigo-600">H. Salida</th>
                             <th class="py-3 px-5 text-right">Estado</th>
                         </tr>
                     </thead>
@@ -573,12 +574,23 @@
 
         function renderizarTablaAsistencias(lista) {
             const tbody = document.getElementById('tabla-asistencias');
-            if(!tbody) return;
+            if (!tbody) return;
 
-            if(!lista || lista.length === 0) {
-                tbody.innerHTML = `<tr id="tabla-vacia" class="text-center text-slate-400"><td colspan="4" class="py-12 flex flex-col items-center justify-center gap-2"><i class="fa-solid fa-folder-open text-3xl text-slate-200"></i><span class="text-xs text-slate-400 font-medium">No hay marcaciones registradas para el día de hoy.</span></td></tr>`;
-                document.getElementById('count-puntual').innerText = "0";
-                document.getElementById('count-tardanza').innerText = "0";
+            // 1. Manejo del estado vacío cuando no hay registros en la lista
+            if (!lista || lista.length === 0) {
+                tbody.innerHTML = `
+                    <tr id="tabla-vacia" class="text-center text-slate-400">
+                        <td colspan="5" class="py-12 flex flex-col items-center justify-center gap-2">
+                            <i class="fa-solid fa-folder-open text-3xl text-slate-200"></i>
+                            <span class="text-xs text-slate-400 font-medium">No hay marcaciones registradas para el día de hoy.</span>
+                        </td>
+                    </tr>`;
+                
+                // Reiniciar contadores del panel superior en cero
+                const elemPuntual = document.getElementById('count-puntual');
+                const elemTardanza = document.getElementById('count-tardanza');
+                if (elemPuntual) elemPuntual.innerText = "0";
+                if (elemTardanza) elemTardanza.innerText = "0";
                 return;
             }
 
@@ -586,35 +598,57 @@
             let cPuntual = 0;
             let cTardanza = 0;
 
+            // 2. Recorrido completo de la lista de marcaciones
             lista.forEach(item => {
                 const est = (item.estado || 'REGISTRADO').toUpperCase();
                 let badgeClass = "bg-emerald-100 text-emerald-800 border-emerald-200";
                 
-                if(est.includes('TARDANZA')) {
+                // Clasificación de badges e incremento de contadores para resumen en vivo
+                if (est.includes('TARDANZA')) {
                     badgeClass = "bg-amber-100 text-amber-800 border-amber-200";
                     cTardanza++;
-                } else if(est.includes('SALIDA')) {
+                } else if (est.includes('SALIDA')) {
                     badgeClass = "bg-indigo-100 text-indigo-800 border-indigo-200";
                 } else {
                     cPuntual++;
                 }
 
-                html += `<tr class="hover:bg-slate-50/80 transition-colors">
-                    <td class="py-3 px-5 font-medium">
-                        <div class="font-bold text-slate-800">${item.nombre}</div>
-                        <div class="text-[11px] text-slate-400 font-mono">ID: ${item.codigo}</div>
-                    </td>
-                    <td class="py-3 px-4 text-slate-500 font-medium">${item.materia_aula || item.aula || '---'}</td>
-                    <td class="py-3 px-4 font-mono font-semibold text-slate-600 text-xs">${item.hora || new Date().toLocaleTimeString()}</td>
-                    <td class="py-3 px-5 text-right">
-                        <span class="font-bold px-2 py-0.5 rounded-md text-[10px] border ${badgeClass}">${est}</span>
-                    </td>
-                </tr>`;
+                // Asignación explícita de Entradas y Salidas
+                const horaEntrada = item.hora_entrada || item.hora || '---';
+                const horaSalida = item.hora_salida || '---';
+
+                // Construcción completa de la fila HTML respetando las 5 columnas
+                html += `
+                    <tr class="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+                        <td class="py-3 px-5 font-medium">
+                            <div class="font-bold text-slate-800">${item.nombre || 'No Especificado'}</div>
+                            <div class="text-[11px] text-slate-400 font-mono">ID: ${item.codigo || '-'}</div>
+                        </td>
+                        <td class="py-3 px-4 text-slate-500 font-medium">
+                            ${item.materia_aula || item.aula || item.asignacion || '---'}
+                        </td>
+                        <td class="py-3 px-4 font-mono font-bold text-emerald-600 text-xs">
+                            ${horaEntrada}
+                        </td>
+                        <td class="py-3 px-4 font-mono font-bold text-indigo-600 text-xs">
+                            ${horaSalida}
+                        </td>
+                        <td class="py-3 px-5 text-right">
+                            <span class="font-bold px-2 py-0.5 rounded-md text-[10px] border ${badgeClass}">
+                                ${est}
+                            </span>
+                        </td>
+                    </tr>`;
             });
 
+            // 3. Inserción del HTML generado en el cuerpo de la tabla
             tbody.innerHTML = html;
-            document.getElementById('count-puntual').innerText = cPuntual;
-            document.getElementById('count-tardanza').innerText = cTardanza;
+
+            // 4. Actualización de los marcadores contadores del encabezado
+            const elemPuntual = document.getElementById('count-puntual');
+            const elemTardanza = document.getElementById('count-tardanza');
+            if (elemPuntual) elemPuntual.innerText = cPuntual;
+            if (elemTardanza) elemTardanza.innerText = cTardanza;
         }
 
         // Toasts informativos dinámicos
