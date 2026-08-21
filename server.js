@@ -414,3 +414,32 @@ app.get('/api/rankings', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
+
+app.get('/api/reportes/historial-detallado', (req, res) => {
+  const { codigo } = req.query;
+  let query = `
+    SELECT 
+      a.fecha, 
+      a.hora, 
+      CASE 
+        WHEN UPPER(a.estado) IN ('PUNTUAL', 'TARDANZA') AND (a.hora_salida IS NULL OR a.hora_salida = '' OR a.hora_salida = '-') 
+          THEN '13:10:00'
+        ELSE COALESCE(a.hora_salida, '-')
+      END AS hora_salida,
+      a.estado, 
+      u.codigo, 
+      u.nombre, 
+      u.materia_aula AS aula
+    FROM asistencias a 
+    JOIN usuarios u ON a.usuario_codigo = u.codigo
+  `;
+  const params = [];
+  if (codigo && codigo !== 'todos') {
+    query += ` WHERE a.usuario_codigo = ?`;
+    params.push(codigo);
+  }
+  db.all(query, params, (err, rows) => {
+    if (err) return res.status(500).json([]);
+    res.json(rows || []);
+  });
+});
