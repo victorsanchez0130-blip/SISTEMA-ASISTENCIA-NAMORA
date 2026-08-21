@@ -414,3 +414,25 @@ app.get('/api/rankings', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
+
+// Endpoint temporal para actualizar salidas por única vez
+app.get('/api/admin/actualizar-salidas-alumnos', (req, res) => {
+  const query = `
+    UPDATE asistencias 
+    SET hora_salida = '13:00:00' 
+    WHERE UPPER(estado) IN ('PUNTUAL', 'TARDANZA') 
+      AND (hora_salida IS NULL OR hora_salida = '' OR hora_salida = '-');
+  `;
+
+  db.run(query, [], function (err) {
+    if (err) {
+      console.error('Error actualizando horas de salida:', err.message);
+      return res.status(500).json({ success: false, mensaje: err.message });
+    }
+
+    res.json({
+      success: true,
+      mensaje: `Se actualizaron correctamente ${this.changes} registros con la hora de salida 13:00:00.`
+    });
+  });
+});
