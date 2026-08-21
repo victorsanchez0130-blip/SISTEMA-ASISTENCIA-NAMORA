@@ -576,11 +576,18 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   const rowsHistorial = historial.map(h => {
     const estadoLimpio = (h.estado || '').toUpperCase();
     let entradaDisplay = h.hora || h.hora_entrada || '-';
-    let salidaDisplay = h.hora_salida || h.salida || '-';
+    let salidaDisplay = h.hora || h.salida_salida || '-';
 
-    if (estadoLimpio === 'FALTA' || estadoLimpio === 'INJUSTIFICADA' || entradaDisplay === '-' || entradaDisplay === '00:00:00') {
+    if (estadoLimpio === 'PUNTUAL' || estadoLimpio === 'TARDANZA') {
+      // Si la salida está vacía, es nula o viene como "-", se le fuerza '13:10:00'
+      if (!salidaDisplay || salidaDisplay === '-' || salidaDisplay === 'null' || salidaDisplay === '00:00:00') {
+        salidaDisplay = '13:10:00';
+      }
+    } else if (estadoLimpio === 'FALTA' || estadoLimpio === 'INJUSTIFICADA' || entradaDisplay === '-' || entradaDisplay === '00:00:00') {
       entradaDisplay = 'FALTA';
       salidaDisplay = 'FALTA';
+    } else {
+      if (!salidaDisplay) salidaDisplay = '-';
     }
 
     return [
