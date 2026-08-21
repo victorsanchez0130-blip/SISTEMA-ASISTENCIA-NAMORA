@@ -576,11 +576,11 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   const rowsHistorial = historial.map(h => {
     const estadoLimpio = (h.estado || '').toUpperCase();
     let entradaDisplay = h.hora || h.hora_entrada || '-';
-    let salidaDisplay = h.hora || h.salida_salida || '-';
+    let salidaDisplay = h.hora_salida || h.salida;
 
     if (estadoLimpio === 'PUNTUAL' || estadoLimpio === 'TARDANZA') {
-      // Si la salida está vacía, es nula o viene como "-", se le fuerza '13:10:00'
-      if (!salidaDisplay || salidaDisplay === '-' || salidaDisplay === 'null' || salidaDisplay === '00:00:00') {
+      // Si la salida está vacía, o es igual a la hora de entrada, la forzamos a 13:10:00
+      if (!salidaDisplay || salidaDisplay === '-' || salidaDisplay === 'null' || salidaDisplay === '00:00:00' || salidaDisplay === entradaDisplay) {
         salidaDisplay = '13:10:00';
       }
     } else if (estadoLimpio === 'FALTA' || estadoLimpio === 'INJUSTIFICADA' || entradaDisplay === '-' || entradaDisplay === '00:00:00') {
@@ -595,7 +595,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       obtenerNombreDia(h.fecha),
       h.nombre || h.alumno || nombre || '-',
       entradaDisplay,
-      salidaDisplay,
+      salidaDisplay, // <--- Ahora dirá 13:10:00 correctamente
       estadoLimpio,
       obtenerObservacionEstado(h.estado)
     ];
