@@ -414,37 +414,3 @@ app.get('/api/rankings', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
-
-// =========================================================================
-// ENDPOINT DE ACTUALIZACIÓN MASIVA DE SALIDAS (SOLO ALUMNOS)
-// =========================================================================
-app.get('/api/admin/actualizar-salidas-alumnos', (req, res) => {
-  const query = `
-    UPDATE asistencias 
-    SET hora_salida = '13:00:00'
-    WHERE id IN (
-      SELECT a.id 
-      FROM asistencias a
-      JOIN usuarios u ON a.usuario_codigo = u.codigo
-      WHERE LOWER(u.rol) IN ('alumno', 'estudiante')
-        AND UPPER(a.estado) IN ('PUNTUAL', 'TARDANZA')
-        AND (a.hora_salida IS NULL OR a.hora_salida = '' OR a.hora_salida = '-')
-    );
-  `;
-
-  db.run(query, [], function (err) {
-    if (err) {
-      console.error('Error al actualizar horas de salida:', err.message);
-      return res.status(500).json({ 
-        success: false, 
-        mensaje: 'Error en base de datos: ' + err.message 
-      });
-    }
-
-    res.json({
-      success: true,
-      mensaje: `¡Éxito! Se asignó la hora de salida (13:00:00) a ${this.changes} registros de alumnos.`,
-      registrosActualizados: this.changes
-    });
-  });
-});
