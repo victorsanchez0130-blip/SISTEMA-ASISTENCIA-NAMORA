@@ -466,10 +466,17 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   const doc = new jsPDFClass();
 
   let imgLogoLoaded = null;
+  let imgFirmaDireccionLoaded = null; // Variable para almacenar la imagen de la firma
   try {
-    imgLogoLoaded = await cargarImagenLogoAsync('img/logo.png');
+    // Precargamos tanto el logo como la firma
+    const [logo, firma] = await Promise.all([
+      cargarImagenLogoAsync('img/logo.png'),
+      cargarImagenLogoAsync('img/firma_direccion.png') // <-- RUTA DE TU IMAGEN DE FIRMA
+    ]);
+    imgLogoLoaded = logo;
+    imgFirmaDireccionLoaded = firma;
   } catch (imgErr) {
-    console.warn("No se pudo precargar la marca de agua:", imgErr);
+    console.warn("No se pudieron precargar las imágenes:", imgErr);
   }
 
   const pintarFondoMarcaAgua = () => {
