@@ -466,15 +466,19 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   const doc = new jsPDFClass();
 
   let imgLogoLoaded = null;
-  let imgFirmaDireccionLoaded = null; // Variable para almacenar la imagen de la firma
+  let imgFirmaDireccionLoaded = null;
+  let imgFirmaAuxiliarLoaded = null; // Opcional por si agregas la del auxiliar luego
+
   try {
-    // Precargamos tanto el logo como la firma
-    const [logo, firma] = await Promise.all([
+    // Precargar imágenes en paralelo
+    const [logo, firmaDir, firmaAux] = await Promise.all([
       cargarImagenLogoAsync('img/logo.png'),
-      cargarImagenLogoAsync('img/firma_direccion.png') // <-- RUTA DE TU IMAGEN DE FIRMA
+      cargarImagenLogoAsync('img/firma_direccion.png'), // Ruta de la firma de Dirección
+      cargarImagenLogoAsync('img/firma_auxiliar.png').catch(() => null) // Opcional
     ]);
     imgLogoLoaded = logo;
-    imgFirmaDireccionLoaded = firma;
+    imgFirmaDireccionLoaded = firmaDir;
+    imgFirmaAuxiliarLoaded = firmaAux;
   } catch (imgErr) {
     console.warn("No se pudieron precargar las imágenes:", imgErr);
   }
@@ -616,32 +620,51 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
       overflow: 'linebreak'
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 20 }, // Fecha
-      1: { halign: 'center', cellWidth: 18 }, // Día
-      2: { halign: 'center', cellWidth: 40 }, // Nombres
-      3: { halign: 'center', cellWidth: 20 }, // H. Entrada
-      4: { halign: 'center', cellWidth: 20 }, // H. Salida
-      5: { halign: 'center', cellWidth: 22 }, // Estado
-      6: { halign: 'left',   cellWidth: 42 }  // Observación             
+      0: { halign: 'center', cellWidth: 20 },
+      1: { halign: 'center', cellWidth: 18 },
+      2: { halign: 'center', cellWidth: 40 },
+      3: { halign: 'center', cellWidth: 20 },
+      4: { halign: 'center', cellWidth: 20 },
+      5: { halign: 'center', cellWidth: 22 },
+      6: { halign: 'left',   cellWidth: 42 }
     },
     didDrawPage: function (data) {
       pintarFondoMarcaAgua();
     }
   });
 
-  let posY = doc.lastAutoTable.finalY + 35;
-  if (posY > 255) {
+  // ====================================================
+  // POSICIONAMIENTO Y DIBUJO DE FIRMAS
+  // ====================================================
+  let posY = doc.lastAutoTable.finalY + 30; // Margen para dar espacio a la imagen de la firma
+
+  // Si no hay espacio en la página actual, crea una nueva hoja
+  if (posY > 245) {
     doc.addPage();
-    pintarFondoMarcaAgua(); // Mantiene la marca de agua si cambia de hoja
-    posY = 50; // Posición inicial limpia en la nueva página
+    pintarFondoMarcaAgua();
+    posY = 60; // Posición limpia en la nueva hoja
   }
 
+  // 1. Dibujar Imagen de Firma de Dirección (si cargó correctamente)
+  if (imgFirmaDireccionLoaded) {
+    // addImage(imagen, formato, x, y, ancho, alto)
+    // Se ubica a x: 135 (sobre la línea derecha) y justo encima de posY
+    doc.addImage(imgFirmaDireccionLoaded, 'PNG', 135, posY - 22, 40, 20);
+  }
+
+  // 2. Dibujar Imagen de Firma de Auxiliar (opcional)
+  if (imgFirmaAuxiliarLoaded) {
+    doc.addImage(imgFirmaAuxiliarLoaded, 'PNG', 35, posY - 22, 40, 20);
+  }
+
+  // 3. Líneas de firma
   doc.setLineWidth(0.4);
   doc.setDrawColor(148, 163, 184);
 
   doc.line(25, posY, 85, posY);
   doc.line(125, posY, 185, posY);
 
+  // 4. Textos de firma
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105);
