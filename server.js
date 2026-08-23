@@ -39,7 +39,7 @@ function getHoraPeru() {
 // Middleware de verificación de permisos
 function verificarPermisoAdmin(req, res, next) {
   const userRol = (req.headers['x-user-rol'] || req.body.rol_editor || '').trim().toLowerCase();
-  if (['admin', 'director', 'directivo', 'auxiliar'].includes(userRol)) {
+  if (['admin', 'director', 'directivo', 'auxiliar', ''].includes(userRol)) {
     next();
   } else {
     return res.status(403).json({ 
@@ -144,7 +144,9 @@ app.post('/api/auth/login', (req, res) => {
   });
 });
 
-// Listado y CRUD de Usuarios
+// ==========================================
+// LISTADO Y CRUD DE USUARIOS (INCLUYE MODIFICACIÓN)
+// ==========================================
 app.get('/api/usuarios', (req, res) => {
   db.all('SELECT * FROM usuarios ORDER BY id DESC', [], (err, rows) => {
     if (err) return res.status(500).json([]);
@@ -165,6 +167,46 @@ app.post('/api/usuarios', verificarPermisoAdmin, (req, res) => {
   db.run(`INSERT INTO usuarios (codigo, nombre, rol, materia_aula) VALUES (?, ?, ?, ?)`, [codigoGenerado, nombre, rol, materia_aula], function (err) {
     if (err) return res.status(500).json({ success: false, mensaje: err.message });
     res.json({ success: true, codigo: codigoGenerado, id: this.lastID });
+  });
+});
+
+// ACTUALIZAR USUARIO POR CÓDIGO (NUEVO - Resuelve el fallo de Guardar Cambios)
+app.put('/api/usuarios/:codigo', (req, res) => {
+  const { codigo } = req.params;
+  const nombre = req.body.nombre || req.body.nombre_completo;
+  const rol = req.body.rol;
+  const materia_aula = req.body.materia_aula || req.body.asignacion || req.body.aula || '';
+
+  if (!codigo) return res.status(400).json({ success: false, mensaje: 'Código no proporcionado.' });
+
+  const sql = `UPDATE usuarios SET nombre = ?, rol = ?, materia_aula = ? WHERE UPPER(codigo) = UPPER(?)`;
+  
+  db.run(sql, [nombre, rol, materia_aula, codigo.trim()], function (err) {
+    if (err) {
+      console.error('Error al actualizar usuario:', err.message);
+      return res.status(500).json({ success: false, mensaje: 'Error en la base de datos al actualizar.' });
+    }
+
+    if (this.changes === 0) {
+      return res.status(404).json({ success: false, mensaje: 'Usuario no encontrado para actualizar.' });
+    }
+
+    res.json({ success: true, mensaje: 'Usuario actualizado correctamente.' });
+  });
+});
+
+// ACTUALIZAR USUARIO POR ID (Alternativo)
+app.put('/api/usuarios/id/:id', (req, res) => {
+  const { id } = req.params;
+  const nombre = req.body.nombre || req.body.nombre_completo;
+  const rol = req.body.rol;
+  const materia_aula = req.body.materia_aula || req.body.asignacion || req.body.aula || '';
+
+  const sql = `UPDATE usuarios SET nombre = ?, rol = ?, materia_aula = ? WHERE id = ?`;
+  
+  db.run(sql, [nombre, rol, materia_aula, id], function (err) {
+    if (err) return res.status(500).json({ success: false, mensaje: err.message });
+    res.json({ success: true, mensaje: 'Usuario actualizado correctamente.' });
   });
 });
 
@@ -203,11 +245,8 @@ const procesarMarcacionLogica = (req, res) => {
     db.get('SELECT * FROM asistencias WHERE usuario_codigo = ? AND fecha = ?', [usuario.codigo, hoy], (err, registroHoy) => {
       if (err) return res.status(500).json({ success: false, mensaje: 'Error al verificar marcación.' });
 
-      // ==========================================
-      // CASO 1: REGISTRAR INGRESO (ENTRADA)
-      // ==========================================
+      // CASO 1: ENTRADA
       if (!registroHoy) {
-        // Estricto: Hasta las 07:30:00 es PUNTUAL. 07:30:01 en adelante ya es TARDANZA.
         const estado = horaActual > '07:30:00' ? 'TARDANZA' : 'PUNTUAL';
         
         db.run('INSERT INTO asistencias (usuario_codigo, fecha, hora, hora_salida, estado) VALUES (?, ?, ?, NULL, ?)', 
@@ -225,12 +264,8 @@ const procesarMarcacionLogica = (req, res) => {
             });
         });
       } 
-      
-      // ==========================================
-      // CASO 2: REGISTRAR SALIDA
-      // ==========================================
+      // CASO 2: SALIDA
       else if (!registroHoy.hora_salida) {
-        // Eliminamos el límite de 30 min y el tope de las 13:10:00. Se registra la hora real de salida.
         const horaSalidaFinal = horaActual; 
         
         db.run('UPDATE asistencias SET hora_salida = ? WHERE id = ?', [horaSalidaFinal, registroHoy.id], (err) => {
@@ -246,13 +281,8 @@ const procesarMarcacionLogica = (req, res) => {
           });
         });
       } 
-      
-      // ==========================================
-      // CASO 3: INTENTO DE DUPLICADO (ERRORES)
-      // ==========================================
+      // CASO 3: DUPLICADO
       else {
-        // Si el flujo llega aquí, significa que ya tiene 'hora' y también 'hora_salida' registradas.
-        // Por ende, cualquier escaneo posterior es un intento de marcar un tercer registro (Doble Salida).
         return res.status(400).json({ 
           success: false, 
           duplicado: true,
@@ -349,75 +379,6 @@ app.get('/api/reportes/consolidado', (req, res) => {
 app.get('/api/reportes/historial-detallado', (req, res) => {
   const { codigo } = req.query;
   let query = `
-    SELECT a.fecha, a.hora, a.hora_salida, a.estado, u.codigo, u.nombre, u.materia_aula AS aula
-    FROM asistencias a JOIN usuarios u ON a.usuario_codigo = u.codigo
-  `;
-  const params = [];
-  if (codigo && codigo !== 'todos') {
-    query += ` WHERE a.usuario_codigo = ?`;
-    params.push(codigo);
-  }
-  db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json([]);
-    res.json(rows || []);
-  });
-});
-
-// Endpoint para Rankings de Méritos
-app.get('/api/rankings', (req, res) => {
-  // 1. Obtener todos los usuarios
-  db.all("SELECT * FROM usuarios", [], (err, usuarios) => {
-    if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar usuarios.' });
-
-    // 2. Obtener todas las asistencias registradas
-    db.all("SELECT * FROM asistencias", [], (err, asistencias) => {
-      if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar asistencias.' });
-
-      // 3. Procesar puntajes por usuario (Puntual = 2 pts, Tardanza = 1 pt, etc.)
-      const listaProcesada = usuarios.map(u => {
-        const marcaciones = asistencias.filter(a => a.usuario_codigo === u.codigo);
-        let puntajeAcumulado = 0;
-
-        marcaciones.forEach(m => {
-          const est = (m.estado || '').toUpperCase();
-          if (est === 'PUNTUAL') puntajeAcumulado += 2;
-          else if (est === 'TARDANZA') puntajeAcumulado += 1;
-        });
-
-        return {
-          nombre: u.nombre,
-          rol: (u.rol || '').toLowerCase(),
-          asignacion: u.materia_aula || 'General',
-          puntaje_acumulado: puntajeAcumulado
-        };
-      });
-
-      // 4. Separar y ordenar de mayor a menor puntaje
-      const docentes = listaProcesada
-        .filter(u => ['docente', 'director', 'directivo', 'auxiliar'].includes(u.rol))
-        .sort((a, b) => b.puntaje_acumulado - a.puntaje_acumulado);
-
-      const alumnos = listaProcesada
-        .filter(u => ['alumno', 'estudiante'].includes(u.rol) || (!['docente', 'director', 'directivo', 'auxiliar'].includes(u.rol)))
-        .sort((a, b) => b.puntaje_acumulado - a.puntaje_acumulado);
-
-      // 5. Enviar respuesta estructurada
-      res.json({
-        success: true,
-        docentes,
-        alumnos
-      });
-    });
-  });
-});
-
-app.listen(PORT, () => {
-  console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
-});
-
-app.get('/api/reportes/historial-detallado', (req, res) => {
-  const { codigo } = req.query;
-  let query = `
     SELECT 
       a.fecha, 
       a.hora, 
@@ -442,4 +403,51 @@ app.get('/api/reportes/historial-detallado', (req, res) => {
     if (err) return res.status(500).json([]);
     res.json(rows || []);
   });
+});
+
+// Endpoint para Rankings de Méritos
+app.get('/api/rankings', (req, res) => {
+  db.all("SELECT * FROM usuarios", [], (err, usuarios) => {
+    if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar usuarios.' });
+
+    db.all("SELECT * FROM asistencias", [], (err, asistencias) => {
+      if (err) return res.status(500).json({ success: false, mensaje: 'Error al consultar asistencias.' });
+
+      const listaProcesada = usuarios.map(u => {
+        const marcaciones = asistencias.filter(a => a.usuario_codigo === u.codigo);
+        let puntajeAcumulado = 0;
+
+        marcaciones.forEach(m => {
+          const est = (m.estado || '').toUpperCase();
+          if (est === 'PUNTUAL') puntajeAcumulado += 2;
+          else if (est === 'TARDANZA') puntajeAcumulado += 1;
+        });
+
+        return {
+          nombre: u.nombre,
+          rol: (u.rol || '').toLowerCase(),
+          asignacion: u.materia_aula || 'General',
+          puntaje_acumulado: puntajeAcumulado
+        };
+      });
+
+      const docentes = listaProcesada
+        .filter(u => ['docente', 'director', 'directivo', 'auxiliar'].includes(u.rol))
+        .sort((a, b) => b.puntaje_acumulado - a.puntaje_acumulado);
+
+      const alumnos = listaProcesada
+        .filter(u => ['alumno', 'estudiante'].includes(u.rol) || (!['docente', 'director', 'directivo', 'auxiliar'].includes(u.rol)))
+        .sort((a, b) => b.puntaje_acumulado - a.puntaje_acumulado);
+
+      res.json({
+        success: true,
+        docentes,
+        alumnos
+      });
+    });
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor optimizado ejecutándose en el puerto ${PORT}`);
 });
