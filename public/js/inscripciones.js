@@ -37,7 +37,6 @@ document.getElementById('formRegistro').addEventListener('submit', async (e) => 
     materia_aula = 'Auxiliar de Educación';
   }
 
-  // Obtener rol actual o por defecto 'admin' para cumplir con el middleware del servidor
   const rolUsuarioLogueado = localStorage.getItem('userRol') || 'admin';
 
   try {
@@ -45,7 +44,7 @@ document.getElementById('formRegistro').addEventListener('submit', async (e) => 
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'x-user-rol': rolUsuarioLogueado // <- ¡Clave para que el servidor autorice la inserción!
+        'x-user-rol': rolUsuarioLogueado
       },
       body: JSON.stringify({ nombre, rol, materia_aula })
     });
@@ -74,12 +73,17 @@ async function cargarUsuarios() {
     
     tbody.innerHTML = '';
 
-    if (usuarios.length === 0) {
+    if (!Array.isArray(usuarios) || usuarios.length === 0) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px;">No hay usuarios registrados.</td></tr>`;
       return;
     }
 
     usuarios.forEach(u => {
+      // Escapar comillas para evitar errores de sintaxis en los atributos onclick
+      const nombreEscapado = (u.nombre || '').replace(/'/g, "\\'");
+      const rolEscapado = (u.rol || '').replace(/'/g, "\\'");
+      const materiaEscapada = (u.materia_aula || '').replace(/'/g, "\\'");
+
       tbody.innerHTML += `
         <tr>
           <td><b>${u.codigo}</b></td>
@@ -87,8 +91,8 @@ async function cargarUsuarios() {
           <td>${u.rol}</td>
           <td>${u.materia_aula || '-'}</td>
           <td style="display:flex; gap:5px;">
-            <button onclick="descargarFotocheck('${u.codigo}', '${u.nombre}', '${u.rol}', '${u.materia_aula}')" class="btn-submit" style="background:#0284c7; padding:6px 12px; font-size:12px;">📱 Fotocheck</button>
-            <button onclick="abrirModalEditar(${u.id}, '${u.nombre}', '${u.rol}', '${u.materia_aula}')" class="btn-submit" style="background:#eab308; padding:6px 12px; font-size:12px;">✏️ Editar</button>
+            <button onclick="descargarFotocheck('${u.codigo}', '${nombreEscapado}', '${rolEscapado}', '${materiaEscapada}')" class="btn-submit" style="background:#0284c7; padding:6px 12px; font-size:12px;">📱 Fotocheck</button>
+            <button onclick="abrirModalEditar(${u.id}, '${nombreEscapado}', '${rolEscapado}', '${materiaEscapada}')" class="btn-submit" style="background:#eab308; padding:6px 12px; font-size:12px;">✏️ Editar</button>
             <button onclick="eliminarUsuario(${u.id})" class="btn-delete" style="padding:6px 12px; font-size:12px;">Eliminar</button>
           </td>
         </tr>
@@ -111,33 +115,52 @@ function cerrarModalEditar() {
   document.getElementById('modalEditar').style.display = 'none';
 }
 
+// ==========================================
+// FUNCIÓN CORREGIDA PARA GUARDAR EDICIÓN
+// ==========================================
 async function guardarEdicionUsuario() {
   const id = document.getElementById('editId').value;
-  const nombre = document.getElementById('editNombre').value;
+  const nombre = document.getElementById('editNombre').value.trim();
   const rol = document.getElementById('editRol').value;
-  const materia_aula = document.getElementById('editAsignacion').value;
+  const materia_aula = document.getElementById('editAsignacion').value.trim();
   const rolUsuarioLogueado = localStorage.getItem('userRol') || 'admin';
 
+  if (!id) {
+    alert("Error: No se encontró el ID del usuario a editar.");
+    return;
+  }
+
+  if (!nombre) {
+    alert("Por favor, ingrese el nombre completo.");
+    return;
+  }
+
   try {
-    const res = await fetch(`/api/usuarios/${id}`, {
+    // Apuntamos a la ruta PUT con /id/ que definimos en el servidor
+    const res = await fetch(`/api/usuarios/id/${id}`, {
       method: 'PUT',
       headers: { 
         'Content-Type': 'application/json',
         'x-user-rol': rolUsuarioLogueado
       },
-      body: JSON.stringify({ nombre, rol, materia_aula })
+      body: JSON.stringify({ 
+        nombre: nombre, 
+        rol: rol, 
+        materia_aula: materia_aula 
+      })
     });
 
     const data = await res.json();
     if (data.success) {
-      alert('Usuario actualizado correctamente');
+      alert('✅ Usuario actualizado correctamente');
       cerrarModalEditar();
       cargarUsuarios();
     } else {
-      alert('Error al actualizar: ' + (data.mensaje || ''));
+      alert('❌ Error al actualizar: ' + (data.mensaje || 'Error desconocido en el servidor.'));
     }
   } catch (err) {
-    console.error("Error al editar:", err);
+    console.error("Error al editar usuario:", err);
+    alert("❌ Error de conexión al intentar guardar los cambios.");
   }
 }
 
@@ -159,6 +182,7 @@ async function eliminarUsuario(id) {
       }
     } catch (err) {
       console.error("Error al eliminar:", err);
+      alert("Error de conexión al eliminar.");
     }
   }
 }
