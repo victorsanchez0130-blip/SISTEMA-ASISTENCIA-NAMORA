@@ -117,7 +117,7 @@ function agregarMembreteInstitucional(doc, titulo) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.setTextColor(14, 42, 71);
-  doc.text("I.E. SANTA ROSA - NAMORA", 105, 15, { align: "center" });
+  doc.text("I.E. CÉSAR VALLEJO MENDOZA - NAMORA", 105, 15, { align: "center" });
 
   doc.setFontSize(12);
   doc.setTextColor(71, 85, 105);

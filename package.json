@@ -1,7 +1,7 @@
 {
-  "name": "sistema-asistencia-srn",
+  "name": "sistema-asistencia-cvm",
   "version": "2.0.0",
-  "description": "Sistema de Control de Asistencia e Incentivos - I.E. Santa Rosa de Namora",
+  "description": "Sistema de Control de Asistencia e Incentivos - I.E. CESAR VALLEJO MENDOZA de Namora",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

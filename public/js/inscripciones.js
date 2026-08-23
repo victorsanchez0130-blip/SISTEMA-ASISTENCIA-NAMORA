@@ -184,7 +184,7 @@ function descargarFotocheck(codigo, nombre, rol, asignacion) {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text("I.E. SANTA ROSA", 27, 7, { align: "center" });
+    doc.text("I.E. CÉSAR VALLEJO MENDOZA", 27, 7, { align: "center" });
     doc.setFontSize(6);
     doc.setFont('helvetica', 'normal');
     doc.text("NAMORA - CAJAMARCA", 27, 12, { align: "center" });

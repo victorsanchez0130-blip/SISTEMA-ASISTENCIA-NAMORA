@@ -1,5 +1,5 @@
 /**
- * Control de Asistencia QR y Consolidados - I.E. SANTA ROSA (NAMORA - CAJAMARCA)
+ * Control de Asistencia QR y Consolidados - I.E. CÉSAR VALLEJO MENDOZA (NAMORA - CAJAMARCA)
  * Archivo: js/escaner.js
  */
 
@@ -25,7 +25,7 @@ const FERIADOS_PERU_MMDD = [
   '07-28', // Fiestas Patrias
   '07-29', // Fiestas Patrias
   '08-06', // Batalla de Junín
-  '08-30', // Santa Rosa de Lima
+  '08-30', // CÉSAR VALLEJO MENDOZA de Lima
   '10-08', // Combate de Angamos
   '11-01', // Día de Todos los Santos
   '12-08', // Inmaculada Concepción
@@ -896,7 +896,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(30, 41, 59);
-  doc.text("I.E. SANTA ROSA - NAMORA", 105, 15, { align: "center" });
+  doc.text("I.E. CÉSAR VALLEJO MENDOZA - NAMORA", 105, 15, { align: "center" });
 
   doc.setFontSize(11);
   doc.text(titulo.toUpperCase(), 105, 22, { align: "center" });
@@ -1146,7 +1146,7 @@ async function generarDocentesPDF() {
   await construirPDFModeloEstandar({
     titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
     codigo: "PERSONAL-DOCENTE",
-    nombre: "Plana Docente I.E. Santa Rosa",
+    nombre: "Plana Docente I.E. CÉSAR VALLEJO MENDOZA",
     aula: "Dirección Académica",
     periodo: `${tipo} (${fecha || 'General'})`,
     metricas: { 
