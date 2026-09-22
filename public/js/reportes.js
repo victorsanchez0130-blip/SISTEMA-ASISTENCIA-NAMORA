@@ -498,7 +498,7 @@ async function construirPDFModeloEstandar({ titulo, codigo, nombre, aula, period
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(30, 41, 59);
-  doc.text("I.E. CÉSAR VALLEJO MENDOZA - NAMORA", 105, 15, { align: "center" });
+  doc.text("I.E. SANTA ROSA - NAMORA", 105, 15, { align: "center" });
 
   doc.setFontSize(11);
   doc.text(titulo.toUpperCase(), 105, 22, { align: "center" });
@@ -854,7 +854,7 @@ async function generarDocentesPDF() {
   await construirPDFModeloEstandar({
     titulo: "REPORTE CONSOLIDADO DE DOCENTES Y PERSONAL",
     codigo: "PERSONAL-DOCENTE",
-    nombre: "Plana Docente I.E. CÉSAR VALLEJO MENDOZA",
+    nombre: "Plana Docente I.E. SANTA ROSA - NAMORA",
     aula: "Dirección Académica",
     periodo: `${tipo} (${fecha || 'General'})`,
     metricas: { 
